@@ -56,12 +56,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	if cfg.AuthMode != "dev" {
-		logger.Error("unsupported auth mode for current phase", "auth_mode", cfg.AuthMode)
+	var authenticator auth.Authenticator
+	switch cfg.AuthMode {
+	case "dev":
+		authenticator = auth.NewDevAuthenticator(cfg)
+	case "descope":
+		var descopeErr error
+		authenticator, descopeErr = auth.NewDescopeAuthenticator(cfg.DescopeProjectID)
+		if descopeErr != nil {
+			logger.Error("failed to initialize descope authenticator", "error", descopeErr)
+			os.Exit(1)
+		}
+	default:
+		logger.Error("unsupported auth mode", "auth_mode", cfg.AuthMode)
 		os.Exit(1)
 	}
-
-	authenticator := auth.NewDevAuthenticator(cfg)
 	stacksService := stacks.NewPostgresService(dbPool)
 	updatesService := updates.NewPostgresService(dbPool)
 	checkpointsService := checkpoints.NewNopService()
@@ -96,6 +105,7 @@ func main() {
 	// Protected routes (require auth)
 	router.Group(func(r chi.Router) {
 		r.Use(middleware.Auth(authenticator))
+		r.Use(middleware.OrgAuth())
 		r.Get("/api/user", handlers.NewUserHandler())
 		r.Get("/api/user/organizations/default", handlers.DefaultOrganization)
 		r.Get("/api/cli/version", handlers.CLIVersion)

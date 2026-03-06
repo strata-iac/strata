@@ -117,14 +117,28 @@ func (h *StackHandler) DeleteStack(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *StackHandler) ListStacks(w http.ResponseWriter, r *http.Request) {
+	caller, ok := auth.CallerFromContext(r.Context())
+	if !ok || caller == nil {
+		encode.WriteError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
 	org := r.URL.Query().Get("organization")
 	if org == "" {
-		caller, ok := auth.CallerFromContext(r.Context())
-		if !ok || caller == nil || caller.OrgLogin == "" {
-			encode.WriteError(w, http.StatusBadRequest, "Bad Request: organization query parameter is required")
-			return
-		}
 		org = caller.OrgLogin
+		if org == "" && len(caller.OrgMemberships) > 0 {
+			org = caller.OrgMemberships[0].OrgLogin
+		}
+	}
+
+	if org == "" {
+		encode.WriteError(w, http.StatusBadRequest, "Bad Request: organization query parameter is required")
+		return
+	}
+
+	if !caller.HasOrgRole(org, auth.RoleViewer) {
+		encode.WriteError(w, http.StatusForbidden, "Forbidden: insufficient permissions for organization "+org)
+		return
 	}
 
 	var continuationToken *string

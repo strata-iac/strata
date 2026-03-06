@@ -25,7 +25,19 @@ const (
 	devAuthToken = "devtoken123"
 	devUserLogin = "dev-user"
 	devOrgLogin  = "dev-org"
+
+	userBToken = "token-user-b"
+	userBLogin = "user-b"
+	userBOrg   = "org-b"
+
+	viewerToken = "token-viewer"
+	viewerLogin = "viewer-user"
 )
+
+var devUsersJSON = `[` +
+	`{"token":"` + userBToken + `","login":"` + userBLogin + `","org":"` + userBOrg + `","role":"admin"},` +
+	`{"token":"` + viewerToken + `","login":"` + viewerLogin + `","org":"` + devOrgLogin + `","role":"viewer"}` +
+	`]`
 
 var (
 	strataURL   string
@@ -110,6 +122,7 @@ func TestMain(m *testing.M) {
 		"STRATA_DEV_AUTH_TOKEN=" + devAuthToken,
 		"STRATA_DEV_USER_LOGIN=" + devUserLogin,
 		"STRATA_DEV_ORG_LOGIN=" + devOrgLogin,
+		"STRATA_DEV_USERS=" + devUsersJSON,
 		"STRATA_BLOB_BACKEND=local",
 		"STRATA_BLOB_LOCAL_PATH=" + blobDir,
 	}

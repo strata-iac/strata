@@ -91,6 +91,10 @@ func newTestRouter(svc stacks.Service) *chi.Mux {
 				DisplayName: "Test User",
 				Email:       "test@example.com",
 				OrgLogin:    "test-org",
+				OrgMemberships: []auth.OrgRole{
+					{OrgLogin: "test-org", Role: auth.RoleAdmin},
+					{OrgLogin: "my-org", Role: auth.RoleAdmin},
+				},
 			}
 			ctx := auth.ContextWithCaller(req.Context(), caller)
 			next.ServeHTTP(w, req.WithContext(ctx))

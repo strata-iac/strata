@@ -10,41 +10,123 @@ import (
 	"github.com/strata-iac/strata/internal/config"
 )
 
+type Role string
+
+const (
+	RoleViewer Role = "viewer"
+	RoleMember Role = "member"
+	RoleAdmin  Role = "admin"
+)
+
+var roleRank = map[Role]int{
+	RoleViewer: 1,
+	RoleMember: 2,
+	RoleAdmin:  3,
+}
+
+func (r Role) AtLeast(required Role) bool {
+	return roleRank[r] >= roleRank[required]
+}
+
+type OrgRole struct {
+	OrgLogin string
+	Role     Role
+}
+
 type callerContextKey struct{}
 
-// ContextWithCaller returns a new context with the Caller stored.
 func ContextWithCaller(ctx context.Context, c *Caller) context.Context {
 	return context.WithValue(ctx, callerContextKey{}, c)
 }
 
-// CallerFromContext retrieves the Caller from the context.
 func CallerFromContext(ctx context.Context) (*Caller, bool) {
 	c, ok := ctx.Value(callerContextKey{}).(*Caller)
 	return c, ok
 }
 
 type Caller struct {
-	UserID      string
-	GithubLogin string
-	DisplayName string
-	Email       string
-	OrgLogin    string
+	UserID         string
+	GithubLogin    string
+	DisplayName    string
+	Email          string
+	OrgLogin       string
+	OrgMemberships []OrgRole
+}
+
+func (c *Caller) HasOrgRole(org string, required Role) bool {
+	for _, m := range c.OrgMemberships {
+		if m.OrgLogin == org && m.Role.AtLeast(required) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Caller) OrgLogins() []string {
+	orgs := make([]string, len(c.OrgMemberships))
+	for i, m := range c.OrgMemberships {
+		orgs[i] = m.OrgLogin
+	}
+	return orgs
 }
 
 type Authenticator interface {
 	ValidateToken(ctx context.Context, token string) (*Caller, error)
 }
 
+type devUser struct {
+	token  string
+	caller *Caller
+}
+
 type DevAuthenticator struct {
-	cfg *config.Config
+	users []devUser
 }
 
 func NewDevAuthenticator(cfg *config.Config) *DevAuthenticator {
-	return &DevAuthenticator{cfg: cfg}
+	a := &DevAuthenticator{}
+
+	a.users = append(a.users, devUser{
+		token: cfg.DevAuthToken,
+		caller: &Caller{
+			UserID:      "dev-user-id",
+			GithubLogin: cfg.DevUserLogin,
+			DisplayName: cfg.DevUserLogin,
+			Email:       "dev@example.local",
+			OrgLogin:    cfg.DevOrgLogin,
+			OrgMemberships: []OrgRole{
+				{OrgLogin: cfg.DevOrgLogin, Role: RoleAdmin},
+			},
+		},
+	})
+
+	for i, u := range cfg.DevUsers {
+		role := RoleMember
+		switch Role(u.Role) {
+		case RoleViewer, RoleMember, RoleAdmin:
+			role = Role(u.Role)
+		}
+
+		a.users = append(a.users, devUser{
+			token: u.Token,
+			caller: &Caller{
+				UserID:      fmt.Sprintf("dev-user-%d", i+2),
+				GithubLogin: u.Login,
+				DisplayName: u.Login,
+				Email:       u.Login + "@example.local",
+				OrgLogin:    u.Org,
+				OrgMemberships: []OrgRole{
+					{OrgLogin: u.Org, Role: role},
+				},
+			},
+		})
+	}
+
+	return a
 }
 
 func (a *DevAuthenticator) ValidateToken(_ context.Context, token string) (*Caller, error) {
-	if a == nil || a.cfg == nil {
+	if a == nil {
 		return nil, errors.New("dev authenticator is not configured")
 	}
 
@@ -54,21 +136,12 @@ func (a *DevAuthenticator) ValidateToken(_ context.Context, token string) (*Call
 	}
 
 	provided := strings.TrimPrefix(token, scheme)
-	if subtle.ConstantTimeCompare([]byte(provided), []byte(a.cfg.DevAuthToken)) != 1 {
-		return nil, errors.New("invalid token")
+
+	for _, u := range a.users {
+		if subtle.ConstantTimeCompare([]byte(provided), []byte(u.token)) == 1 {
+			return u.caller, nil
+		}
 	}
 
-	caller := &Caller{
-		UserID:      "dev-user-id",
-		GithubLogin: a.cfg.DevUserLogin,
-		DisplayName: a.cfg.DevUserLogin,
-		Email:       "dev@example.local",
-		OrgLogin:    a.cfg.DevOrgLogin,
-	}
-
-	if caller.GithubLogin == "" {
-		return nil, errors.New("github login must not be empty")
-	}
-
-	return caller, nil
+	return nil, errors.New("invalid token")
 }

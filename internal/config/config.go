@@ -3,10 +3,18 @@ package config
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 )
+
+type DevUserConfig struct {
+	Token string `json:"token"`
+	Login string `json:"login"`
+	Org   string `json:"org"`
+	Role  string `json:"role"`
+}
 
 type Config struct {
 	ListenAddr       string
@@ -20,6 +28,7 @@ type Config struct {
 	DevAuthToken     string
 	DevUserLogin     string
 	DevOrgLogin      string
+	DevUsers         []DevUserConfig
 	EncryptionKey    []byte
 }
 
@@ -36,6 +45,10 @@ func Load() (*Config, error) {
 		DevAuthToken:     os.Getenv("STRATA_DEV_AUTH_TOKEN"),
 		DevUserLogin:     getEnvDefault("STRATA_DEV_USER_LOGIN", "dev-user"),
 		DevOrgLogin:      getEnvDefault("STRATA_DEV_ORG_LOGIN", "dev-org"),
+	}
+
+	if err := cfg.loadDevUsers(); err != nil {
+		return nil, err
 	}
 
 	if err := cfg.validate(); err != nil {
@@ -78,18 +91,39 @@ func (c *Config) validate() error {
 		return errors.New("STRATA_DESCOPE_PROJECT_ID is required when STRATA_AUTH_MODE=descope")
 	}
 
-	if c.AuthMode == "dev" && c.DevAuthToken == "" {
-		return errors.New("STRATA_DEV_AUTH_TOKEN is required when STRATA_AUTH_MODE=dev")
+	if c.AuthMode == "dev" {
+		if c.DevAuthToken == "" {
+			return errors.New("STRATA_DEV_AUTH_TOKEN is required when STRATA_AUTH_MODE=dev")
+		}
+		if c.DevUserLogin == "" {
+			return errors.New("STRATA_DEV_USER_LOGIN must not be empty when STRATA_AUTH_MODE=dev")
+		}
+		if c.DevOrgLogin == "" {
+			return errors.New("STRATA_DEV_ORG_LOGIN must not be empty when STRATA_AUTH_MODE=dev")
+		}
 	}
 
-	if c.DevUserLogin == "" {
-		return errors.New("STRATA_DEV_USER_LOGIN must not be empty")
+	return nil
+}
+
+func (c *Config) loadDevUsers() error {
+	raw := os.Getenv("STRATA_DEV_USERS")
+	if raw == "" {
+		return nil
 	}
 
-	if c.DevOrgLogin == "" {
-		return errors.New("STRATA_DEV_ORG_LOGIN must not be empty")
+	var users []DevUserConfig
+	if err := json.Unmarshal([]byte(raw), &users); err != nil {
+		return fmt.Errorf("STRATA_DEV_USERS: invalid JSON: %w", err)
 	}
 
+	for i, u := range users {
+		if u.Token == "" || u.Login == "" || u.Org == "" {
+			return fmt.Errorf("STRATA_DEV_USERS[%d]: token, login, and org are required", i)
+		}
+	}
+
+	c.DevUsers = users
 	return nil
 }
 

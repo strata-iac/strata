@@ -40,11 +40,16 @@ func DefaultOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	defaultOrg := caller.OrgLogin
+	if defaultOrg == "" && len(caller.OrgMemberships) > 0 {
+		defaultOrg = caller.OrgMemberships[0].OrgLogin
+	}
+
 	encode.WriteJSON(w, http.StatusOK, struct {
 		GitHubLogin string `json:"gitHubLogin"`
 		Messages    []any  `json:"messages"`
 	}{
-		GitHubLogin: caller.OrgLogin,
+		GitHubLogin: defaultOrg,
 		Messages:    []any{},
 	})
 }
@@ -57,18 +62,27 @@ func NewUserHandler() http.HandlerFunc {
 			return
 		}
 
+		orgs := make([]orgResponse, 0, len(caller.OrgMemberships))
+		for _, m := range caller.OrgMemberships {
+			orgs = append(orgs, orgResponse{
+				GithubLogin: m.OrgLogin,
+				Name:        m.OrgLogin,
+			})
+		}
+		if len(orgs) == 0 && caller.OrgLogin != "" {
+			orgs = append(orgs, orgResponse{
+				GithubLogin: caller.OrgLogin,
+				Name:        caller.OrgLogin,
+			})
+		}
+
 		resp := userResponse{
-			ID:          caller.UserID,
-			GithubLogin: caller.GithubLogin,
-			Name:        caller.DisplayName,
-			Email:       caller.Email,
-			Organizations: []orgResponse{
-				{
-					GithubLogin: caller.OrgLogin,
-					Name:        caller.OrgLogin,
-				},
-			},
-			Identities: []string{},
+			ID:            caller.UserID,
+			GithubLogin:   caller.GithubLogin,
+			Name:          caller.DisplayName,
+			Email:         caller.Email,
+			Organizations: orgs,
+			Identities:    []string{},
 		}
 
 		encode.WriteJSON(w, http.StatusOK, resp)
