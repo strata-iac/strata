@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jellydator/ttlcache/v3"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
 )
 
@@ -21,14 +22,41 @@ const (
 	maxLeaseDuration     = 300 // seconds
 )
 
+type leaseInfo struct {
+	hash      string
+	expiresAt time.Time
+}
+
 // PostgresService implements the update lifecycle backed by PostgreSQL.
 type PostgresService struct {
-	db *pgxpool.Pool
+	db         *pgxpool.Pool
+	stackIDs   *ttlcache.Cache[string, string]
+	leaseCache *ttlcache.Cache[string, leaseInfo]
 }
 
 // NewPostgresService creates a new PostgreSQL-backed update service.
 func NewPostgresService(db *pgxpool.Pool) *PostgresService {
-	return &PostgresService{db: db}
+	stackIDs := ttlcache.New[string, string](
+		ttlcache.WithTTL[string, string](5 * time.Minute),
+	)
+	go stackIDs.Start()
+
+	leases := ttlcache.New[string, leaseInfo](
+		ttlcache.WithTTL[string, leaseInfo](30 * time.Second),
+	)
+	go leases.Start()
+
+	return &PostgresService{
+		db:         db,
+		stackIDs:   stackIDs,
+		leaseCache: leases,
+	}
+}
+
+// StopCaches stops background cache eviction goroutines.
+func (s *PostgresService) StopCaches() {
+	s.stackIDs.Stop()
+	s.leaseCache.Stop()
 }
 
 func (s *PostgresService) CreateUpdate(ctx context.Context, org, project, stack string, kind apitype.UpdateKind, req apitype.UpdateProgramRequest) (*apitype.UpdateProgramResponse, error) {
@@ -322,6 +350,8 @@ func (s *PostgresService) RenewLease(ctx context.Context, org, project, stack, u
 		return nil, ErrUpdateNotFound
 	}
 
+	s.leaseCache.Delete(updateID)
+
 	return &apitype.RenewUpdateLeaseResponse{
 		Token:           newToken,
 		TokenExpiration: newExpires.Unix(),
@@ -372,6 +402,7 @@ func (s *PostgresService) CompleteUpdate(ctx context.Context, org, project, stac
 		return fmt.Errorf("commit complete update: %w", err)
 	}
 
+	s.leaseCache.Delete(updateID)
 	return nil
 }
 
@@ -379,6 +410,19 @@ func (s *PostgresService) ValidateUpdateToken(ctx context.Context, org, project,
 	stackID, err := s.findStackID(ctx, org, project, stack)
 	if err != nil {
 		return err
+	}
+
+	providedHash := hashToken(token)
+
+	if item := s.leaseCache.Get(updateID); item != nil {
+		li := item.Value()
+		if time.Now().After(li.expiresAt) {
+			return ErrLeaseExpired
+		}
+		if providedHash != li.hash {
+			return ErrInvalidToken
+		}
+		return nil
 	}
 
 	var storedHash string
@@ -398,11 +442,11 @@ func (s *PostgresService) ValidateUpdateToken(ctx context.Context, org, project,
 		return ErrLeaseExpired
 	}
 
-	providedHash := hashToken(token)
 	if providedHash != storedHash {
 		return ErrInvalidToken
 	}
 
+	s.leaseCache.Set(updateID, leaseInfo{hash: storedHash, expiresAt: leaseExpiresAt}, ttlcache.DefaultTTL)
 	return nil
 }
 
@@ -596,6 +640,7 @@ func (s *PostgresService) CancelUpdate(ctx context.Context, org, project, stack,
 		return fmt.Errorf("commit cancel update: %w", err)
 	}
 
+	s.leaseCache.Delete(updateID)
 	return nil
 }
 
@@ -902,8 +947,12 @@ func statusToUpdateResult(status string) apitype.UpdateResult {
 	}
 }
 
-// findStackID looks up a stack by org/project/stack, returning the stack UUID.
 func (s *PostgresService) findStackID(ctx context.Context, org, project, stack string) (string, error) {
+	key := org + "/" + project + "/" + stack
+	if item := s.stackIDs.Get(key); item != nil {
+		return item.Value(), nil
+	}
+
 	var stackID string
 	err := s.db.QueryRow(ctx, `
 		SELECT s.id::text
@@ -918,6 +967,8 @@ func (s *PostgresService) findStackID(ctx context.Context, org, project, stack s
 		}
 		return "", fmt.Errorf("find stack: %w", err)
 	}
+
+	s.stackIDs.Set(key, stackID, ttlcache.DefaultTTL)
 	return stackID, nil
 }
 
