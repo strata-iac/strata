@@ -1,0 +1,12 @@
+{
+	auto_https off
+	admin off
+}
+
+:8080 {
+	reverse_proxy strata-cluster:8080 {
+		lb_policy round_robin
+		health_uri /healthz
+		health_interval 5s
+	}
+}

@@ -3,16 +3,22 @@ GO := $(MISE_EXEC) go
 GOLANGCI_LINT := $(MISE_EXEC) golangci-lint
 GOVULNCHECK := $(MISE_EXEC) govulncheck
 
-.PHONY: dev deps down build go-build web fmt lint lint-fix vuln test e2e examples check check-all
+.PHONY: dev deps down build go-build web fmt lint lint-fix vuln test e2e e2e-cluster examples check check-all cluster cluster-down
 
 dev:
 	docker compose --profile dev up --build
+
+cluster:
+	docker compose --profile cluster up --build
 
 deps:
 	docker compose up -d
 
 down:
 	docker compose --profile dev down -v
+
+cluster-down:
+	docker compose --profile cluster down -v
 
 build:
 	docker build -t strata:dev .
@@ -40,6 +46,15 @@ test:
 
 e2e:
 	$(GO) test -race -count=1 -tags=e2e -timeout=15m -v ./e2e/...
+
+e2e-cluster:
+	docker compose --profile cluster up --build -d
+	@echo "Waiting for cluster..."
+	@until curl -sf http://localhost:8080/healthz > /dev/null 2>&1; do sleep 1; done
+	STRATA_E2E_URL=http://localhost:8080 $(GO) test -race -count=1 -tags=e2e -timeout=15m -v ./e2e/...; \
+	status=$$?; \
+	docker compose --profile cluster down -v; \
+	exit $$status
 
 examples:
 	$(GO) test -race -count=1 -tags=e2e -timeout=15m -v -run TestExamples ./e2e/...

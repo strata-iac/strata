@@ -40,9 +40,10 @@ var devUsersJSON = `[` +
 	`]`
 
 var (
-	strataURL   string
-	dbPool      *pgxpool.Pool
-	projectRoot string
+	strataURL    string
+	strataBinary string
+	dbPool       *pgxpool.Pool
+	projectRoot  string
 )
 
 func TestMain(m *testing.M) {
@@ -88,18 +89,31 @@ func TestMain(m *testing.M) {
 	defer os.RemoveAll(tmpDir)
 
 	binaryPath := filepath.Join(tmpDir, "strata")
-	blobDir := filepath.Join(tmpDir, "blobs")
-	if err := os.MkdirAll(blobDir, 0o750); err != nil {
-		fmt.Fprintf(os.Stderr, "e2e: create blob dir: %v\n", err)
-		os.Exit(1)
-	}
-
 	buildCmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/strata")
 	buildCmd.Dir = projectRoot
 	buildCmd.Stdout = os.Stdout
 	buildCmd.Stderr = os.Stderr
 	if err := buildCmd.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "e2e: build strata: %v\n", err)
+		os.Exit(1)
+	}
+	strataBinary = binaryPath
+
+	if externalURL := os.Getenv("STRATA_E2E_URL"); externalURL != "" {
+		strataURL = externalURL
+		if err := waitForHealthy(strataURL+"/healthz", 30*time.Second); err != nil {
+			fmt.Fprintf(os.Stderr, "e2e: external server not healthy at %s: %v\n", strataURL, err)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "e2e: using external server at %s\n", strataURL)
+		code := m.Run()
+		dbPool.Close()
+		os.Exit(code)
+	}
+
+	blobDir := filepath.Join(tmpDir, "blobs")
+	if err := os.MkdirAll(blobDir, 0o750); err != nil {
+		fmt.Fprintf(os.Stderr, "e2e: create blob dir: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -164,6 +178,7 @@ type testEnv struct {
 	home        string
 	projectDir  string
 	accessToken string
+	serverURL   string
 }
 
 func newTestEnv(t *testing.T, projectName string) *testEnv {
@@ -185,9 +200,16 @@ func newTestEnvWithToken(t *testing.T, projectName, token string) *testEnv {
 	return env
 }
 
+func (e *testEnv) baseURL() string {
+	if e.serverURL != "" {
+		return e.serverURL
+	}
+	return strataURL
+}
+
 func (e *testEnv) login() {
 	e.t.Helper()
-	e.run("login", strataURL)
+	e.run("login", e.baseURL())
 }
 
 func (e *testEnv) run(args ...string) (string, string) {
@@ -234,7 +256,7 @@ func (e *testEnv) httpDo(method, path, body string) *http.Response {
 	if body != "" {
 		bodyReader = strings.NewReader(body)
 	}
-	req, err := http.NewRequestWithContext(context.Background(), method, strataURL+path, bodyReader)
+	req, err := http.NewRequestWithContext(context.Background(), method, e.baseURL()+path, bodyReader)
 	if err != nil {
 		e.t.Fatalf("create request: %v", err)
 	}
