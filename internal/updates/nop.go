@@ -64,3 +64,7 @@ func (s *NopService) GetUpdateStatus(_ context.Context, _, _, _, _ string, _ *st
 func (s *NopService) CancelUpdate(_ context.Context, _, _, _, _ string) error {
 	return nil
 }
+
+func (s *NopService) PatchCheckpointDelta(_ context.Context, _, _, _, _ string, _ apitype.PatchUpdateCheckpointDeltaRequest) error {
+	return nil
+}

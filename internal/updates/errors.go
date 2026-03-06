@@ -17,4 +17,7 @@ var (
 
 	// ErrStackNotFound is returned when the referenced stack does not exist.
 	ErrStackNotFound = errors.New("stack not found")
+
+	// ErrDeltaHashMismatch is returned when the delta checkpoint hash does not match after applying edits.
+	ErrDeltaHashMismatch = errors.New("delta checkpoint hash mismatch")
 )

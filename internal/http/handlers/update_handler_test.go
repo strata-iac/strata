@@ -28,6 +28,7 @@ type mockUpdateService struct {
 	importStackFn             func(ctx context.Context, org, project, stack string, deployment apitype.UntypedDeployment) (string, error)
 	getUpdateStatusFn         func(ctx context.Context, org, project, stack, updateID string, continuationToken *string) (*apitype.UpdateResults, error)
 	cancelUpdateFn            func(ctx context.Context, org, project, stack, updateID string) error
+	patchCheckpointDeltaFn    func(ctx context.Context, org, project, stack, updateID string, req apitype.PatchUpdateCheckpointDeltaRequest) error
 }
 
 func (m *mockUpdateService) CreateUpdate(ctx context.Context, org, project, stack string, kind apitype.UpdateKind, req apitype.UpdateProgramRequest) (*apitype.UpdateProgramResponse, error) {
@@ -97,6 +98,13 @@ func (m *mockUpdateService) CancelUpdate(ctx context.Context, org, project, stac
 	return nil
 }
 
+func (m *mockUpdateService) PatchCheckpointDelta(ctx context.Context, org, project, stack, updateID string, req apitype.PatchUpdateCheckpointDeltaRequest) error {
+	if m.patchCheckpointDeltaFn != nil {
+		return m.patchCheckpointDeltaFn(ctx, org, project, stack, updateID, req)
+	}
+	return nil
+}
+
 func newUpdateTestRouter(svc updates.Service) *chi.Mux {
 	h := NewUpdateHandler(svc)
 	r := chi.NewRouter()
@@ -110,6 +118,7 @@ func newUpdateTestRouter(svc updates.Service) *chi.Mux {
 	r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}", h.StartUpdate)
 	r.Patch("/api/stacks/{org}/{project}/{stack}/update/{updateID}/checkpoint", h.PatchCheckpoint)
 	r.Patch("/api/stacks/{org}/{project}/{stack}/update/{updateID}/checkpointverbatim", h.PatchCheckpointVerbatim)
+	r.Patch("/api/stacks/{org}/{project}/{stack}/update/{updateID}/checkpointdelta", h.PatchCheckpointDelta)
 	r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}/events/batch", h.RecordEvents)
 	r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}/renew_lease", h.RenewLease)
 	r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}/complete", h.CompleteUpdate)
@@ -653,5 +662,72 @@ func TestCancelUpdate_StackNotFound(t *testing.T) {
 
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestPatchCheckpointDelta_Success(t *testing.T) {
+	svc := &mockUpdateService{
+		patchCheckpointDeltaFn: func(_ context.Context, _, _, _, updateID string, req apitype.PatchUpdateCheckpointDeltaRequest) error {
+			if updateID != "uid-abc" {
+				t.Errorf("expected updateID uid-abc, got %s", updateID)
+			}
+			if req.SequenceNumber != 2 {
+				t.Errorf("expected sequence 2, got %d", req.SequenceNumber)
+			}
+			if req.CheckpointHash != "abc123" {
+				t.Errorf("expected hash abc123, got %s", req.CheckpointHash)
+			}
+			return nil
+		},
+	}
+
+	body, _ := json.Marshal(apitype.PatchUpdateCheckpointDeltaRequest{
+		Version:         3,
+		SequenceNumber:  2,
+		CheckpointHash:  "abc123",
+		DeploymentDelta: json.RawMessage(`[]`),
+	})
+	req := httptest.NewRequest(http.MethodPatch, "/api/stacks/test-org/test-project/dev/update/uid-abc/checkpointdelta", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestPatchCheckpointDelta_HashMismatch(t *testing.T) {
+	svc := &mockUpdateService{
+		patchCheckpointDeltaFn: func(context.Context, string, string, string, string, apitype.PatchUpdateCheckpointDeltaRequest) error {
+			return updates.ErrDeltaHashMismatch
+		},
+	}
+
+	body, _ := json.Marshal(apitype.PatchUpdateCheckpointDeltaRequest{
+		Version:         3,
+		SequenceNumber:  1,
+		CheckpointHash:  "wrong",
+		DeploymentDelta: json.RawMessage(`[]`),
+	})
+	req := httptest.NewRequest(http.MethodPatch, "/api/stacks/test-org/test-project/dev/update/uid-abc/checkpointdelta", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestPatchCheckpointDelta_BadJSON(t *testing.T) {
+	svc := &mockUpdateService{}
+	req := httptest.NewRequest(http.MethodPatch, "/api/stacks/test-org/test-project/dev/update/uid-abc/checkpointdelta", bytes.NewReader([]byte("not json")))
+	rr := httptest.NewRecorder()
+
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
 	}
 }

@@ -250,6 +250,27 @@ func (h *UpdateHandler) GetUpdateStatus(w http.ResponseWriter, r *http.Request) 
 	encode.WriteJSON(w, http.StatusOK, results)
 }
 
+// PatchCheckpointDelta handles PATCH .../checkpointdelta.
+func (h *UpdateHandler) PatchCheckpointDelta(w http.ResponseWriter, r *http.Request) {
+	org := chi.URLParam(r, "org")
+	project := chi.URLParam(r, "project")
+	stack := chi.URLParam(r, "stack")
+	updateID := chi.URLParam(r, "updateID")
+
+	var req apitype.PatchUpdateCheckpointDeltaRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		encode.WriteError(w, http.StatusBadRequest, "Bad Request: invalid JSON body")
+		return
+	}
+
+	if err := h.updates.PatchCheckpointDelta(r.Context(), org, project, stack, updateID, req); err != nil {
+		h.writeUpdateError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func (h *UpdateHandler) CancelUpdate(w http.ResponseWriter, r *http.Request) {
 	org := chi.URLParam(r, "org")
 	project := chi.URLParam(r, "project")
@@ -268,7 +289,7 @@ func (h *UpdateHandler) writeUpdateError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, updates.ErrUpdateNotFound), errors.Is(err, updates.ErrStackNotFound):
 		encode.WriteError(w, http.StatusNotFound, "Not Found")
-	case errors.Is(err, updates.ErrUpdateConflict):
+	case errors.Is(err, updates.ErrUpdateConflict), errors.Is(err, updates.ErrDeltaHashMismatch):
 		encode.WriteError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, updates.ErrInvalidToken), errors.Is(err, updates.ErrLeaseExpired):
 		encode.WriteError(w, http.StatusUnauthorized, err.Error())

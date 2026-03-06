@@ -579,6 +579,64 @@ func (s *PostgresService) CancelUpdate(ctx context.Context, org, project, stack,
 	return nil
 }
 
+func (s *PostgresService) PatchCheckpointDelta(ctx context.Context, org, project, stack, updateID string, req apitype.PatchUpdateCheckpointDeltaRequest) error {
+	stackID, err := s.findStackID(ctx, org, project, stack)
+	if err != nil {
+		return err
+	}
+
+	if err := s.verifyUpdateRunning(ctx, updateID, stackID); err != nil {
+		return err
+	}
+
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin patch checkpoint delta transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var lastDeployment json.RawMessage
+	err = tx.QueryRow(ctx, `
+		SELECT deployment FROM checkpoints
+		WHERE stack_id = $1 AND deployment IS NOT NULL
+		ORDER BY version DESC, created_at DESC
+		LIMIT 1
+	`, stackID).Scan(&lastDeployment)
+	if err != nil {
+		return fmt.Errorf("fetch last checkpoint for delta: %w", err)
+	}
+
+	result, err := applyDelta(lastDeployment, req.DeploymentDelta)
+	if err != nil {
+		return fmt.Errorf("apply delta: %w", err)
+	}
+
+	if checksumDeployment(result) != req.CheckpointHash {
+		return ErrDeltaHashMismatch
+	}
+
+	if _, err = tx.Exec(ctx, `
+		INSERT INTO checkpoints (stack_id, update_id, version, sequence_number, deployment, is_invalid)
+		VALUES ($1, $2::uuid, $3, $4, $5, false)
+		ON CONFLICT (update_id, sequence_number) WHERE sequence_number > 0
+		DO NOTHING
+	`, stackID, updateID, req.Version, req.SequenceNumber, json.RawMessage(result)); err != nil {
+		return fmt.Errorf("insert delta checkpoint: %w", err)
+	}
+
+	if _, err = tx.Exec(ctx, `
+		UPDATE stacks SET last_checkpoint_version = $1, updated_at = now() WHERE id = $2
+	`, req.Version, stackID); err != nil {
+		return fmt.Errorf("update stack version: %w", err)
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit patch checkpoint delta: %w", err)
+	}
+
+	return nil
+}
+
 // findStackID looks up a stack by org/project/stack, returning the stack UUID.
 func (s *PostgresService) findStackID(ctx context.Context, org, project, stack string) (string, error) {
 	var stackID string

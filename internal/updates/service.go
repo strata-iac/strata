@@ -46,4 +46,7 @@ type Service interface {
 
 	// CancelUpdate cancels an active update, releasing the stack lock.
 	CancelUpdate(ctx context.Context, org, project, stack, updateID string) error
+
+	// PatchCheckpointDelta applies a delta (textual diff) to the last-saved checkpoint.
+	PatchCheckpointDelta(ctx context.Context, org, project, stack, updateID string, req apitype.PatchUpdateCheckpointDeltaRequest) error
 }

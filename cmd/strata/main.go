@@ -119,6 +119,7 @@ func main() {
 		r.Use(middleware.UpdateAuth(updatesService))
 		r.Patch("/api/stacks/{org}/{project}/{stack}/update/{updateID}/checkpoint", updateHandler.PatchCheckpoint)
 		r.Patch("/api/stacks/{org}/{project}/{stack}/update/{updateID}/checkpointverbatim", updateHandler.PatchCheckpointVerbatim)
+		r.Patch("/api/stacks/{org}/{project}/{stack}/update/{updateID}/checkpointdelta", updateHandler.PatchCheckpointDelta)
 		r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}/events/batch", updateHandler.RecordEvents)
 		r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}/renew_lease", updateHandler.RenewLease)
 		r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}/complete", updateHandler.CompleteUpdate)
