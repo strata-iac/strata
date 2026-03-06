@@ -1,0 +1,6 @@
+[tools]
+go = "1.25.7"
+"go:github.com/steveyegge/beads/cmd/bd" = "0.59.0"
+
+[settings]
+experimental = true
