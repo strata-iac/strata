@@ -276,7 +276,7 @@ func TestCreateStack(t *testing.T) {
 				reqBody = bytes.NewBufferString("{invalid")
 			}
 
-			req := httptest.NewRequest(http.MethodPost, "/api/stacks/"+tc.org+"/"+tc.project, reqBody)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/"+tc.org+"/"+tc.project, reqBody)
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
@@ -357,7 +357,7 @@ func TestGetStack(t *testing.T) {
 			t.Parallel()
 
 			router := newTestRouter(tc.svc)
-			req := httptest.NewRequest(http.MethodGet, "/api/stacks/my-org/my-project/dev", nil)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/stacks/my-org/my-project/dev", nil)
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
 
@@ -448,7 +448,7 @@ func TestDeleteStack(t *testing.T) {
 			if tc.query != "" {
 				target += "?" + tc.query
 			}
-			req := httptest.NewRequest(http.MethodDelete, target, nil)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, target, nil)
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
 
@@ -562,7 +562,7 @@ func TestListStacks(t *testing.T) {
 			if tc.query != "" {
 				target += "?" + tc.query
 			}
-			req := httptest.NewRequest(http.MethodGet, target, nil)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, target, nil)
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
 
@@ -614,7 +614,7 @@ func TestProjectExists(t *testing.T) {
 			t.Parallel()
 
 			router := newTestRouter(tc.svc)
-			req := httptest.NewRequest(http.MethodHead, "/api/stacks/my-org/my-project", nil)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodHead, "/api/stacks/my-org/my-project", nil)
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
 
@@ -711,7 +711,7 @@ func TestRenameStack(t *testing.T) {
 				reqBody = bytes.NewBufferString("{invalid")
 			}
 
-			req := httptest.NewRequest(http.MethodPost, "/api/stacks/my-org/my-project/dev/rename", reqBody)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/my-org/my-project/dev/rename", reqBody)
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
@@ -778,7 +778,7 @@ func TestUpdateTags(t *testing.T) {
 				reqBody = bytes.NewBufferString("{invalid")
 			}
 
-			req := httptest.NewRequest(http.MethodPatch, "/api/stacks/my-org/my-project/dev/tags", reqBody)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/stacks/my-org/my-project/dev/tags", reqBody)
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
 
@@ -792,7 +792,7 @@ func TestUpdateTags(t *testing.T) {
 func TestCLIVersion(t *testing.T) {
 	t.Parallel()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/cli/version", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/cli/version", nil)
 	rr := httptest.NewRecorder()
 
 	CLIVersion(rr, req)
@@ -816,7 +816,7 @@ func TestCLIVersion(t *testing.T) {
 func TestDefaultOrganization(t *testing.T) {
 	t.Parallel()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/user/organizations/default", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/user/organizations/default", nil)
 	caller := &auth.Caller{
 		UserID:      "test-user-id",
 		GithubLogin: "test-user",
@@ -848,7 +848,7 @@ func TestDefaultOrganization(t *testing.T) {
 func TestDefaultOrganization_Unauthorized(t *testing.T) {
 	t.Parallel()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/user/organizations/default", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/user/organizations/default", nil)
 	rr := httptest.NewRecorder()
 	DefaultOrganization(rr, req)
 

@@ -59,3 +59,21 @@ jobs:
         env:
           STRATA_DATABASE_URL: postgres://strata:strata@localhost:5432/strata?sslmode=disable
         run: mise exec -- go test -race -count=1 -tags=e2e -timeout=15m -v ./e2e/...
+
+  e2e-cluster:
+    name: E2E Cluster Tests
+    runs-on: ubuntu-latest
+    needs: [check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: go-${{ runner.os }}-
+      - uses: pulumi/setup-pulumi@v2
+      - name: Run cluster E2E tests
+        run: mise exec -- make e2e-cluster

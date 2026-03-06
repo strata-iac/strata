@@ -182,7 +182,7 @@ func TestCreateUpdate_Success(t *testing.T) {
 			}
 
 			body, _ := json.Marshal(apitype.UpdateProgramRequest{Name: "test-prog"})
-			req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/"+kind, bytes.NewReader(body))
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/"+kind, bytes.NewReader(body))
 			rr := httptest.NewRecorder()
 
 			newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -210,7 +210,7 @@ func TestCreateUpdate_Conflict(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(apitype.UpdateProgramRequest{Name: "test-prog"})
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/update", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/update", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -228,7 +228,7 @@ func TestCreateUpdate_StackNotFound(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(apitype.UpdateProgramRequest{Name: "test-prog"})
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/update", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/update", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -253,7 +253,7 @@ func TestStartUpdate_Success(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(apitype.StartUpdateRequest{})
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/update/uid-abc", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/update/uid-abc", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -282,7 +282,7 @@ func TestStartUpdate_NotFound(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(apitype.StartUpdateRequest{})
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/update/nonexistent", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/update/nonexistent", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -306,7 +306,7 @@ func TestPatchCheckpoint_Success(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(apitype.PatchUpdateCheckpointRequest{Version: 3, Deployment: json.RawMessage(`{}`)})
-	req := httptest.NewRequest(http.MethodPatch, "/api/stacks/test-org/test-project/dev/update/uid-abc/checkpoint", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/stacks/test-org/test-project/dev/update/uid-abc/checkpoint", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -331,7 +331,7 @@ func TestPatchCheckpointVerbatim_Success(t *testing.T) {
 		UntypedDeployment: json.RawMessage(`{}`),
 		SequenceNumber:    5,
 	})
-	req := httptest.NewRequest(http.MethodPatch, "/api/stacks/test-org/test-project/dev/update/uid-abc/checkpointverbatim", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/stacks/test-org/test-project/dev/update/uid-abc/checkpointverbatim", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -357,7 +357,7 @@ func TestRecordEvents_Success(t *testing.T) {
 			{Sequence: 2, Timestamp: 1001},
 		},
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/update/uid-abc/events/batch", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/update/uid-abc/events/batch", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -381,7 +381,7 @@ func TestRenewLease_Success(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(apitype.RenewUpdateLeaseRequest{Duration: 300})
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/update/uid-abc/renew_lease", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/update/uid-abc/renew_lease", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -413,7 +413,7 @@ func TestCompleteUpdate_Success(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(apitype.CompleteUpdateRequest{Status: apitype.UpdateStatusSucceeded})
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/update/uid-abc/complete", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/update/uid-abc/complete", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -431,7 +431,7 @@ func TestCompleteUpdate_NotFound(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(apitype.CompleteUpdateRequest{Status: apitype.UpdateStatusFailed})
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/update/uid-abc/complete", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/update/uid-abc/complete", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -457,7 +457,7 @@ func TestExportStackVersion_Success(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/export/3", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/stacks/test-org/test-project/dev/export/3", nil)
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -477,7 +477,7 @@ func TestExportStackVersion_Success(t *testing.T) {
 
 func TestExportStackVersion_InvalidVersion(t *testing.T) {
 	svc := &mockUpdateService{}
-	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/export/abc", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/stacks/test-org/test-project/dev/export/abc", nil)
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -494,7 +494,7 @@ func TestExportStackVersion_NotFound(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/export/99", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/stacks/test-org/test-project/dev/export/99", nil)
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -521,7 +521,7 @@ func TestImportStack_Success(t *testing.T) {
 		Version:    3,
 		Deployment: json.RawMessage(`{"manifest":{},"resources":null}`),
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/import", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/import", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -547,7 +547,7 @@ func TestImportStack_Conflict(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(apitype.UntypedDeployment{Version: 3, Deployment: json.RawMessage(`{}`)})
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/import", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/import", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -565,7 +565,7 @@ func TestImportStack_StackNotFound(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(apitype.UntypedDeployment{Version: 3, Deployment: json.RawMessage(`{}`)})
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/import", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/import", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -577,7 +577,7 @@ func TestImportStack_StackNotFound(t *testing.T) {
 
 func TestImportStack_BadJSON(t *testing.T) {
 	svc := &mockUpdateService{}
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/import", bytes.NewReader([]byte("not json")))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/import", bytes.NewReader([]byte("not json")))
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -603,7 +603,7 @@ func TestGetUpdateStatus_Success(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/update/uid-abc", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/stacks/test-org/test-project/dev/update/uid-abc", nil)
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -631,7 +631,7 @@ func TestGetUpdateStatus_NotFound(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/update/nonexistent", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/stacks/test-org/test-project/dev/update/nonexistent", nil)
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -653,7 +653,7 @@ func TestCancelUpdate_Success(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/update/abc-123/cancel", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/update/abc-123/cancel", nil)
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -673,7 +673,7 @@ func TestCancelUpdate_NotFound(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/update/abc-123/cancel", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/update/abc-123/cancel", nil)
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -690,7 +690,7 @@ func TestCancelUpdate_StackNotFound(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/update/abc-123/cancel", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/update/abc-123/cancel", nil)
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -722,7 +722,7 @@ func TestPatchCheckpointDelta_Success(t *testing.T) {
 		CheckpointHash:  "abc123",
 		DeploymentDelta: json.RawMessage(`[]`),
 	})
-	req := httptest.NewRequest(http.MethodPatch, "/api/stacks/test-org/test-project/dev/update/uid-abc/checkpointdelta", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/stacks/test-org/test-project/dev/update/uid-abc/checkpointdelta", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -745,7 +745,7 @@ func TestPatchCheckpointDelta_HashMismatch(t *testing.T) {
 		CheckpointHash:  "wrong",
 		DeploymentDelta: json.RawMessage(`[]`),
 	})
-	req := httptest.NewRequest(http.MethodPatch, "/api/stacks/test-org/test-project/dev/update/uid-abc/checkpointdelta", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/stacks/test-org/test-project/dev/update/uid-abc/checkpointdelta", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -757,7 +757,7 @@ func TestPatchCheckpointDelta_HashMismatch(t *testing.T) {
 
 func TestPatchCheckpointDelta_BadJSON(t *testing.T) {
 	svc := &mockUpdateService{}
-	req := httptest.NewRequest(http.MethodPatch, "/api/stacks/test-org/test-project/dev/update/uid-abc/checkpointdelta", bytes.NewReader([]byte("not json")))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/stacks/test-org/test-project/dev/update/uid-abc/checkpointdelta", bytes.NewReader([]byte("not json")))
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
@@ -775,7 +775,7 @@ func TestListUpdates_Empty(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/updates", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/stacks/test-org/test-project/dev/updates", nil)
 	rr := httptest.NewRecorder()
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
 
@@ -805,7 +805,7 @@ func TestListUpdates_WithResults(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/updates", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/stacks/test-org/test-project/dev/updates", nil)
 	rr := httptest.NewRecorder()
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
 
@@ -844,7 +844,7 @@ func TestListUpdates_PaginationParams(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/updates?page=3&pageSize=25", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/stacks/test-org/test-project/dev/updates?page=3&pageSize=25", nil)
 	rr := httptest.NewRecorder()
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
 
@@ -867,7 +867,7 @@ func TestListUpdates_StackNotFound(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/updates", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/stacks/test-org/test-project/dev/updates", nil)
 	rr := httptest.NewRecorder()
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
 
@@ -892,7 +892,7 @@ func TestGetLatestUpdate_Success(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/updates/latest", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/stacks/test-org/test-project/dev/updates/latest", nil)
 	rr := httptest.NewRecorder()
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
 
@@ -919,7 +919,7 @@ func TestGetLatestUpdate_NotFound(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/updates/latest", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/stacks/test-org/test-project/dev/updates/latest", nil)
 	rr := httptest.NewRecorder()
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
 
@@ -939,7 +939,7 @@ func TestGetUpdateEvents_Empty(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/update/uid-abc/events", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/stacks/test-org/test-project/dev/update/uid-abc/events", nil)
 	rr := httptest.NewRecorder()
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
 
@@ -974,7 +974,7 @@ func TestGetUpdateEvents_WithEvents(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/update/uid-abc/events", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/stacks/test-org/test-project/dev/update/uid-abc/events", nil)
 	rr := httptest.NewRecorder()
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
 
@@ -1005,7 +1005,7 @@ func TestGetUpdateEvents_NotFound(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/update/uid-abc/events", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/stacks/test-org/test-project/dev/update/uid-abc/events", nil)
 	rr := httptest.NewRecorder()
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
 
@@ -1024,7 +1024,7 @@ func TestGetUpdateEvents_WithContinuationToken(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/update/uid-abc/events?continuationToken=100", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/stacks/test-org/test-project/dev/update/uid-abc/events?continuationToken=100", nil)
 	rr := httptest.NewRecorder()
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
 

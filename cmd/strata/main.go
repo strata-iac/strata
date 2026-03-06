@@ -223,12 +223,12 @@ func runHealthcheck() {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil) //nolint:gosec // G704: url is from own STRATA_LISTEN_ADDR, not user input
 	if err != nil {
 		os.Exit(1)
 	}
 
-	resp, err := http.DefaultClient.Do(req) //nolint:gosec // localhost-only healthcheck, port from own config
+	resp, err := http.DefaultClient.Do(req) //nolint:gosec // G704: url is from own STRATA_LISTEN_ADDR, not user input
 	if err != nil {
 		os.Exit(1)
 	}

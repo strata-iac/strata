@@ -50,7 +50,7 @@ func TestEncrypt_Success(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(apitype.EncryptValueRequest{Plaintext: []byte("my secret")})
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/encrypt", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/encrypt", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	newCryptoTestRouter(svc).ServeHTTP(rr, req)
@@ -70,7 +70,7 @@ func TestEncrypt_Success(t *testing.T) {
 
 func TestEncrypt_BadJSON(t *testing.T) {
 	svc := &mockCryptoService{}
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/encrypt", bytes.NewReader([]byte("bad json")))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/encrypt", bytes.NewReader([]byte("bad json")))
 	rr := httptest.NewRecorder()
 
 	newCryptoTestRouter(svc).ServeHTTP(rr, req)
@@ -91,7 +91,7 @@ func TestDecrypt_Success(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(apitype.DecryptValueRequest{Ciphertext: []byte("some-cipher")})
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/decrypt", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/decrypt", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	newCryptoTestRouter(svc).ServeHTTP(rr, req)
@@ -111,7 +111,7 @@ func TestDecrypt_Success(t *testing.T) {
 
 func TestDecrypt_BadJSON(t *testing.T) {
 	svc := &mockCryptoService{}
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/decrypt", bytes.NewReader([]byte("bad")))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/decrypt", bytes.NewReader([]byte("bad")))
 	rr := httptest.NewRecorder()
 
 	newCryptoTestRouter(svc).ServeHTTP(rr, req)
@@ -129,7 +129,7 @@ func TestDecrypt_DecryptionFailed(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(apitype.DecryptValueRequest{Ciphertext: []byte("invalid")})
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/decrypt", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/decrypt", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	newCryptoTestRouter(svc).ServeHTTP(rr, req)
@@ -147,7 +147,7 @@ func TestDecrypt_InternalError(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(apitype.DecryptValueRequest{Ciphertext: []byte("data")})
-	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/decrypt", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/stacks/test-org/test-project/dev/decrypt", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	newCryptoTestRouter(svc).ServeHTTP(rr, req)

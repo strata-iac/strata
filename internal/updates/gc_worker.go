@@ -36,7 +36,7 @@ func (w *GCWorker) Start(ctx context.Context) {
 		w.logger.Warn("gc reconciliation at startup failed", "error", err)
 	}
 
-	go w.loop()
+	go w.loop() //nolint:gosec // G118: intentionally detached — GC worker runs for app lifetime, not per-request
 }
 
 func (w *GCWorker) Stop() {
