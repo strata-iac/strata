@@ -9,6 +9,13 @@ import (
 	"github.com/strata-iac/strata/internal/http/encode"
 )
 
+func CLIVersion(w http.ResponseWriter, _ *http.Request) {
+	encode.WriteJSON(w, http.StatusOK, apitype.CLIVersionResponse{
+		LatestVersion:        "3.225.1",
+		OldestWithoutWarning: "3.0.0",
+	})
+}
+
 func Capabilities(w http.ResponseWriter, _ *http.Request) {
 	cfg, _ := json.Marshal(apitype.DeltaCheckpointUploadsConfigV2{
 		CheckpointCutoffSizeBytes: 0,

@@ -68,3 +68,11 @@ func (s *NopService) CancelUpdate(_ context.Context, _, _, _, _ string) error {
 func (s *NopService) PatchCheckpointDelta(_ context.Context, _, _, _, _ string, _ apitype.PatchUpdateCheckpointDeltaRequest) error {
 	return nil
 }
+
+func (s *NopService) ListUpdates(_ context.Context, _, _, _ string, _, _ int) ([]apitype.UpdateInfo, error) {
+	return []apitype.UpdateInfo{}, nil
+}
+
+func (s *NopService) GetLatestUpdate(_ context.Context, _, _, _ string) (*apitype.UpdateInfo, error) {
+	return nil, ErrUpdateNotFound
+}

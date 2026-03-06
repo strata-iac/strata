@@ -191,6 +191,31 @@ func (h *StackHandler) RenameStack(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func (h *StackHandler) UpdateTags(w http.ResponseWriter, r *http.Request) {
+	org := chi.URLParam(r, "org")
+	project := chi.URLParam(r, "project")
+	stackName := chi.URLParam(r, "stack")
+
+	var tags map[string]string
+	if err := json.NewDecoder(r.Body).Decode(&tags); err != nil {
+		encode.WriteError(w, http.StatusBadRequest, "Bad Request: invalid JSON body")
+		return
+	}
+
+	err := h.stacks.UpdateTags(r.Context(), org, project, stackName, tags)
+	if err != nil {
+		switch {
+		case errors.Is(err, stacks.ErrStackNotFound):
+			encode.WriteError(w, http.StatusNotFound, "Not Found")
+		default:
+			encode.WriteError(w, http.StatusInternalServerError, "Internal Server Error")
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func stackToResponse(stack *apitype.Stack) stackResponse {
 	resp := stackResponse{
 		ID:               stack.ID,

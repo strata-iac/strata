@@ -271,6 +271,50 @@ func (h *UpdateHandler) PatchCheckpointDelta(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusOK)
 }
 
+func (h *UpdateHandler) ListUpdates(w http.ResponseWriter, r *http.Request) {
+	org := chi.URLParam(r, "org")
+	project := chi.URLParam(r, "project")
+	stack := chi.URLParam(r, "stack")
+
+	page := 1
+	if p := r.URL.Query().Get("page"); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+
+	pageSize := 10
+	if ps := r.URL.Query().Get("pageSize"); ps != "" {
+		if parsed, err := strconv.Atoi(ps); err == nil && parsed > 0 {
+			pageSize = parsed
+		}
+	}
+
+	infos, err := h.updates.ListUpdates(r.Context(), org, project, stack, page, pageSize)
+	if err != nil {
+		h.writeUpdateError(w, err)
+		return
+	}
+
+	encode.WriteJSON(w, http.StatusOK, apitype.GetHistoryResponse{Updates: infos})
+}
+
+func (h *UpdateHandler) GetLatestUpdate(w http.ResponseWriter, r *http.Request) {
+	org := chi.URLParam(r, "org")
+	project := chi.URLParam(r, "project")
+	stack := chi.URLParam(r, "stack")
+
+	info, err := h.updates.GetLatestUpdate(r.Context(), org, project, stack)
+	if err != nil {
+		h.writeUpdateError(w, err)
+		return
+	}
+
+	encode.WriteJSON(w, http.StatusOK, struct {
+		Info apitype.UpdateInfo `json:"info"`
+	}{Info: *info})
+}
+
 func (h *UpdateHandler) CancelUpdate(w http.ResponseWriter, r *http.Request) {
 	org := chi.URLParam(r, "org")
 	project := chi.URLParam(r, "project")

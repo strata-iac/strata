@@ -49,4 +49,10 @@ type Service interface {
 
 	// PatchCheckpointDelta applies a delta (textual diff) to the last-saved checkpoint.
 	PatchCheckpointDelta(ctx context.Context, org, project, stack, updateID string, req apitype.PatchUpdateCheckpointDeltaRequest) error
+
+	// ListUpdates returns paginated update history for a stack.
+	ListUpdates(ctx context.Context, org, project, stack string, page, pageSize int) ([]apitype.UpdateInfo, error)
+
+	// GetLatestUpdate returns the most recent update for a stack.
+	GetLatestUpdate(ctx context.Context, org, project, stack string) (*apitype.UpdateInfo, error)
 }

@@ -13,4 +13,5 @@ type Service interface {
 	ListStacks(ctx context.Context, org string, continuationToken *string, tagFilter string) (*apitype.ListStacksResponse, error)
 	ProjectExists(ctx context.Context, org, project string) (bool, error)
 	RenameStack(ctx context.Context, org, project, stack, newName, newProject string) error
+	UpdateTags(ctx context.Context, org, project, stack string, tags map[string]string) error
 }

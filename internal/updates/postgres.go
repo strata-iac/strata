@@ -649,6 +649,151 @@ func (s *PostgresService) PatchCheckpointDelta(ctx context.Context, org, project
 	return nil
 }
 
+func (s *PostgresService) ListUpdates(ctx context.Context, org, project, stack string, page, pageSize int) ([]apitype.UpdateInfo, error) {
+	stackID, err := s.findStackID(ctx, org, project, stack)
+	if err != nil {
+		return nil, err
+	}
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+	offset := (page - 1) * pageSize
+
+	rows, err := s.db.Query(ctx, `
+		SELECT kind, status, version, config, metadata, created_at, started_at, completed_at
+		FROM updates
+		WHERE stack_id = $1
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
+	`, stackID, pageSize, offset)
+	if err != nil {
+		return nil, fmt.Errorf("list updates: %w", err)
+	}
+	defer rows.Close()
+
+	result := make([]apitype.UpdateInfo, 0, pageSize)
+	for rows.Next() {
+		info, err := scanUpdateInfo(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, info)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate updates: %w", err)
+	}
+
+	return result, nil
+}
+
+func (s *PostgresService) GetLatestUpdate(ctx context.Context, org, project, stack string) (*apitype.UpdateInfo, error) {
+	stackID, err := s.findStackID(ctx, org, project, stack)
+	if err != nil {
+		return nil, err
+	}
+
+	row := s.db.QueryRow(ctx, `
+		SELECT kind, status, version, config, metadata, created_at, started_at, completed_at
+		FROM updates
+		WHERE stack_id = $1
+		ORDER BY created_at DESC
+		LIMIT 1
+	`, stackID)
+
+	var (
+		kind        string
+		status      string
+		version     int
+		configJSON  json.RawMessage
+		metaJSON    json.RawMessage
+		createdAt   time.Time
+		startedAt   *time.Time
+		completedAt *time.Time
+	)
+	if err := row.Scan(&kind, &status, &version, &configJSON, &metaJSON, &createdAt, &startedAt, &completedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUpdateNotFound
+		}
+		return nil, fmt.Errorf("get latest update: %w", err)
+	}
+
+	info := buildUpdateInfo(kind, status, version, configJSON, metaJSON, createdAt, startedAt, completedAt)
+	return &info, nil
+}
+
+func scanUpdateInfo(rows pgx.Rows) (apitype.UpdateInfo, error) {
+	var (
+		kind        string
+		status      string
+		version     int
+		configJSON  json.RawMessage
+		metaJSON    json.RawMessage
+		createdAt   time.Time
+		startedAt   *time.Time
+		completedAt *time.Time
+	)
+	if err := rows.Scan(&kind, &status, &version, &configJSON, &metaJSON, &createdAt, &startedAt, &completedAt); err != nil {
+		return apitype.UpdateInfo{}, fmt.Errorf("scan update info: %w", err)
+	}
+	return buildUpdateInfo(kind, status, version, configJSON, metaJSON, createdAt, startedAt, completedAt), nil
+}
+
+func buildUpdateInfo(kind, status string, version int, configJSON, metaJSON json.RawMessage, createdAt time.Time, startedAt, completedAt *time.Time) apitype.UpdateInfo {
+	info := apitype.UpdateInfo{
+		Kind:    apitype.UpdateKind(kind),
+		Version: version,
+		Result:  statusToUpdateResult(status),
+	}
+
+	info.StartTime = createdAt.Unix()
+	if startedAt != nil {
+		info.StartTime = startedAt.Unix()
+	}
+	if completedAt != nil {
+		info.EndTime = completedAt.Unix()
+	}
+
+	var meta apitype.UpdateMetadata
+	if len(metaJSON) > 0 {
+		_ = json.Unmarshal(metaJSON, &meta)
+	}
+	info.Message = meta.Message
+	info.Environment = meta.Environment
+	if info.Environment == nil {
+		info.Environment = map[string]string{}
+	}
+
+	var cfg map[string]apitype.ConfigValue
+	if len(configJSON) > 0 {
+		_ = json.Unmarshal(configJSON, &cfg)
+	}
+	if cfg == nil {
+		cfg = map[string]apitype.ConfigValue{}
+	}
+	info.Config = cfg
+
+	return info
+}
+
+const statusCancelled = "cancelled" //nolint:misspell // matches DB enum value
+
+func statusToUpdateResult(status string) apitype.UpdateResult {
+	switch status {
+	case "succeeded":
+		return apitype.SucceededResult
+	case "failed", statusCancelled:
+		return apitype.FailedResult
+	case "running", "requested":
+		return apitype.InProgressResult
+	default:
+		return apitype.NotStartedResult
+	}
+}
+
 // findStackID looks up a stack by org/project/stack, returning the stack UUID.
 func (s *PostgresService) findStackID(ctx context.Context, org, project, stack string) (string, error) {
 	var stackID string

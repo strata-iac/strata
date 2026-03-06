@@ -355,6 +355,30 @@ func (s *PostgresService) RenameStack(ctx context.Context, org, project, stack, 
 	return nil
 }
 
+func (s *PostgresService) UpdateTags(ctx context.Context, org, project, stack string, tags map[string]string) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("stacks postgres service is not configured")
+	}
+
+	ct, err := s.db.Exec(ctx, `
+		UPDATE stacks SET tags = $4::jsonb, updated_at = now()
+		WHERE id = (
+			SELECT s.id FROM stacks s
+			JOIN projects p ON p.id = s.project_id
+			JOIN organizations o ON o.id = p.organization_id
+			WHERE o.github_login = $1 AND p.name = $2 AND s.name = $3
+		)
+	`, org, project, stack, mapToStringString(tags))
+	if err != nil {
+		return fmt.Errorf("update stack tags: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrStackNotFound
+	}
+
+	return nil
+}
+
 func mapToStackTags(tags map[string]string) map[apitype.StackTagName]string {
 	if len(tags) == 0 {
 		return map[apitype.StackTagName]string{}

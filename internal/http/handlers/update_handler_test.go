@@ -29,6 +29,8 @@ type mockUpdateService struct {
 	getUpdateStatusFn         func(ctx context.Context, org, project, stack, updateID string, continuationToken *string) (*apitype.UpdateResults, error)
 	cancelUpdateFn            func(ctx context.Context, org, project, stack, updateID string) error
 	patchCheckpointDeltaFn    func(ctx context.Context, org, project, stack, updateID string, req apitype.PatchUpdateCheckpointDeltaRequest) error
+	listUpdatesFn             func(ctx context.Context, org, project, stack string, page, pageSize int) ([]apitype.UpdateInfo, error)
+	getLatestUpdateFn         func(ctx context.Context, org, project, stack string) (*apitype.UpdateInfo, error)
 }
 
 func (m *mockUpdateService) CreateUpdate(ctx context.Context, org, project, stack string, kind apitype.UpdateKind, req apitype.UpdateProgramRequest) (*apitype.UpdateProgramResponse, error) {
@@ -105,9 +107,25 @@ func (m *mockUpdateService) PatchCheckpointDelta(ctx context.Context, org, proje
 	return nil
 }
 
+func (m *mockUpdateService) ListUpdates(ctx context.Context, org, project, stack string, page, pageSize int) ([]apitype.UpdateInfo, error) {
+	if m.listUpdatesFn != nil {
+		return m.listUpdatesFn(ctx, org, project, stack, page, pageSize)
+	}
+	return []apitype.UpdateInfo{}, nil
+}
+
+func (m *mockUpdateService) GetLatestUpdate(ctx context.Context, org, project, stack string) (*apitype.UpdateInfo, error) {
+	if m.getLatestUpdateFn != nil {
+		return m.getLatestUpdateFn(ctx, org, project, stack)
+	}
+	return nil, updates.ErrUpdateNotFound
+}
+
 func newUpdateTestRouter(svc updates.Service) *chi.Mux {
 	h := NewUpdateHandler(svc)
 	r := chi.NewRouter()
+	r.Get("/api/stacks/{org}/{project}/{stack}/updates/latest", h.GetLatestUpdate)
+	r.Get("/api/stacks/{org}/{project}/{stack}/updates", h.ListUpdates)
 	r.Get("/api/stacks/{org}/{project}/{stack}/export/{version}", h.ExportStackVersion)
 	r.Post("/api/stacks/{org}/{project}/{stack}/import", h.ImportStack)
 	r.Get("/api/stacks/{org}/{project}/{stack}/update/{updateID}", h.GetUpdateStatus)
@@ -729,5 +747,153 @@ func TestPatchCheckpointDelta_BadJSON(t *testing.T) {
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestListUpdates_Empty(t *testing.T) {
+	t.Parallel()
+	svc := &mockUpdateService{
+		listUpdatesFn: func(_ context.Context, _, _, _ string, _, _ int) ([]apitype.UpdateInfo, error) {
+			return []apitype.UpdateInfo{}, nil
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/updates", nil)
+	rr := httptest.NewRecorder()
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp apitype.GetHistoryResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Updates) != 0 {
+		t.Fatalf("expected 0 updates, got %d", len(resp.Updates))
+	}
+}
+
+func TestListUpdates_WithResults(t *testing.T) {
+	t.Parallel()
+	svc := &mockUpdateService{
+		listUpdatesFn: func(_ context.Context, _, _, _ string, _, _ int) ([]apitype.UpdateInfo, error) {
+			return []apitype.UpdateInfo{
+				{Kind: apitype.UpdateUpdate, Version: 1, Result: apitype.SucceededResult},
+				{Kind: apitype.PreviewUpdate, Version: 2, Result: apitype.InProgressResult},
+			}, nil
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/updates", nil)
+	rr := httptest.NewRecorder()
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp apitype.GetHistoryResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Updates) != 2 {
+		t.Fatalf("expected 2 updates, got %d", len(resp.Updates))
+	}
+	if resp.Updates[0].Kind != apitype.UpdateUpdate {
+		t.Fatalf("expected first update kind 'update', got %s", resp.Updates[0].Kind)
+	}
+}
+
+func TestListUpdates_PaginationParams(t *testing.T) {
+	t.Parallel()
+	var gotPage, gotPageSize int
+	svc := &mockUpdateService{
+		listUpdatesFn: func(_ context.Context, _, _, _ string, page, pageSize int) ([]apitype.UpdateInfo, error) {
+			gotPage = page
+			gotPageSize = pageSize
+			return []apitype.UpdateInfo{}, nil
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/updates?page=3&pageSize=25", nil)
+	rr := httptest.NewRecorder()
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if gotPage != 3 {
+		t.Fatalf("expected page=3, got %d", gotPage)
+	}
+	if gotPageSize != 25 {
+		t.Fatalf("expected pageSize=25, got %d", gotPageSize)
+	}
+}
+
+func TestListUpdates_StackNotFound(t *testing.T) {
+	t.Parallel()
+	svc := &mockUpdateService{
+		listUpdatesFn: func(context.Context, string, string, string, int, int) ([]apitype.UpdateInfo, error) {
+			return nil, updates.ErrStackNotFound
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/updates", nil)
+	rr := httptest.NewRecorder()
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGetLatestUpdate_Success(t *testing.T) {
+	t.Parallel()
+	svc := &mockUpdateService{
+		getLatestUpdateFn: func(_ context.Context, _, _, _ string) (*apitype.UpdateInfo, error) {
+			return &apitype.UpdateInfo{
+				Kind:    apitype.UpdateUpdate,
+				Version: 5,
+				Result:  apitype.SucceededResult,
+				Config:  map[string]apitype.ConfigValue{},
+			}, nil
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/updates/latest", nil)
+	rr := httptest.NewRecorder()
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Info apitype.UpdateInfo `json:"info"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Info.Version != 5 {
+		t.Fatalf("expected version=5, got %d", resp.Info.Version)
+	}
+}
+
+func TestGetLatestUpdate_NotFound(t *testing.T) {
+	t.Parallel()
+	svc := &mockUpdateService{
+		getLatestUpdateFn: func(context.Context, string, string, string) (*apitype.UpdateInfo, error) {
+			return nil, updates.ErrUpdateNotFound
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/updates/latest", nil)
+	rr := httptest.NewRecorder()
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rr.Code, rr.Body.String())
 	}
 }

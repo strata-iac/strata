@@ -27,6 +27,7 @@ type mockStackService struct {
 	listStacksFn    func(ctx context.Context, org string, continuationToken *string, tagFilter string) (*apitype.ListStacksResponse, error)
 	projectExistsFn func(ctx context.Context, org, project string) (bool, error)
 	renameStackFn   func(ctx context.Context, org, project, stack, newName, newProject string) error
+	updateTagsFn    func(ctx context.Context, org, project, stack string, tags map[string]string) error
 }
 
 func (m *mockStackService) CreateStack(ctx context.Context, org, project, stackName string, tags map[string]string) (*apitype.Stack, error) {
@@ -71,15 +72,17 @@ func (m *mockStackService) RenameStack(ctx context.Context, org, project, stack,
 	return m.renameStackFn(ctx, org, project, stack, newName, newProject)
 }
 
-// ---------------------------------------------------------------------------
-// Test router helper
-// ---------------------------------------------------------------------------
+func (m *mockStackService) UpdateTags(ctx context.Context, org, project, stack string, tags map[string]string) error {
+	if m.updateTagsFn == nil {
+		panic("updateTagsFn not set")
+	}
+	return m.updateTagsFn(ctx, org, project, stack, tags)
+}
 
 func newTestRouter(svc stacks.Service) *chi.Mux {
 	h := NewStackHandler(svc)
 	r := chi.NewRouter()
 
-	// Fake auth middleware — injects a hardcoded Caller.
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			caller := &auth.Caller{
@@ -100,6 +103,7 @@ func newTestRouter(svc stacks.Service) *chi.Mux {
 	r.Get("/api/stacks/{org}/{project}/{stack}", h.GetStack)
 	r.Delete("/api/stacks/{org}/{project}/{stack}", h.DeleteStack)
 	r.Post("/api/stacks/{org}/{project}/{stack}/rename", h.RenameStack)
+	r.Patch("/api/stacks/{org}/{project}/{stack}/tags", h.UpdateTags)
 
 	return r
 }
@@ -712,5 +716,139 @@ func TestRenameStack(t *testing.T) {
 				t.Fatalf("status: got %d want %d, body: %s", rec.Code, tc.wantStatus, rec.Body.String())
 			}
 		})
+	}
+}
+
+func TestUpdateTags(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		body       any
+		svc        *mockStackService
+		wantStatus int
+	}{
+		{
+			name: "happy path",
+			body: map[string]string{"pulumi:project": "my-project", "env": "prod"},
+			svc: &mockStackService{
+				updateTagsFn: func(_ context.Context, org, project, stack string, tags map[string]string) error {
+					if org != "my-org" || project != "my-project" || stack != "dev" {
+						t.Errorf("unexpected params: org=%s project=%s stack=%s", org, project, stack)
+					}
+					if tags["env"] != "prod" {
+						t.Errorf("expected tag env=prod, got %s", tags["env"])
+					}
+					return nil
+				},
+			},
+			wantStatus: http.StatusNoContent,
+		},
+		{
+			name: "stack not found",
+			body: map[string]string{"env": "prod"},
+			svc: &mockStackService{
+				updateTagsFn: func(context.Context, string, string, string, map[string]string) error {
+					return stacks.ErrStackNotFound
+				},
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "invalid JSON",
+			body:       nil,
+			svc:        &mockStackService{updateTagsFn: func(context.Context, string, string, string, map[string]string) error { return nil }},
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			router := newTestRouter(tc.svc)
+
+			var reqBody *bytes.Buffer
+			if tc.body != nil {
+				reqBody = jsonBody(t, tc.body)
+			} else {
+				reqBody = bytes.NewBufferString("{invalid")
+			}
+
+			req := httptest.NewRequest(http.MethodPatch, "/api/stacks/my-org/my-project/dev/tags", reqBody)
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status: got %d want %d, body: %s", rec.Code, tc.wantStatus, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestCLIVersion(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cli/version", nil)
+	rr := httptest.NewRecorder()
+
+	CLIVersion(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp apitype.CLIVersionResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.LatestVersion == "" {
+		t.Fatal("expected non-empty latestVersion")
+	}
+	if resp.OldestWithoutWarning == "" {
+		t.Fatal("expected non-empty oldestWithoutWarning")
+	}
+}
+
+func TestDefaultOrganization(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/user/organizations/default", nil)
+	caller := &auth.Caller{
+		UserID:      "test-user-id",
+		GithubLogin: "test-user",
+		DisplayName: "Test User",
+		Email:       "test@example.com",
+		OrgLogin:    "test-org",
+	}
+	ctx := auth.ContextWithCaller(req.Context(), caller)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	DefaultOrganization(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		GitHubLogin string `json:"gitHubLogin"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.GitHubLogin != "test-org" {
+		t.Fatalf("expected gitHubLogin=test-org, got %s", resp.GitHubLogin)
+	}
+}
+
+func TestDefaultOrganization_Unauthorized(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/user/organizations/default", nil)
+	rr := httptest.NewRecorder()
+	DefaultOrganization(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", rr.Code, rr.Body.String())
 	}
 }

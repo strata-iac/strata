@@ -33,8 +33,22 @@ type tokenInfo struct {
 	Team         string `json:"team,omitempty"`
 }
 
-// NewUserHandler returns an http.HandlerFunc that returns the authenticated user.
-// It reads the Caller from request context (set by auth middleware).
+func DefaultOrganization(w http.ResponseWriter, r *http.Request) {
+	caller, ok := auth.CallerFromContext(r.Context())
+	if !ok || caller == nil {
+		encode.WriteError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	encode.WriteJSON(w, http.StatusOK, struct {
+		GitHubLogin string `json:"gitHubLogin"`
+		Messages    []any  `json:"messages"`
+	}{
+		GitHubLogin: caller.OrgLogin,
+		Messages:    []any{},
+	})
+}
+
 func NewUserHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		caller, ok := auth.CallerFromContext(r.Context())
