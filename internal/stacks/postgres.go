@@ -53,7 +53,7 @@ func (s *PostgresService) CreateStack(ctx context.Context, org, project, stackNa
 	if err != nil {
 		return nil, fmt.Errorf("begin create stack transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO organizations (github_login, display_name)

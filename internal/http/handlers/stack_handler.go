@@ -104,7 +104,7 @@ func (h *StackHandler) DeleteStack(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, stacks.ErrStackHasResources):
-			encode.WriteError(w, http.StatusBadRequest, stacks.ErrStackHasResources.Error())
+			encode.WriteError(w, http.StatusBadRequest, "Bad Request: Stack still contains resources.")
 		case errors.Is(err, stacks.ErrStackNotFound):
 			encode.WriteError(w, http.StatusNotFound, "Not Found")
 		default:

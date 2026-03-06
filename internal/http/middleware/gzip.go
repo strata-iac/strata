@@ -24,7 +24,11 @@ func Gzip(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Decompress request body if gzipped
 		if r.Header.Get("Content-Encoding") == "gzip" {
-			gr := gzipReaderPool.Get().(*gzip.Reader)
+			gr, ok := gzipReaderPool.Get().(*gzip.Reader)
+			if !ok {
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
 			if err := gr.Reset(r.Body); err != nil {
 				http.Error(w, "failed to decompress request", http.StatusBadRequest)
 				return
@@ -36,15 +40,20 @@ func Gzip(next http.Handler) http.Handler {
 
 		// Compress response if client accepts gzip
 		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-			gw := gzipWriterPool.Get().(*gzip.Writer)
+			gw, ok := gzipWriterPool.Get().(*gzip.Writer)
+			if !ok {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			gw.Reset(w)
 
 			w.Header().Set("Content-Encoding", "gzip")
-			w.Header().Del("Content-Length") // length changes
+			w.Header().Del("Content-Length")
 
 			grw := &gzipResponseWriter{ResponseWriter: w, Writer: gw}
 			defer func() {
-				gw.Close()
+				_ = gw.Close()
 				gzipWriterPool.Put(gw)
 			}()
 

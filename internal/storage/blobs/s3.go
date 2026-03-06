@@ -27,12 +27,12 @@ func NewS3Store(ctx context.Context, bucket, endpoint string) (*S3Store, error) 
 	loadOpts := make([]func(*awsconfig.LoadOptions) error, 0, 2)
 	if endpoint != "" {
 		loadOpts = append(loadOpts,
-			awsconfig.WithEndpointResolverWithOptions(aws.EndpointResolverWithOptionsFunc(func(service, region string, _ ...interface{}) (aws.Endpoint, error) {
+			awsconfig.WithEndpointResolverWithOptions(aws.EndpointResolverWithOptionsFunc(func(service, _ string, _ ...interface{}) (aws.Endpoint, error) { //nolint:staticcheck // TODO: migrate to BaseEndpoint
 				if service == s3.ServiceID {
-					return aws.Endpoint{URL: endpoint}, nil
+					return aws.Endpoint{URL: endpoint}, nil //nolint:staticcheck // see above
 				}
 
-				return aws.Endpoint{}, &aws.EndpointNotFoundError{}
+				return aws.Endpoint{}, &aws.EndpointNotFoundError{} //nolint:staticcheck // see above
 			})),
 		)
 

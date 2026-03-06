@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type LocalStore struct {
@@ -18,17 +19,34 @@ func NewLocalStore(basePath string) (*LocalStore, error) {
 		return nil, fmt.Errorf("base path is required")
 	}
 
-	if err := os.MkdirAll(basePath, 0o755); err != nil {
-		return nil, fmt.Errorf("create base path %q: %w", basePath, err)
+	absBase, err := filepath.Abs(basePath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve base path %q: %w", basePath, err)
 	}
 
-	return &LocalStore{basePath: basePath}, nil
+	if err := os.MkdirAll(absBase, 0o750); err != nil {
+		return nil, fmt.Errorf("create base path %q: %w", absBase, err)
+	}
+
+	return &LocalStore{basePath: absBase}, nil
+}
+
+func (s *LocalStore) safePath(key string) (string, error) {
+	joined := filepath.Join(s.basePath, filepath.Clean("/"+key))
+	if !strings.HasPrefix(joined, s.basePath+string(filepath.Separator)) && joined != s.basePath {
+		return "", fmt.Errorf("invalid key %q: path traversal detected", key)
+	}
+
+	return joined, nil
 }
 
 func (s *LocalStore) Put(_ context.Context, key string, r io.Reader, _ int64) error {
-	path := filepath.Join(s.basePath, key)
+	path, err := s.safePath(key)
+	if err != nil {
+		return err
+	}
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("create parent directory for %q: %w", key, err)
 	}
 
@@ -64,9 +82,12 @@ func (s *LocalStore) Put(_ context.Context, key string, r io.Reader, _ int64) er
 }
 
 func (s *LocalStore) Get(_ context.Context, key string) (io.ReadCloser, error) {
-	path := filepath.Join(s.basePath, key)
+	path, err := s.safePath(key)
+	if err != nil {
+		return nil, err
+	}
 
-	f, err := os.Open(path)
+	f, err := os.Open(path) //#nosec G304 -- path validated by safePath
 	if err != nil {
 		return nil, fmt.Errorf("open blob %q: %w", key, err)
 	}
@@ -75,9 +96,12 @@ func (s *LocalStore) Get(_ context.Context, key string) (io.ReadCloser, error) {
 }
 
 func (s *LocalStore) Delete(_ context.Context, key string) error {
-	path := filepath.Join(s.basePath, key)
+	path, err := s.safePath(key)
+	if err != nil {
+		return err
+	}
 
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err = os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("remove blob %q: %w", key, err)
 	}
 
@@ -85,9 +109,12 @@ func (s *LocalStore) Delete(_ context.Context, key string) error {
 }
 
 func (s *LocalStore) Exists(_ context.Context, key string) (bool, error) {
-	path := filepath.Join(s.basePath, key)
+	path, err := s.safePath(key)
+	if err != nil {
+		return false, err
+	}
 
-	_, err := os.Stat(path)
+	_, err = os.Stat(path)
 	if err == nil {
 		return true, nil
 	}

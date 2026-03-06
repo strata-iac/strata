@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"time"
 )
 
 type Server struct {
@@ -18,8 +19,9 @@ type Server struct {
 func NewServer(addr string, handler http.Handler, logger *slog.Logger) *Server {
 	return &Server{
 		server: &http.Server{
-			Addr:    addr,
-			Handler: handler,
+			Addr:              addr,
+			Handler:           handler,
+			ReadHeaderTimeout: 10 * time.Second,
 		},
 		logger: logger,
 		errCh:  make(chan error, 1),
