@@ -17,10 +17,13 @@ COPY . .
 COPY --from=web-builder /src/web/dist web/dist
 RUN go build -o /strata ./cmd/strata
 
-FROM alpine:3
+FROM scratch
 
 COPY --from=builder /strata /strata
 
 EXPOSE 8080
+
+HEALTHCHECK --interval=5s --timeout=3s --retries=10 \
+  CMD ["/strata", "healthcheck"]
 
 CMD ["/strata"]

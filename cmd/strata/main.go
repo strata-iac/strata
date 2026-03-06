@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -31,6 +32,11 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		runHealthcheck()
+		return
+	}
+
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	cfg, err := config.Load()
@@ -199,4 +205,36 @@ func main() {
 	}
 
 	logger.Info("strata stopped")
+}
+
+func runHealthcheck() {
+	addr := os.Getenv("STRATA_LISTEN_ADDR")
+	if addr == "" {
+		addr = ":8080"
+	}
+
+	_, port, _ := net.SplitHostPort(addr)
+	if port == "" {
+		port = "8080"
+	}
+
+	url := "http://localhost:" + port + "/healthz"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		os.Exit(1)
+	}
+
+	resp, err := http.DefaultClient.Do(req) //nolint:gosec // localhost-only healthcheck, port from own config
+	if err != nil {
+		os.Exit(1)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		os.Exit(1)
+	}
 }

@@ -21,7 +21,7 @@ x-strata: &strata
     AWS_ACCESS_KEY_ID: minio
     AWS_SECRET_ACCESS_KEY: minio
   healthcheck: &strata-health
-    test: ["CMD", "wget", "-q", "-O-", "http://localhost:8080/healthz"]
+    test: ["CMD", "/strata", "healthcheck"]
     interval: 5s
     timeout: 3s
     retries: 10
