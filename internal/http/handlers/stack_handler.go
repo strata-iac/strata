@@ -23,14 +23,14 @@ func NewStackHandler(svc stacks.Service) *StackHandler {
 }
 
 type stackResponse struct {
-	ID               string            `json:"id"`
-	OrgName          string            `json:"orgName"`
-	ProjectName      string            `json:"projectName"`
-	StackName        string            `json:"stackName"`
-	CurrentOperation any               `json:"currentOperation"`
-	ActiveUpdate     string            `json:"activeUpdate"`
-	Tags             map[string]string `json:"tags"`
-	Version          int               `json:"version"`
+	ID               string                   `json:"id"`
+	OrgName          string                   `json:"orgName"`
+	ProjectName      string                   `json:"projectName"`
+	StackName        string                   `json:"stackName"`
+	CurrentOperation *apitype.OperationStatus `json:"currentOperation,omitempty"`
+	ActiveUpdate     string                   `json:"activeUpdate"`
+	Tags             map[string]string        `json:"tags,omitempty"`
+	Version          int                      `json:"version"`
 }
 
 func (h *StackHandler) CreateStack(w http.ResponseWriter, r *http.Request) {
@@ -113,7 +113,7 @@ func (h *StackHandler) DeleteStack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *StackHandler) ListStacks(w http.ResponseWriter, r *http.Request) {
@@ -159,6 +159,38 @@ func (h *StackHandler) ProjectExists(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func (h *StackHandler) RenameStack(w http.ResponseWriter, r *http.Request) {
+	org := chi.URLParam(r, "org")
+	project := chi.URLParam(r, "project")
+	stackName := chi.URLParam(r, "stack")
+
+	var req apitype.StackRenameRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		encode.WriteError(w, http.StatusBadRequest, "Bad Request: invalid JSON body")
+		return
+	}
+
+	if req.NewName == "" && req.NewProject == "" {
+		encode.WriteError(w, http.StatusBadRequest, "Bad Request: newName or newProject is required")
+		return
+	}
+
+	err := h.stacks.RenameStack(r.Context(), org, project, stackName, req.NewName, req.NewProject)
+	if err != nil {
+		switch {
+		case errors.Is(err, stacks.ErrStackNotFound):
+			encode.WriteError(w, http.StatusNotFound, "Not Found")
+		case errors.Is(err, stacks.ErrStackAlreadyExists):
+			encode.WriteError(w, http.StatusConflict, err.Error())
+		default:
+			encode.WriteError(w, http.StatusInternalServerError, "Internal Server Error")
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func stackToResponse(stack *apitype.Stack) stackResponse {
 	resp := stackResponse{
 		ID:               stack.ID,
@@ -167,12 +199,14 @@ func stackToResponse(stack *apitype.Stack) stackResponse {
 		StackName:        string(stack.StackName),
 		CurrentOperation: stack.CurrentOperation,
 		ActiveUpdate:     stack.ActiveUpdate,
-		Tags:             make(map[string]string, len(stack.Tags)),
 		Version:          stack.Version,
 	}
 
-	for k, v := range stack.Tags {
-		resp.Tags[k] = v
+	if len(stack.Tags) > 0 {
+		resp.Tags = make(map[string]string, len(stack.Tags))
+		for k, v := range stack.Tags {
+			resp.Tags[k] = v
+		}
 	}
 
 	return resp

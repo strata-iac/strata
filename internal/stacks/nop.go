@@ -42,6 +42,10 @@ func (s *NopService) ProjectExists(_ context.Context, _, _ string) (bool, error)
 	return false, nil
 }
 
+func (s *NopService) RenameStack(_ context.Context, _, _, _, _, _ string) error {
+	return nil
+}
+
 func cloneTags(tags map[string]string) map[string]string {
 	if len(tags) == 0 {
 		return map[string]string{}

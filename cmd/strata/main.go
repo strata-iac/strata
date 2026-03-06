@@ -85,6 +85,7 @@ func main() {
 		r.Post("/api/stacks/{org}/{project}", stackHandler.CreateStack)
 		r.Get("/api/stacks/{org}/{project}/{stack}", stackHandler.GetStack)
 		r.Delete("/api/stacks/{org}/{project}/{stack}", stackHandler.DeleteStack)
+		r.Post("/api/stacks/{org}/{project}/{stack}/rename", stackHandler.RenameStack)
 	})
 
 	srv := httpserver.NewServer(cfg.ListenAddr, router, logger)

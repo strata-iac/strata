@@ -269,6 +269,92 @@ func (s *PostgresService) ProjectExists(ctx context.Context, org, project string
 	return exists, nil
 }
 
+func (s *PostgresService) RenameStack(ctx context.Context, org, project, stack, newName, newProject string) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("stacks postgres service is not configured")
+	}
+
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin rename stack transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var stackID string
+	var currentName, currentProject string
+	err = tx.QueryRow(ctx, `
+		SELECT s.id::text, s.name, p.name
+		FROM stacks s
+		JOIN projects p ON p.id = s.project_id
+		JOIN organizations o ON o.id = p.organization_id
+		WHERE o.github_login = $1 AND p.name = $2 AND s.name = $3
+	`, org, project, stack).Scan(&stackID, &currentName, &currentProject)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrStackNotFound
+		}
+
+		return fmt.Errorf("find stack to rename: %w", err)
+	}
+
+	effectiveName := currentName
+	if newName != "" {
+		effectiveName = newName
+	}
+
+	effectiveProject := currentProject
+	if newProject != "" {
+		effectiveProject = newProject
+	}
+
+	if effectiveName == currentName && effectiveProject == currentProject {
+		return nil
+	}
+
+	if effectiveProject != currentProject {
+		if _, err = tx.Exec(ctx, `
+			INSERT INTO projects (organization_id, name)
+			SELECT o.id, $2
+			FROM organizations o
+			WHERE o.github_login = $1
+			ON CONFLICT (organization_id, name) DO NOTHING
+		`, org, effectiveProject); err != nil {
+			return fmt.Errorf("ensure target project exists: %w", err)
+		}
+
+		if _, err = tx.Exec(ctx, `
+			UPDATE stacks SET project_id = (
+				SELECT p.id FROM projects p
+				JOIN organizations o ON o.id = p.organization_id
+				WHERE o.github_login = $1 AND p.name = $2
+			) WHERE id = $3::uuid
+		`, org, effectiveProject, stackID); err != nil {
+			return fmt.Errorf("move stack to new project: %w", err)
+		}
+	}
+
+	fqn := fmt.Sprintf("%s/%s/%s", org, effectiveProject, effectiveName)
+
+	_, err = tx.Exec(ctx, `
+		UPDATE stacks SET name = $1, fully_qualified_name = $2, updated_at = now()
+		WHERE id = $3::uuid
+	`, effectiveName, fqn, stackID)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return ErrStackAlreadyExists
+		}
+
+		return fmt.Errorf("rename stack: %w", err)
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit rename stack transaction: %w", err)
+	}
+
+	return nil
+}
+
 func mapToStackTags(tags map[string]string) map[apitype.StackTagName]string {
 	if len(tags) == 0 {
 		return map[apitype.StackTagName]string{}
