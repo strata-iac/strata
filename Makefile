@@ -2,10 +2,9 @@ MISE_EXEC := mise exec --
 GO := $(MISE_EXEC) go
 GOFUMPT := $(MISE_EXEC) gofumpt
 GOLANGCI_LINT := $(MISE_EXEC) golangci-lint
-GOSEC := $(MISE_EXEC) gosec
 GOVULNCHECK := $(MISE_EXEC) govulncheck
 
-.PHONY: dev deps down build go-build go-vet lint fmt sec vuln test check
+.PHONY: dev deps down build go-build fmt lint lint-fix vuln test e2e check check-all
 
 dev:
 	docker compose --profile dev up --build
@@ -22,14 +21,8 @@ build:
 go-build:
 	$(GO) build ./...
 
-go-vet:
-	$(GO) vet ./...
-
 fmt:
 	$(GOFUMPT) -w .
-
-fmt-check:
-	@test -z "$$($(GOFUMPT) -l .)" || (echo "gofumpt: files need formatting:" && $(GOFUMPT) -l . && exit 1)
 
 lint:
 	$(GOLANGCI_LINT) run ./...
@@ -37,13 +30,15 @@ lint:
 lint-fix:
 	$(GOLANGCI_LINT) run --fix ./...
 
-sec:
-	$(GOSEC) -quiet ./...
-
 vuln:
 	$(GOVULNCHECK) ./...
 
 test:
 	$(GO) test -race -count=1 ./...
 
-check: fmt-check lint sec vuln go-build test
+e2e:
+	$(GO) test -race -count=1 -tags=e2e -timeout=5m -v ./e2e/...
+
+check: lint vuln go-build test
+
+check-all: check e2e

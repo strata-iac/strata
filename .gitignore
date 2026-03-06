@@ -1,5 +1,6 @@
 # Binary
 /strata
+/bin/
 
 # Environment
 .env
@@ -11,6 +12,9 @@
 
 # OS
 .DS_Store
+
+# Data (dev blobs)
+/data/
 
 # Dolt database files (added by bd init)
 .dolt/
