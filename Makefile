@@ -3,7 +3,7 @@ GO := $(MISE_EXEC) go
 GOLANGCI_LINT := $(MISE_EXEC) golangci-lint
 GOVULNCHECK := $(MISE_EXEC) govulncheck
 
-.PHONY: dev deps down build go-build web fmt lint lint-fix vuln test e2e check check-all
+.PHONY: dev deps down build go-build web fmt lint lint-fix vuln test e2e examples check check-all
 
 dev:
 	docker compose --profile dev up --build
@@ -39,7 +39,10 @@ test:
 	$(GO) test -race -count=1 ./...
 
 e2e:
-	$(GO) test -race -count=1 -tags=e2e -timeout=5m -v ./e2e/...
+	$(GO) test -race -count=1 -tags=e2e -timeout=15m -v ./e2e/...
+
+examples:
+	$(GO) test -race -count=1 -tags=e2e -timeout=15m -v -run TestExamples ./e2e/...
 
 check: lint vuln go-build test
 

@@ -1,0 +1,3 @@
+name: secrets-heavy
+description: Secret-heavy program testing batch-decrypt, secret outputs, encrypted config
+runtime: go

@@ -1,0 +1,3 @@
+name: multi-resource
+description: Multiple resources with dependencies, various types, and stack outputs
+runtime: go

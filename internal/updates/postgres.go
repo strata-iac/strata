@@ -623,12 +623,15 @@ func (s *PostgresService) PatchCheckpointDelta(ctx context.Context, org, project
 		LIMIT 1
 	`, stackID).Scan(&lastDeployment)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrDeltaHashMismatch
+		}
 		return fmt.Errorf("fetch last checkpoint for delta: %w", err)
 	}
 
 	result, err := applyDelta(lastDeployment, req.DeploymentDelta)
 	if err != nil {
-		return fmt.Errorf("apply delta: %w", err)
+		return ErrDeltaHashMismatch
 	}
 
 	if checksumDeployment(result) != req.CheckpointHash {
@@ -657,7 +660,7 @@ func (s *PostgresService) PatchCheckpointDelta(ctx context.Context, org, project
 	return nil
 }
 
-func (s *PostgresService) ListUpdates(ctx context.Context, org, project, stack string, page, pageSize int) ([]apitype.UpdateInfo, error) {
+func (s *PostgresService) ListUpdates(ctx context.Context, org, project, stack string, page, pageSize int) ([]UpdateSummary, error) {
 	stackID, err := s.findStackID(ctx, org, project, stack)
 	if err != nil {
 		return nil, err
@@ -672,7 +675,7 @@ func (s *PostgresService) ListUpdates(ctx context.Context, org, project, stack s
 	offset := (page - 1) * pageSize
 
 	rows, err := s.db.Query(ctx, `
-		SELECT kind, status, version, config, metadata, created_at, started_at, completed_at
+		SELECT id::text, kind, status, version, config, metadata, created_at, started_at, completed_at
 		FROM updates
 		WHERE stack_id = $1
 		ORDER BY created_at DESC
@@ -683,13 +686,13 @@ func (s *PostgresService) ListUpdates(ctx context.Context, org, project, stack s
 	}
 	defer rows.Close()
 
-	result := make([]apitype.UpdateInfo, 0, pageSize)
+	result := make([]UpdateSummary, 0, pageSize)
 	for rows.Next() {
-		info, err := scanUpdateInfo(rows)
+		summary, err := scanUpdateSummary(rows)
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, info)
+		result = append(result, summary)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate updates: %w", err)
@@ -698,14 +701,14 @@ func (s *PostgresService) ListUpdates(ctx context.Context, org, project, stack s
 	return result, nil
 }
 
-func (s *PostgresService) GetLatestUpdate(ctx context.Context, org, project, stack string) (*apitype.UpdateInfo, error) {
+func (s *PostgresService) GetLatestUpdate(ctx context.Context, org, project, stack string) (*UpdateSummary, error) {
 	stackID, err := s.findStackID(ctx, org, project, stack)
 	if err != nil {
 		return nil, err
 	}
 
 	row := s.db.QueryRow(ctx, `
-		SELECT kind, status, version, config, metadata, created_at, started_at, completed_at
+		SELECT id::text, kind, status, version, config, metadata, created_at, started_at, completed_at
 		FROM updates
 		WHERE stack_id = $1
 		ORDER BY created_at DESC
@@ -713,6 +716,7 @@ func (s *PostgresService) GetLatestUpdate(ctx context.Context, org, project, sta
 	`, stackID)
 
 	var (
+		updateID    string
 		kind        string
 		status      string
 		version     int
@@ -722,19 +726,22 @@ func (s *PostgresService) GetLatestUpdate(ctx context.Context, org, project, sta
 		startedAt   *time.Time
 		completedAt *time.Time
 	)
-	if err := row.Scan(&kind, &status, &version, &configJSON, &metaJSON, &createdAt, &startedAt, &completedAt); err != nil {
+	if err := row.Scan(&updateID, &kind, &status, &version, &configJSON, &metaJSON, &createdAt, &startedAt, &completedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrUpdateNotFound
 		}
 		return nil, fmt.Errorf("get latest update: %w", err)
 	}
 
-	info := buildUpdateInfo(kind, status, version, configJSON, metaJSON, createdAt, startedAt, completedAt)
-	return &info, nil
+	return &UpdateSummary{
+		UpdateInfo: buildUpdateInfo(kind, status, version, configJSON, metaJSON, createdAt, startedAt, completedAt),
+		UpdateID:   updateID,
+	}, nil
 }
 
-func scanUpdateInfo(rows pgx.Rows) (apitype.UpdateInfo, error) {
+func scanUpdateSummary(rows pgx.Rows) (UpdateSummary, error) {
 	var (
+		updateID    string
 		kind        string
 		status      string
 		version     int
@@ -744,10 +751,13 @@ func scanUpdateInfo(rows pgx.Rows) (apitype.UpdateInfo, error) {
 		startedAt   *time.Time
 		completedAt *time.Time
 	)
-	if err := rows.Scan(&kind, &status, &version, &configJSON, &metaJSON, &createdAt, &startedAt, &completedAt); err != nil {
-		return apitype.UpdateInfo{}, fmt.Errorf("scan update info: %w", err)
+	if err := rows.Scan(&updateID, &kind, &status, &version, &configJSON, &metaJSON, &createdAt, &startedAt, &completedAt); err != nil {
+		return UpdateSummary{}, fmt.Errorf("scan update summary: %w", err)
 	}
-	return buildUpdateInfo(kind, status, version, configJSON, metaJSON, createdAt, startedAt, completedAt), nil
+	return UpdateSummary{
+		UpdateInfo: buildUpdateInfo(kind, status, version, configJSON, metaJSON, createdAt, startedAt, completedAt),
+		UpdateID:   updateID,
+	}, nil
 }
 
 func buildUpdateInfo(kind, status string, version int, configJSON, metaJSON json.RawMessage, createdAt time.Time, startedAt, completedAt *time.Time) apitype.UpdateInfo {
@@ -785,6 +795,32 @@ func buildUpdateInfo(kind, status string, version int, configJSON, metaJSON json
 	info.Config = cfg
 
 	return info
+}
+
+func (s *PostgresService) ResolveUpdateRef(ctx context.Context, org, project, stack, ref string) (string, error) {
+	version, err := strconv.Atoi(ref)
+	if err != nil {
+		// Not a number — treat ref as a UUID and return it directly.
+		return ref, nil //nolint:nilerr // intentional: Atoi error means ref is a UUID, not a version number
+	}
+
+	stackID, err := s.findStackID(ctx, org, project, stack)
+	if err != nil {
+		return "", err
+	}
+
+	var updateID string
+	err = s.db.QueryRow(ctx, `
+		SELECT id::text FROM updates WHERE stack_id = $1 AND version = $2
+	`, stackID, version).Scan(&updateID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrUpdateNotFound
+		}
+		return "", fmt.Errorf("resolve update ref: %w", err)
+	}
+
+	return updateID, nil
 }
 
 const (

@@ -1,0 +1,3 @@
+name: large-state
+description: 50+ resources stress-testing large checkpoints, delta efficiency, event batching
+runtime: go

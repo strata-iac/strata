@@ -29,8 +29,9 @@ type mockUpdateService struct {
 	getUpdateStatusFn         func(ctx context.Context, org, project, stack, updateID string, continuationToken *string) (*apitype.UpdateResults, error)
 	cancelUpdateFn            func(ctx context.Context, org, project, stack, updateID string) error
 	patchCheckpointDeltaFn    func(ctx context.Context, org, project, stack, updateID string, req apitype.PatchUpdateCheckpointDeltaRequest) error
-	listUpdatesFn             func(ctx context.Context, org, project, stack string, page, pageSize int) ([]apitype.UpdateInfo, error)
-	getLatestUpdateFn         func(ctx context.Context, org, project, stack string) (*apitype.UpdateInfo, error)
+	listUpdatesFn             func(ctx context.Context, org, project, stack string, page, pageSize int) ([]updates.UpdateSummary, error)
+	getLatestUpdateFn         func(ctx context.Context, org, project, stack string) (*updates.UpdateSummary, error)
+	resolveUpdateRefFn        func(ctx context.Context, org, project, stack, ref string) (string, error)
 	getUpdateEventsFn         func(ctx context.Context, org, project, stack, updateID string, continuationToken *string) (*apitype.GetUpdateEventsResponse, error)
 }
 
@@ -108,18 +109,25 @@ func (m *mockUpdateService) PatchCheckpointDelta(ctx context.Context, org, proje
 	return nil
 }
 
-func (m *mockUpdateService) ListUpdates(ctx context.Context, org, project, stack string, page, pageSize int) ([]apitype.UpdateInfo, error) {
+func (m *mockUpdateService) ListUpdates(ctx context.Context, org, project, stack string, page, pageSize int) ([]updates.UpdateSummary, error) {
 	if m.listUpdatesFn != nil {
 		return m.listUpdatesFn(ctx, org, project, stack, page, pageSize)
 	}
-	return []apitype.UpdateInfo{}, nil
+	return []updates.UpdateSummary{}, nil
 }
 
-func (m *mockUpdateService) GetLatestUpdate(ctx context.Context, org, project, stack string) (*apitype.UpdateInfo, error) {
+func (m *mockUpdateService) GetLatestUpdate(ctx context.Context, org, project, stack string) (*updates.UpdateSummary, error) {
 	if m.getLatestUpdateFn != nil {
 		return m.getLatestUpdateFn(ctx, org, project, stack)
 	}
 	return nil, updates.ErrUpdateNotFound
+}
+
+func (m *mockUpdateService) ResolveUpdateRef(_ context.Context, _, _, _, ref string) (string, error) {
+	if m.resolveUpdateRefFn != nil {
+		return m.resolveUpdateRefFn(context.Background(), "", "", "", ref)
+	}
+	return ref, nil
 }
 
 func (m *mockUpdateService) GetUpdateEvents(ctx context.Context, org, project, stack, updateID string, continuationToken *string) (*apitype.GetUpdateEventsResponse, error) {
@@ -762,8 +770,8 @@ func TestPatchCheckpointDelta_BadJSON(t *testing.T) {
 func TestListUpdates_Empty(t *testing.T) {
 	t.Parallel()
 	svc := &mockUpdateService{
-		listUpdatesFn: func(_ context.Context, _, _, _ string, _, _ int) ([]apitype.UpdateInfo, error) {
-			return []apitype.UpdateInfo{}, nil
+		listUpdatesFn: func(_ context.Context, _, _, _ string, _, _ int) ([]updates.UpdateSummary, error) {
+			return []updates.UpdateSummary{}, nil
 		},
 	}
 
@@ -775,7 +783,9 @@ func TestListUpdates_Empty(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
 	}
 
-	var resp apitype.GetHistoryResponse
+	var resp struct {
+		Updates []json.RawMessage `json:"updates"`
+	}
 	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -787,10 +797,10 @@ func TestListUpdates_Empty(t *testing.T) {
 func TestListUpdates_WithResults(t *testing.T) {
 	t.Parallel()
 	svc := &mockUpdateService{
-		listUpdatesFn: func(_ context.Context, _, _, _ string, _, _ int) ([]apitype.UpdateInfo, error) {
-			return []apitype.UpdateInfo{
-				{Kind: apitype.UpdateUpdate, Version: 1, Result: apitype.SucceededResult},
-				{Kind: apitype.PreviewUpdate, Version: 2, Result: apitype.InProgressResult},
+		listUpdatesFn: func(_ context.Context, _, _, _ string, _, _ int) ([]updates.UpdateSummary, error) {
+			return []updates.UpdateSummary{
+				{UpdateInfo: apitype.UpdateInfo{Kind: apitype.UpdateUpdate, Version: 1, Result: apitype.SucceededResult}, UpdateID: "uid-1"},
+				{UpdateInfo: apitype.UpdateInfo{Kind: apitype.PreviewUpdate, Version: 2, Result: apitype.InProgressResult}, UpdateID: "uid-2"},
 			}, nil
 		},
 	}
@@ -803,7 +813,12 @@ func TestListUpdates_WithResults(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
 	}
 
-	var resp apitype.GetHistoryResponse
+	var resp struct {
+		Updates []struct {
+			Kind     apitype.UpdateKind `json:"kind"`
+			UpdateID string             `json:"updateID"`
+		} `json:"updates"`
+	}
 	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -813,16 +828,19 @@ func TestListUpdates_WithResults(t *testing.T) {
 	if resp.Updates[0].Kind != apitype.UpdateUpdate {
 		t.Fatalf("expected first update kind 'update', got %s", resp.Updates[0].Kind)
 	}
+	if resp.Updates[0].UpdateID != "uid-1" {
+		t.Fatalf("expected first updateID 'uid-1', got %s", resp.Updates[0].UpdateID)
+	}
 }
 
 func TestListUpdates_PaginationParams(t *testing.T) {
 	t.Parallel()
 	var gotPage, gotPageSize int
 	svc := &mockUpdateService{
-		listUpdatesFn: func(_ context.Context, _, _, _ string, page, pageSize int) ([]apitype.UpdateInfo, error) {
+		listUpdatesFn: func(_ context.Context, _, _, _ string, page, pageSize int) ([]updates.UpdateSummary, error) {
 			gotPage = page
 			gotPageSize = pageSize
-			return []apitype.UpdateInfo{}, nil
+			return []updates.UpdateSummary{}, nil
 		},
 	}
 
@@ -844,7 +862,7 @@ func TestListUpdates_PaginationParams(t *testing.T) {
 func TestListUpdates_StackNotFound(t *testing.T) {
 	t.Parallel()
 	svc := &mockUpdateService{
-		listUpdatesFn: func(context.Context, string, string, string, int, int) ([]apitype.UpdateInfo, error) {
+		listUpdatesFn: func(context.Context, string, string, string, int, int) ([]updates.UpdateSummary, error) {
 			return nil, updates.ErrStackNotFound
 		},
 	}
@@ -861,12 +879,15 @@ func TestListUpdates_StackNotFound(t *testing.T) {
 func TestGetLatestUpdate_Success(t *testing.T) {
 	t.Parallel()
 	svc := &mockUpdateService{
-		getLatestUpdateFn: func(_ context.Context, _, _, _ string) (*apitype.UpdateInfo, error) {
-			return &apitype.UpdateInfo{
-				Kind:    apitype.UpdateUpdate,
-				Version: 5,
-				Result:  apitype.SucceededResult,
-				Config:  map[string]apitype.ConfigValue{},
+		getLatestUpdateFn: func(_ context.Context, _, _, _ string) (*updates.UpdateSummary, error) {
+			return &updates.UpdateSummary{
+				UpdateInfo: apitype.UpdateInfo{
+					Kind:    apitype.UpdateUpdate,
+					Version: 5,
+					Result:  apitype.SucceededResult,
+					Config:  map[string]apitype.ConfigValue{},
+				},
+				UpdateID: "uid-latest",
 			}, nil
 		},
 	}
@@ -893,7 +914,7 @@ func TestGetLatestUpdate_Success(t *testing.T) {
 func TestGetLatestUpdate_NotFound(t *testing.T) {
 	t.Parallel()
 	svc := &mockUpdateService{
-		getLatestUpdateFn: func(context.Context, string, string, string) (*apitype.UpdateInfo, error) {
+		getLatestUpdateFn: func(context.Context, string, string, string) (*updates.UpdateSummary, error) {
 			return nil, updates.ErrUpdateNotFound
 		},
 	}

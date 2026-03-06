@@ -6,6 +6,12 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
 )
 
+// UpdateSummary extends apitype.UpdateInfo with the update UUID.
+type UpdateSummary struct {
+	apitype.UpdateInfo
+	UpdateID string `json:"updateID"`
+}
+
 // Service defines the update lifecycle operations.
 type Service interface {
 	// CreateUpdate creates a new update for the given stack.
@@ -51,10 +57,13 @@ type Service interface {
 	PatchCheckpointDelta(ctx context.Context, org, project, stack, updateID string, req apitype.PatchUpdateCheckpointDeltaRequest) error
 
 	// ListUpdates returns paginated update history for a stack.
-	ListUpdates(ctx context.Context, org, project, stack string, page, pageSize int) ([]apitype.UpdateInfo, error)
+	ListUpdates(ctx context.Context, org, project, stack string, page, pageSize int) ([]UpdateSummary, error)
 
 	// GetLatestUpdate returns the most recent update for a stack.
-	GetLatestUpdate(ctx context.Context, org, project, stack string) (*apitype.UpdateInfo, error)
+	GetLatestUpdate(ctx context.Context, org, project, stack string) (*UpdateSummary, error)
+
+	// ResolveUpdateRef resolves an update reference (UUID or version number) to a UUID.
+	ResolveUpdateRef(ctx context.Context, org, project, stack, ref string) (string, error)
 
 	// GetUpdateEvents returns engine events for an update with continuation token pagination.
 	GetUpdateEvents(ctx context.Context, org, project, stack, updateID string, continuationToken *string) (*apitype.GetUpdateEventsResponse, error)

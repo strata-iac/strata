@@ -1,0 +1,3 @@
+name: component
+description: Component resources with parent-child hierarchy testing URN nesting in state
+runtime: go

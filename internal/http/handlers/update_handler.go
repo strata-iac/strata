@@ -234,7 +234,13 @@ func (h *UpdateHandler) GetUpdateStatus(w http.ResponseWriter, r *http.Request) 
 	org := chi.URLParam(r, "org")
 	project := chi.URLParam(r, "project")
 	stack := chi.URLParam(r, "stack")
-	updateID := chi.URLParam(r, "updateID")
+	updateRef := chi.URLParam(r, "updateID")
+
+	updateID, err := h.updates.ResolveUpdateRef(r.Context(), org, project, stack, updateRef)
+	if err != nil {
+		h.writeUpdateError(w, err)
+		return
+	}
 
 	var continuationToken *string
 	if ct := r.URL.Query().Get("continuationToken"); ct != "" {
@@ -271,6 +277,11 @@ func (h *UpdateHandler) PatchCheckpointDelta(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusOK)
 }
 
+type updateInfoResponse struct {
+	apitype.UpdateInfo
+	UpdateID string `json:"updateID"`
+}
+
 func (h *UpdateHandler) ListUpdates(w http.ResponseWriter, r *http.Request) {
 	org := chi.URLParam(r, "org")
 	project := chi.URLParam(r, "project")
@@ -290,13 +301,20 @@ func (h *UpdateHandler) ListUpdates(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	infos, err := h.updates.ListUpdates(r.Context(), org, project, stack, page, pageSize)
+	summaries, err := h.updates.ListUpdates(r.Context(), org, project, stack, page, pageSize)
 	if err != nil {
 		h.writeUpdateError(w, err)
 		return
 	}
 
-	encode.WriteJSON(w, http.StatusOK, apitype.GetHistoryResponse{Updates: infos})
+	resp := make([]updateInfoResponse, len(summaries))
+	for i, s := range summaries {
+		resp[i] = updateInfoResponse{UpdateInfo: s.UpdateInfo, UpdateID: s.UpdateID}
+	}
+
+	encode.WriteJSON(w, http.StatusOK, struct {
+		Updates []updateInfoResponse `json:"updates"`
+	}{Updates: resp})
 }
 
 func (h *UpdateHandler) GetLatestUpdate(w http.ResponseWriter, r *http.Request) {
@@ -304,22 +322,28 @@ func (h *UpdateHandler) GetLatestUpdate(w http.ResponseWriter, r *http.Request) 
 	project := chi.URLParam(r, "project")
 	stack := chi.URLParam(r, "stack")
 
-	info, err := h.updates.GetLatestUpdate(r.Context(), org, project, stack)
+	summary, err := h.updates.GetLatestUpdate(r.Context(), org, project, stack)
 	if err != nil {
 		h.writeUpdateError(w, err)
 		return
 	}
 
 	encode.WriteJSON(w, http.StatusOK, struct {
-		Info apitype.UpdateInfo `json:"info"`
-	}{Info: *info})
+		Info updateInfoResponse `json:"info"`
+	}{Info: updateInfoResponse{UpdateInfo: summary.UpdateInfo, UpdateID: summary.UpdateID}})
 }
 
 func (h *UpdateHandler) GetUpdateEvents(w http.ResponseWriter, r *http.Request) {
 	org := chi.URLParam(r, "org")
 	project := chi.URLParam(r, "project")
 	stack := chi.URLParam(r, "stack")
-	updateID := chi.URLParam(r, "updateID")
+	updateRef := chi.URLParam(r, "updateID")
+
+	updateID, err := h.updates.ResolveUpdateRef(r.Context(), org, project, stack, updateRef)
+	if err != nil {
+		h.writeUpdateError(w, err)
+		return
+	}
 
 	var continuationToken *string
 	if ct := r.URL.Query().Get("continuationToken"); ct != "" {

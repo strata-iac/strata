@@ -1,0 +1,3 @@
+name: replace-triggers
+description: Resource replacement via triggers, create/delete lifecycle, stdout/stderr in state
+runtime: go

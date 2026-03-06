@@ -106,16 +106,10 @@ export function StackDetail() {
         </div>
       ) : (
         <div className="space-y-4">
-          {updates.map((update, i) => {
-            // In a real app, we'd use the update ID from the API.
-            // Since it's not in the UpdateInfo interface, we'll use the index or version as a fallback for the URL.
-            // Assuming the API returns updates in reverse chronological order, version is a good identifier.
-            const updateId = update.version.toString();
-            
-            return (
+          {updates.map((update, i) => (
               <Link
                 key={i}
-                to={`/stacks/${org}/${project}/${stack}/updates/${updateId}`}
+                to={`/stacks/${org}/${project}/${stack}/updates/${update.updateID}`}
                 className="block bg-zinc-900 border border-zinc-800 rounded-lg p-5 hover:border-zinc-600 transition-colors"
               >
                 <div className="flex items-start justify-between mb-3">
@@ -150,8 +144,7 @@ export function StackDetail() {
                   </div>
                 )}
               </Link>
-            );
-          })}
+          ))}
         </div>
       )}
     </div>

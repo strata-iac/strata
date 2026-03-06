@@ -1,0 +1,7 @@
+name: stack-ref
+description: Cross-stack references testing stack output resolution from another stack
+runtime: go
+config:
+  sourceStack:
+    description: Fully-qualified stack name to reference (e.g. dev-org/multi-resource/dev)
+    default: dev-org/multi-resource/dev

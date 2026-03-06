@@ -12,6 +12,7 @@ export function StackList() {
       try {
         const data = await apiClient.getStacks();
         setStacks(data.stacks || []);
+        setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load stacks');
       } finally {
@@ -20,6 +21,8 @@ export function StackList() {
     };
 
     fetchStacks();
+    const interval = setInterval(fetchStacks, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {

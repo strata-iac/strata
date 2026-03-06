@@ -113,6 +113,8 @@ func main() {
 		r.Post("/api/stacks/{org}/{project}/{stack}/import", updateHandler.ImportStack)
 		r.Post("/api/stacks/{org}/{project}/{stack}/encrypt", cryptoHandler.Encrypt)
 		r.Post("/api/stacks/{org}/{project}/{stack}/decrypt", cryptoHandler.Decrypt)
+		r.Post("/api/stacks/{org}/{project}/{stack}/batch-decrypt", cryptoHandler.BatchDecrypt)
+		r.Post("/api/stacks/{org}/{project}/{stack}/decrypt/log-decryption", handlers.LogDecryptionNoop)
 		r.Get("/api/stacks/{org}/{project}/{stack}/update/{updateID}", updateHandler.GetUpdateStatus)
 		r.Get("/api/stacks/{org}/{project}/{stack}/update/{updateID}/events", updateHandler.GetUpdateEvents)
 		r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}/cancel", updateHandler.CancelUpdate)

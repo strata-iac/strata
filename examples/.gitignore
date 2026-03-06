@@ -1,0 +1,4 @@
+*/*
+!main.go
+!Pulumi.yaml
+!go.mod

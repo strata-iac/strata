@@ -1,0 +1,3 @@
+name: protect
+description: Protected and retain-on-delete resources testing destroy rejection and state flags
+runtime: go

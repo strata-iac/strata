@@ -17,7 +17,7 @@ COPY . .
 COPY --from=web-builder /src/web/dist web/dist
 RUN go build -o /strata ./cmd/strata
 
-FROM alpine:3.21
+FROM scratch
 
 COPY --from=builder /strata /strata
 

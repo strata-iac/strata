@@ -18,6 +18,7 @@ export interface UpdateInfo {
   config: Record<string, { value: string; secret: boolean }>;
   resourceChanges?: Record<string, number>;
   version: number;
+  updateID: string;
 }
 
 export interface EngineEvent {
