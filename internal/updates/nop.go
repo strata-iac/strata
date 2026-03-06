@@ -48,3 +48,15 @@ func (s *NopService) ValidateUpdateToken(_ context.Context, _, _, _, _, _ string
 func (s *NopService) ExportStack(_ context.Context, _, _, _ string) (*apitype.UntypedDeployment, error) {
 	return nil, nil
 }
+
+func (s *NopService) ExportStackVersion(_ context.Context, _, _, _ string, _ int) (*apitype.UntypedDeployment, error) {
+	return nil, nil
+}
+
+func (s *NopService) ImportStack(_ context.Context, _, _, _ string, _ apitype.UntypedDeployment) (string, error) {
+	return "", nil
+}
+
+func (s *NopService) GetUpdateStatus(_ context.Context, _, _, _, _ string, _ *string) (*apitype.UpdateResults, error) {
+	return &apitype.UpdateResults{Status: apitype.StatusSucceeded}, nil
+}

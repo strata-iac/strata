@@ -425,6 +425,123 @@ func (s *PostgresService) ExportStack(ctx context.Context, org, project, stack s
 	}, nil
 }
 
+func (s *PostgresService) ExportStackVersion(ctx context.Context, org, project, stack string, version int) (*apitype.UntypedDeployment, error) {
+	stackID, err := s.findStackID(ctx, org, project, stack)
+	if err != nil {
+		return nil, err
+	}
+
+	var deployment json.RawMessage
+	err = s.db.QueryRow(ctx, `
+		SELECT deployment FROM checkpoints
+		WHERE stack_id = $1 AND version = $2 AND deployment IS NOT NULL
+		ORDER BY created_at DESC
+		LIMIT 1
+	`, stackID, version).Scan(&deployment)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUpdateNotFound
+		}
+		return nil, fmt.Errorf("query checkpoint version %d: %w", version, err)
+	}
+
+	return &apitype.UntypedDeployment{
+		Version:    3,
+		Deployment: deployment,
+	}, nil
+}
+
+func (s *PostgresService) ImportStack(ctx context.Context, org, project, stack string, deployment apitype.UntypedDeployment) (string, error) {
+	stackID, err := s.findStackID(ctx, org, project, stack)
+	if err != nil {
+		return "", err
+	}
+
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return "", fmt.Errorf("begin import transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Check for active updates — cannot import while an update is running.
+	var activeCount int
+	err = tx.QueryRow(ctx, `
+		SELECT COUNT(*) FROM updates
+		WHERE stack_id = $1 AND status IN ('not started', 'requested', 'running')
+	`, stackID).Scan(&activeCount)
+	if err != nil {
+		return "", fmt.Errorf("check active updates: %w", err)
+	}
+	if activeCount > 0 {
+		return "", ErrUpdateConflict
+	}
+
+	// Get next version.
+	var lastVersion int64
+	err = tx.QueryRow(ctx, `
+		SELECT last_checkpoint_version FROM stacks WHERE id = $1
+	`, stackID).Scan(&lastVersion)
+	if err != nil {
+		return "", fmt.Errorf("get stack version: %w", err)
+	}
+	newVersion := lastVersion + 1
+
+	// Create a completed import update record.
+	var updateID string
+	err = tx.QueryRow(ctx, `
+		INSERT INTO updates (stack_id, kind, status, version, completed_at)
+		VALUES ($1, 'import', 'succeeded', $2, now())
+		RETURNING id::text
+	`, stackID, newVersion).Scan(&updateID)
+	if err != nil {
+		return "", fmt.Errorf("insert import update: %w", err)
+	}
+
+	// Store the checkpoint.
+	if _, err = tx.Exec(ctx, `
+		INSERT INTO checkpoints (stack_id, update_id, version, deployment)
+		VALUES ($1, $2::uuid, $3, $4)
+	`, stackID, updateID, newVersion, deployment.Deployment); err != nil {
+		return "", fmt.Errorf("insert import checkpoint: %w", err)
+	}
+
+	// Bump the stack version.
+	if _, err = tx.Exec(ctx, `
+		UPDATE stacks SET last_checkpoint_version = $1, updated_at = now() WHERE id = $2
+	`, newVersion, stackID); err != nil {
+		return "", fmt.Errorf("update stack version: %w", err)
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return "", fmt.Errorf("commit import: %w", err)
+	}
+
+	return updateID, nil
+}
+
+func (s *PostgresService) GetUpdateStatus(ctx context.Context, org, project, stack, updateID string, _ *string) (*apitype.UpdateResults, error) {
+	stackID, err := s.findStackID(ctx, org, project, stack)
+	if err != nil {
+		return nil, err
+	}
+
+	var status string
+	err = s.db.QueryRow(ctx, `
+		SELECT status FROM updates WHERE id = $1::uuid AND stack_id = $2
+	`, updateID, stackID).Scan(&status)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUpdateNotFound
+		}
+		return nil, fmt.Errorf("get update status: %w", err)
+	}
+
+	return &apitype.UpdateResults{
+		Status: apitype.UpdateStatus(status),
+		Events: []apitype.UpdateEvent{},
+	}, nil
+}
+
 // findStackID looks up a stack by org/project/stack, returning the stack UUID.
 func (s *PostgresService) findStackID(ctx context.Context, org, project, stack string) (string, error) {
 	var stackID string

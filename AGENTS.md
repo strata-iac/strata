@@ -185,12 +185,18 @@ internal/
     service.go               # Service interface (6 methods)
     postgres.go              # PostgreSQL implementation
     errors.go                # Sentinel errors
-  updates/                   # Update lifecycle (Phase 3)
-    service.go               # Service interface
-    repository.go            # Repository interface
+  updates/                   # Update lifecycle (Phase 3) + State ops (Phase 4)
+    service.go               # Service interface (12 methods incl. export/import)
+    postgres.go              # PostgreSQL implementation
+    nop.go                   # NopService stub
+    errors.go                # Sentinel errors
   checkpoints/               # Checkpoint storage (Phase 3)
   events/                    # Event ingestion (Phase 3)
   crypto/                    # Encrypt/decrypt (Phase 4)
+    service.go               # Service interface (Encrypt/Decrypt with stackFQN)
+    nop.go                   # NopService stub
+    aes.go                   # AES-256-GCM with HKDF per-stack key derivation
+    aes_test.go              # 6 unit tests
   storage/blobs/             # Blob storage (local + S3)
 e2e/                         # E2E acceptance tests (build tag: e2e)
 .github/workflows/ci.yml    # CI: check + e2e jobs
@@ -222,6 +228,23 @@ The sequence the CLI follows during `pulumi up`:
    - `POST .../renew_lease` — `RenewUpdateLeaseRequest` → `RenewUpdateLeaseResponse`
 4. **CompleteUpdate**: `POST .../complete` — `CompleteUpdateRequest` {status: succeeded|failed|cancelled}
 
+### State Operations Protocol (Phase 4)
+
+**Export**: `GET /api/stacks/{org}/{project}/{stack}/export` returns latest checkpoint as `apitype.UntypedDeployment`.
+- `GET .../export/{version}` returns specific version checkpoint.
+- Empty stacks return valid `UntypedDeployment` with `version: 3` and non-null deployment JSON.
+
+**Import**: `POST /api/stacks/{org}/{project}/{stack}/import` — body is `apitype.UntypedDeployment`, response is `apitype.ImportStackResponse{UpdateID}`.
+- Single-shot operation (no create→start→complete lifecycle).
+- CLI polls `GET .../update/{updateID}` after import; return `UpdateResults{Status: "succeeded"}`.
+- Cross-stack import requires `--force` flag from CLI.
+
+**Encrypt/Decrypt**: `POST .../encrypt` takes `apitype.EncryptValueRequest{Plaintext []byte}`, returns `EncryptValueResponse{Ciphertext []byte}`.
+- `POST .../decrypt` takes `DecryptValueRequest{Ciphertext []byte}`, returns `DecryptValueResponse{Plaintext []byte}`.
+- `Plaintext`/`Ciphertext` are `[]byte` → JSON-encoded as base64.
+- Uses AES-256-GCM with HKDF per-stack key derivation from a master key.
+- Dev mode auto-generates deterministic key from `sha256("strata-dev-encryption-key")`.
+
 ### Quality Gates
 
 ```bash
@@ -242,3 +265,4 @@ make check-all   # check + e2e
 | STRATA_DEV_ORG_LOGIN | dev-org | Dev org login name |
 | STRATA_BLOB_BACKEND | local | Blob storage (local or s3) |
 | STRATA_BLOB_LOCAL_PATH | ./data/blobs | Local blob path |
+| STRATA_ENCRYPTION_KEY | (auto in dev) | 64 hex chars (32 bytes) for AES-256 encryption |

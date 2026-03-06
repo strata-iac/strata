@@ -34,4 +34,13 @@ type Service interface {
 
 	// ExportStack returns the latest deployment/state for a stack.
 	ExportStack(ctx context.Context, org, project, stack string) (*apitype.UntypedDeployment, error)
+
+	// ExportStackVersion returns a specific version of the deployment/state for a stack.
+	ExportStackVersion(ctx context.Context, org, project, stack string, version int) (*apitype.UntypedDeployment, error)
+
+	// ImportStack imports a deployment into the given stack, returning the update ID.
+	ImportStack(ctx context.Context, org, project, stack string, deployment apitype.UntypedDeployment) (string, error)
+
+	// GetUpdateStatus returns the current status and events for an update (used for polling after import).
+	GetUpdateStatus(ctx context.Context, org, project, stack, updateID string, continuationToken *string) (*apitype.UpdateResults, error)
 }

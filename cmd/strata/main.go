@@ -63,9 +63,22 @@ func main() {
 	updatesService := updates.NewPostgresService(dbPool)
 	checkpointsService := checkpoints.NewNopService()
 	eventsService := events.NewNopService()
-	cryptoService := crypto.NewNopService()
+
+	var cryptoService crypto.Service
+	if len(cfg.EncryptionKey) > 0 {
+		var err error
+		cryptoService, err = crypto.NewAESService(cfg.EncryptionKey)
+		if err != nil {
+			logger.Error("failed to initialize crypto service", "error", err)
+			os.Exit(1)
+		}
+	} else {
+		cryptoService = crypto.NewNopService()
+	}
+
 	stackHandler := handlers.NewStackHandler(stacksService)
 	updateHandler := handlers.NewUpdateHandler(updatesService)
+	cryptoHandler := handlers.NewCryptoHandler(cryptoService)
 
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
@@ -88,6 +101,11 @@ func main() {
 		r.Delete("/api/stacks/{org}/{project}/{stack}", stackHandler.DeleteStack)
 		r.Post("/api/stacks/{org}/{project}/{stack}/rename", stackHandler.RenameStack)
 		r.Get("/api/stacks/{org}/{project}/{stack}/export", updateHandler.ExportStack)
+		r.Get("/api/stacks/{org}/{project}/{stack}/export/{version}", updateHandler.ExportStackVersion)
+		r.Post("/api/stacks/{org}/{project}/{stack}/import", updateHandler.ImportStack)
+		r.Post("/api/stacks/{org}/{project}/{stack}/encrypt", cryptoHandler.Encrypt)
+		r.Post("/api/stacks/{org}/{project}/{stack}/decrypt", cryptoHandler.Decrypt)
+		r.Get("/api/stacks/{org}/{project}/{stack}/update/{updateID}", updateHandler.GetUpdateStatus)
 		r.Post("/api/stacks/{org}/{project}/{stack}/update", updateHandler.CreateUpdateFor("update"))
 		r.Post("/api/stacks/{org}/{project}/{stack}/preview", updateHandler.CreateUpdateFor("preview"))
 		r.Post("/api/stacks/{org}/{project}/{stack}/refresh", updateHandler.CreateUpdateFor("refresh"))

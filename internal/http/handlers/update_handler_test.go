@@ -24,6 +24,9 @@ type mockUpdateService struct {
 	completeUpdateFn          func(ctx context.Context, org, project, stack, updateID string, req apitype.CompleteUpdateRequest) error
 	validateUpdateTokenFn     func(ctx context.Context, org, project, stack, updateID, token string) error
 	exportStackFn             func(ctx context.Context, org, project, stack string) (*apitype.UntypedDeployment, error)
+	exportStackVersionFn      func(ctx context.Context, org, project, stack string, version int) (*apitype.UntypedDeployment, error)
+	importStackFn             func(ctx context.Context, org, project, stack string, deployment apitype.UntypedDeployment) (string, error)
+	getUpdateStatusFn         func(ctx context.Context, org, project, stack, updateID string, continuationToken *string) (*apitype.UpdateResults, error)
 }
 
 func (m *mockUpdateService) CreateUpdate(ctx context.Context, org, project, stack string, kind apitype.UpdateKind, req apitype.UpdateProgramRequest) (*apitype.UpdateProgramResponse, error) {
@@ -65,9 +68,33 @@ func (m *mockUpdateService) ExportStack(ctx context.Context, org, project, stack
 	return nil, nil
 }
 
+func (m *mockUpdateService) ExportStackVersion(ctx context.Context, org, project, stack string, version int) (*apitype.UntypedDeployment, error) {
+	if m.exportStackVersionFn != nil {
+		return m.exportStackVersionFn(ctx, org, project, stack, version)
+	}
+	return nil, nil
+}
+
+func (m *mockUpdateService) ImportStack(ctx context.Context, org, project, stack string, deployment apitype.UntypedDeployment) (string, error) {
+	if m.importStackFn != nil {
+		return m.importStackFn(ctx, org, project, stack, deployment)
+	}
+	return "", nil
+}
+
+func (m *mockUpdateService) GetUpdateStatus(ctx context.Context, org, project, stack, updateID string, continuationToken *string) (*apitype.UpdateResults, error) {
+	if m.getUpdateStatusFn != nil {
+		return m.getUpdateStatusFn(ctx, org, project, stack, updateID, continuationToken)
+	}
+	return nil, nil
+}
+
 func newUpdateTestRouter(svc updates.Service) *chi.Mux {
 	h := NewUpdateHandler(svc)
 	r := chi.NewRouter()
+	r.Get("/api/stacks/{org}/{project}/{stack}/export/{version}", h.ExportStackVersion)
+	r.Post("/api/stacks/{org}/{project}/{stack}/import", h.ImportStack)
+	r.Get("/api/stacks/{org}/{project}/{stack}/update/{updateID}", h.GetUpdateStatus)
 	r.Post("/api/stacks/{org}/{project}/{stack}/update", h.CreateUpdateFor("update"))
 	r.Post("/api/stacks/{org}/{project}/{stack}/preview", h.CreateUpdateFor("preview"))
 	r.Post("/api/stacks/{org}/{project}/{stack}/refresh", h.CreateUpdateFor("refresh"))
@@ -352,6 +379,206 @@ func TestCompleteUpdate_NotFound(t *testing.T) {
 
 	body, _ := json.Marshal(apitype.CompleteUpdateRequest{Status: apitype.UpdateStatusFailed})
 	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/update/uid-abc/complete", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestExportStackVersion_Success(t *testing.T) {
+	svc := &mockUpdateService{
+		exportStackVersionFn: func(_ context.Context, org, project, stack string, version int) (*apitype.UntypedDeployment, error) {
+			if org != "test-org" || project != "test-project" || stack != "dev" {
+				t.Errorf("unexpected params: org=%s project=%s stack=%s", org, project, stack)
+			}
+			if version != 3 {
+				t.Errorf("expected version 3, got %d", version)
+			}
+			return &apitype.UntypedDeployment{
+				Version:    3,
+				Deployment: json.RawMessage(`{"manifest":{}}`),
+			}, nil
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/export/3", nil)
+	rr := httptest.NewRecorder()
+
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp apitype.UntypedDeployment
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Version != 3 {
+		t.Errorf("expected version 3, got %d", resp.Version)
+	}
+}
+
+func TestExportStackVersion_InvalidVersion(t *testing.T) {
+	svc := &mockUpdateService{}
+	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/export/abc", nil)
+	rr := httptest.NewRecorder()
+
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestExportStackVersion_NotFound(t *testing.T) {
+	svc := &mockUpdateService{
+		exportStackVersionFn: func(context.Context, string, string, string, int) (*apitype.UntypedDeployment, error) {
+			return nil, updates.ErrUpdateNotFound
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/export/99", nil)
+	rr := httptest.NewRecorder()
+
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestImportStack_Success(t *testing.T) {
+	svc := &mockUpdateService{
+		importStackFn: func(_ context.Context, org, project, stack string, dep apitype.UntypedDeployment) (string, error) {
+			if org != "test-org" || project != "test-project" || stack != "dev" {
+				t.Errorf("unexpected params: org=%s project=%s stack=%s", org, project, stack)
+			}
+			if dep.Version != 3 {
+				t.Errorf("expected deployment version 3, got %d", dep.Version)
+			}
+			return "import-update-123", nil
+		},
+	}
+
+	body, _ := json.Marshal(apitype.UntypedDeployment{
+		Version:    3,
+		Deployment: json.RawMessage(`{"manifest":{},"resources":null}`),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/import", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp apitype.ImportStackResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.UpdateID != "import-update-123" {
+		t.Errorf("expected updateID import-update-123, got %s", resp.UpdateID)
+	}
+}
+
+func TestImportStack_Conflict(t *testing.T) {
+	svc := &mockUpdateService{
+		importStackFn: func(context.Context, string, string, string, apitype.UntypedDeployment) (string, error) {
+			return "", updates.ErrUpdateConflict
+		},
+	}
+
+	body, _ := json.Marshal(apitype.UntypedDeployment{Version: 3, Deployment: json.RawMessage(`{}`)})
+	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/import", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestImportStack_StackNotFound(t *testing.T) {
+	svc := &mockUpdateService{
+		importStackFn: func(context.Context, string, string, string, apitype.UntypedDeployment) (string, error) {
+			return "", updates.ErrStackNotFound
+		},
+	}
+
+	body, _ := json.Marshal(apitype.UntypedDeployment{Version: 3, Deployment: json.RawMessage(`{}`)})
+	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/import", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestImportStack_BadJSON(t *testing.T) {
+	svc := &mockUpdateService{}
+	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/import", bytes.NewReader([]byte("not json")))
+	rr := httptest.NewRecorder()
+
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGetUpdateStatus_Success(t *testing.T) {
+	svc := &mockUpdateService{
+		getUpdateStatusFn: func(_ context.Context, _, _, _, updateID string, ct *string) (*apitype.UpdateResults, error) {
+			if updateID != "uid-abc" {
+				t.Errorf("expected updateID uid-abc, got %s", updateID)
+			}
+			if ct != nil {
+				t.Errorf("expected nil continuation token, got %s", *ct)
+			}
+			return &apitype.UpdateResults{
+				Status: apitype.StatusSucceeded,
+				Events: []apitype.UpdateEvent{},
+			}, nil
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/update/uid-abc", nil)
+	rr := httptest.NewRecorder()
+
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp apitype.UpdateResults
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Status != apitype.StatusSucceeded {
+		t.Errorf("expected status succeeded, got %s", resp.Status)
+	}
+	if resp.ContinuationToken != nil {
+		t.Errorf("expected nil continuation token, got %v", resp.ContinuationToken)
+	}
+}
+
+func TestGetUpdateStatus_NotFound(t *testing.T) {
+	svc := &mockUpdateService{
+		getUpdateStatusFn: func(context.Context, string, string, string, string, *string) (*apitype.UpdateResults, error) {
+			return nil, updates.ErrUpdateNotFound
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/update/nonexistent", nil)
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)

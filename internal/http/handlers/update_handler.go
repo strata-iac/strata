@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
@@ -186,6 +187,67 @@ func (h *UpdateHandler) ExportStack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	encode.WriteJSON(w, http.StatusOK, deployment)
+}
+
+func (h *UpdateHandler) ExportStackVersion(w http.ResponseWriter, r *http.Request) {
+	org := chi.URLParam(r, "org")
+	project := chi.URLParam(r, "project")
+	stack := chi.URLParam(r, "stack")
+	versionStr := chi.URLParam(r, "version")
+
+	version, err := strconv.Atoi(versionStr)
+	if err != nil {
+		encode.WriteError(w, http.StatusBadRequest, "Bad Request: invalid version")
+		return
+	}
+
+	deployment, err := h.updates.ExportStackVersion(r.Context(), org, project, stack, version)
+	if err != nil {
+		h.writeUpdateError(w, err)
+		return
+	}
+
+	encode.WriteJSON(w, http.StatusOK, deployment)
+}
+
+func (h *UpdateHandler) ImportStack(w http.ResponseWriter, r *http.Request) {
+	org := chi.URLParam(r, "org")
+	project := chi.URLParam(r, "project")
+	stack := chi.URLParam(r, "stack")
+
+	var req apitype.UntypedDeployment
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		encode.WriteError(w, http.StatusBadRequest, "Bad Request: invalid JSON body")
+		return
+	}
+
+	updateID, err := h.updates.ImportStack(r.Context(), org, project, stack, req)
+	if err != nil {
+		h.writeUpdateError(w, err)
+		return
+	}
+
+	encode.WriteJSON(w, http.StatusOK, apitype.ImportStackResponse{UpdateID: updateID})
+}
+
+func (h *UpdateHandler) GetUpdateStatus(w http.ResponseWriter, r *http.Request) {
+	org := chi.URLParam(r, "org")
+	project := chi.URLParam(r, "project")
+	stack := chi.URLParam(r, "stack")
+	updateID := chi.URLParam(r, "updateID")
+
+	var continuationToken *string
+	if ct := r.URL.Query().Get("continuationToken"); ct != "" {
+		continuationToken = &ct
+	}
+
+	results, err := h.updates.GetUpdateStatus(r.Context(), org, project, stack, updateID, continuationToken)
+	if err != nil {
+		h.writeUpdateError(w, err)
+		return
+	}
+
+	encode.WriteJSON(w, http.StatusOK, results)
 }
 
 func (h *UpdateHandler) writeUpdateError(w http.ResponseWriter, err error) {
