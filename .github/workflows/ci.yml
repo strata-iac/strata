@@ -54,7 +54,7 @@ jobs:
             ~/.cache/go-build
           key: go-${{ runner.os }}-${{ hashFiles('go.sum') }}
           restore-keys: go-${{ runner.os }}-
-      - uses: pulumi/setup-pulumi@v6
+      - uses: pulumi/setup-pulumi@v2
       - name: Run E2E tests
         env:
           STRATA_DATABASE_URL: postgres://strata:strata@localhost:5432/strata?sslmode=disable
