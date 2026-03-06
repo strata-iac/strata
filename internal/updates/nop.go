@@ -60,3 +60,7 @@ func (s *NopService) ImportStack(_ context.Context, _, _, _ string, _ apitype.Un
 func (s *NopService) GetUpdateStatus(_ context.Context, _, _, _, _ string, _ *string) (*apitype.UpdateResults, error) {
 	return &apitype.UpdateResults{Status: apitype.StatusSucceeded}, nil
 }
+
+func (s *NopService) CancelUpdate(_ context.Context, _, _, _, _ string) error {
+	return nil
+}

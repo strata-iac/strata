@@ -106,6 +106,7 @@ func main() {
 		r.Post("/api/stacks/{org}/{project}/{stack}/encrypt", cryptoHandler.Encrypt)
 		r.Post("/api/stacks/{org}/{project}/{stack}/decrypt", cryptoHandler.Decrypt)
 		r.Get("/api/stacks/{org}/{project}/{stack}/update/{updateID}", updateHandler.GetUpdateStatus)
+		r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}/cancel", updateHandler.CancelUpdate)
 		r.Post("/api/stacks/{org}/{project}/{stack}/update", updateHandler.CreateUpdateFor("update"))
 		r.Post("/api/stacks/{org}/{project}/{stack}/preview", updateHandler.CreateUpdateFor("preview"))
 		r.Post("/api/stacks/{org}/{project}/{stack}/refresh", updateHandler.CreateUpdateFor("refresh"))
@@ -123,6 +124,8 @@ func main() {
 		r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}/complete", updateHandler.CompleteUpdate)
 	})
 
+	gcWorker := updates.NewGCWorker(dbPool, logger)
+
 	srv := httpserver.NewServer(cfg.ListenAddr, router, logger)
 	application := app.New(cfg, logger, dbPool, app.Services{
 		Authenticator: authenticator,
@@ -139,6 +142,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	gcWorker.Start(context.Background())
 	logger.Info("strata started", "listen_addr", cfg.ListenAddr)
 
 	signalCh := make(chan os.Signal, 1)
@@ -152,6 +156,8 @@ func main() {
 			logger.Error("http server exited with error", "error", err)
 		}
 	}
+
+	gcWorker.Stop()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

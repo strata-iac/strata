@@ -250,6 +250,20 @@ func (h *UpdateHandler) GetUpdateStatus(w http.ResponseWriter, r *http.Request) 
 	encode.WriteJSON(w, http.StatusOK, results)
 }
 
+func (h *UpdateHandler) CancelUpdate(w http.ResponseWriter, r *http.Request) {
+	org := chi.URLParam(r, "org")
+	project := chi.URLParam(r, "project")
+	stack := chi.URLParam(r, "stack")
+	updateID := chi.URLParam(r, "updateID")
+
+	if err := h.updates.CancelUpdate(r.Context(), org, project, stack, updateID); err != nil {
+		h.writeUpdateError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func (h *UpdateHandler) writeUpdateError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, updates.ErrUpdateNotFound), errors.Is(err, updates.ErrStackNotFound):

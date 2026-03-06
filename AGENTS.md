@@ -161,7 +161,7 @@ Strata is a self-hosted Pulumi backend written in Go. It implements the Pulumi S
 - **PostgreSQL 17** (metadata, state)
 - **chi v5** (HTTP router)
 - **pgx v5** (Postgres driver)
-- **golangci-lint** (consolidated linting — 29 linters including gosec, gofumpt, govet)
+- **golangci-lint v2** (consolidated linting + formatting — gofumpt, goimports as formatters; gosec, govet, revive, etc. as linters)
 - **Pulumi SDK v3.225.1** (apitype definitions)
 
 ### Directory Structure
@@ -185,11 +185,12 @@ internal/
     service.go               # Service interface (6 methods)
     postgres.go              # PostgreSQL implementation
     errors.go                # Sentinel errors
-  updates/                   # Update lifecycle (Phase 3) + State ops (Phase 4)
-    service.go               # Service interface (12 methods incl. export/import)
+  updates/                   # Update lifecycle (Phase 3) + State ops (Phase 4) + Resilience (Phase 5)
+    service.go               # Service interface (13 methods incl. CancelUpdate)
     postgres.go              # PostgreSQL implementation
     nop.go                   # NopService stub
     errors.go                # Sentinel errors
+    gc_worker.go             # Orphan GC with pg advisory locks for cluster-safety
   checkpoints/               # Checkpoint storage (Phase 3)
   events/                    # Event ingestion (Phase 3)
   crypto/                    # Encrypt/decrypt (Phase 4)
@@ -244,6 +245,27 @@ The sequence the CLI follows during `pulumi up`:
 - `Plaintext`/`Ciphertext` are `[]byte` → JSON-encoded as base64.
 - Uses AES-256-GCM with HKDF per-stack key derivation from a master key.
 - Dev mode auto-generates deterministic key from `sha256("strata-dev-encryption-key")`.
+
+### Resilience Protocol (Phase 5)
+
+**Cancel Update**: `POST /api/stacks/{org}/{project}/{stack}/update/{updateID}/cancel`
+- Uses regular API token auth (NOT update-token). No request body, no response body.
+- Transaction: set status='cancelled', clear lease token, clear stack's active update lock.
+- Idempotent: canceling an already-canceled update returns success.
+
+**Orphan GC Worker**: Background goroutine that cleans up stale updates.
+- Scans for: running updates with expired leases, stale not-started/requested updates (>1hr).
+- Uses `pg_try_advisory_lock(0x5472617461_4743)` for cluster-safe execution — only one instance runs GC at a time.
+- Runs reconciliation at startup, then every 60s. Lock acquired per-cycle, released after each cycle.
+- Wired in `main.go`: `Start()` after server, `Stop()` before shutdown.
+
+### Cluster-Safety
+
+All state lives in PostgreSQL. No in-memory caches, no local-only state.
+- **Transactions** protect critical sections (create stack, rename, cancel update).
+- **Unique index** prevents multiple active updates per stack.
+- **pg advisory locks** ensure only one GC worker runs across the cluster.
+- **Local blob storage** is the only non-clusterable component — use S3 (`STRATA_BLOB_BACKEND=s3`) for multi-node.
 
 ### Quality Gates
 

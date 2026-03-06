@@ -542,6 +542,43 @@ func (s *PostgresService) GetUpdateStatus(ctx context.Context, org, project, sta
 	}, nil
 }
 
+func (s *PostgresService) CancelUpdate(ctx context.Context, org, project, stack, updateID string) error {
+	stackID, err := s.findStackID(ctx, org, project, stack)
+	if err != nil {
+		return err
+	}
+
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin cancel update transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	ct, err := tx.Exec(ctx, `
+		UPDATE updates
+		SET status = 'cancelled', completed_at = now(), lease_token = NULL, lease_expires_at = NULL
+		WHERE id = $1::uuid AND stack_id = $2 AND status IN ('not started', 'requested', 'running')
+	`, updateID, stackID)
+	if err != nil {
+		return fmt.Errorf("cancel update: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrUpdateNotFound
+	}
+
+	if _, err = tx.Exec(ctx, `
+		UPDATE stacks SET current_operation_id = NULL, updated_at = now() WHERE id = $1
+	`, stackID); err != nil {
+		return fmt.Errorf("clear current operation: %w", err)
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit cancel update: %w", err)
+	}
+
+	return nil
+}
+
 // findStackID looks up a stack by org/project/stack, returning the stack UUID.
 func (s *PostgresService) findStackID(ctx context.Context, org, project, stack string) (string, error) {
 	var stackID string

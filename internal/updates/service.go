@@ -43,4 +43,7 @@ type Service interface {
 
 	// GetUpdateStatus returns the current status and events for an update (used for polling after import).
 	GetUpdateStatus(ctx context.Context, org, project, stack, updateID string, continuationToken *string) (*apitype.UpdateResults, error)
+
+	// CancelUpdate cancels an active update, releasing the stack lock.
+	CancelUpdate(ctx context.Context, org, project, stack, updateID string) error
 }

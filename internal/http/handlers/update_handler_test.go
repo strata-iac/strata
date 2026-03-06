@@ -27,6 +27,7 @@ type mockUpdateService struct {
 	exportStackVersionFn      func(ctx context.Context, org, project, stack string, version int) (*apitype.UntypedDeployment, error)
 	importStackFn             func(ctx context.Context, org, project, stack string, deployment apitype.UntypedDeployment) (string, error)
 	getUpdateStatusFn         func(ctx context.Context, org, project, stack, updateID string, continuationToken *string) (*apitype.UpdateResults, error)
+	cancelUpdateFn            func(ctx context.Context, org, project, stack, updateID string) error
 }
 
 func (m *mockUpdateService) CreateUpdate(ctx context.Context, org, project, stack string, kind apitype.UpdateKind, req apitype.UpdateProgramRequest) (*apitype.UpdateProgramResponse, error) {
@@ -89,6 +90,13 @@ func (m *mockUpdateService) GetUpdateStatus(ctx context.Context, org, project, s
 	return nil, nil
 }
 
+func (m *mockUpdateService) CancelUpdate(ctx context.Context, org, project, stack, updateID string) error {
+	if m.cancelUpdateFn != nil {
+		return m.cancelUpdateFn(ctx, org, project, stack, updateID)
+	}
+	return nil
+}
+
 func newUpdateTestRouter(svc updates.Service) *chi.Mux {
 	h := NewUpdateHandler(svc)
 	r := chi.NewRouter()
@@ -105,6 +113,7 @@ func newUpdateTestRouter(svc updates.Service) *chi.Mux {
 	r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}/events/batch", h.RecordEvents)
 	r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}/renew_lease", h.RenewLease)
 	r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}/complete", h.CompleteUpdate)
+	r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}/cancel", h.CancelUpdate)
 	return r
 }
 
@@ -579,6 +588,65 @@ func TestGetUpdateStatus_NotFound(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/update/nonexistent", nil)
+	rr := httptest.NewRecorder()
+
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestCancelUpdate_Success(t *testing.T) {
+	var calledOrg, calledProject, calledStack, calledUpdateID string
+	svc := &mockUpdateService{
+		cancelUpdateFn: func(_ context.Context, org, project, stack, updateID string) error {
+			calledOrg = org
+			calledProject = project
+			calledStack = stack
+			calledUpdateID = updateID
+			return nil
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/update/abc-123/cancel", nil)
+	rr := httptest.NewRecorder()
+
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if calledOrg != "test-org" || calledProject != "test-project" || calledStack != "dev" || calledUpdateID != "abc-123" {
+		t.Fatalf("unexpected params: org=%s project=%s stack=%s updateID=%s", calledOrg, calledProject, calledStack, calledUpdateID)
+	}
+}
+
+func TestCancelUpdate_NotFound(t *testing.T) {
+	svc := &mockUpdateService{
+		cancelUpdateFn: func(context.Context, string, string, string, string) error {
+			return updates.ErrUpdateNotFound
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/update/abc-123/cancel", nil)
+	rr := httptest.NewRecorder()
+
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestCancelUpdate_StackNotFound(t *testing.T) {
+	svc := &mockUpdateService{
+		cancelUpdateFn: func(context.Context, string, string, string, string) error {
+			return updates.ErrStackNotFound
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/stacks/test-org/test-project/dev/update/abc-123/cancel", nil)
 	rr := httptest.NewRecorder()
 
 	newUpdateTestRouter(svc).ServeHTTP(rr, req)
