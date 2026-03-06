@@ -210,6 +210,13 @@ func (s *PostgresService) PatchCheckpointVerbatim(ctx context.Context, org, proj
 		return err
 	}
 
+	// UntypedDeployment is the full serialized UntypedDeployment {version, deployment}.
+	// Extract just the inner deployment so it matches what PatchCheckpoint stores.
+	var wrapped apitype.UntypedDeployment
+	if err := json.Unmarshal(req.UntypedDeployment, &wrapped); err != nil {
+		return fmt.Errorf("unmarshal verbatim checkpoint: %w", err)
+	}
+
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("begin patch checkpoint verbatim transaction: %w", err)
@@ -221,7 +228,7 @@ func (s *PostgresService) PatchCheckpointVerbatim(ctx context.Context, org, proj
 		VALUES ($1, $2::uuid, $3, $4, $5, false)
 		ON CONFLICT (update_id, sequence_number) WHERE sequence_number > 0
 		DO NOTHING
-	`, stackID, updateID, req.Version, req.SequenceNumber, req.UntypedDeployment); err != nil {
+	`, stackID, updateID, req.Version, req.SequenceNumber, wrapped.Deployment); err != nil {
 		return fmt.Errorf("insert verbatim checkpoint: %w", err)
 	}
 
