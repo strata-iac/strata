@@ -8,8 +8,8 @@ Strata has four levels of testing: Go unit tests, web unit tests, E2E acceptance
 ## Go Unit Tests
 
 ```bash
-make test
-# or: mise exec -- go test -race -count=1 ./...
+bun run go:test
+# or: mise exec -- go test -race -count=1 -timeout=2m ./...
 ```
 
 Go unit tests use the standard `testing` package with table-driven patterns. They run without any external dependencies (no database, no Docker).
@@ -25,8 +25,8 @@ All Go tests run with `-race` to detect data races.
 ## Web Unit Tests
 
 ```bash
-make check-web
-# or: cd web/apps/api && bun test
+bun run check:web
+# or: mise exec -- bun test --cwd web/apps/api
 ```
 
 The tRPC web API (`@strata/api`) has 28 unit tests using Bun's built-in test runner. Tests use `appRouter.createCaller(ctx)` to invoke procedures directly without HTTP, with a chainable Proxy-based mock for the Drizzle database.
@@ -43,14 +43,14 @@ Tests require `STRATA_DATABASE_URL` and `STRATA_DEV_AUTH_TOKEN` env vars (dummy 
 ## E2E Acceptance Tests
 
 ```bash
-make e2e
+bun run e2e
 # or: mise exec -- go test -race -count=1 -tags=e2e -timeout=15m -v ./e2e/...
 ```
 
 E2E tests exercise the full Pulumi CLI lifecycle against an in-process Strata server. They require:
-- PostgreSQL (started via `make deps` or Docker Compose)
+- PostgreSQL (started via `bun run dev:deps` or Docker Compose)
 - Pulumi CLI installed
-- `STRATA_DATABASE_URL` environment variable (or use `make e2e` which connects to the Docker Compose PostgreSQL)
+- `STRATA_DATABASE_URL` environment variable (set in `mise.toml` [env] for dev)
 
 ### Test Files
 
@@ -84,7 +84,7 @@ This validates the complete update lifecycle end-to-end without requiring cloud 
 ## Cluster E2E Tests
 
 ```bash
-make e2e-cluster
+bun run e2e:cluster
 ```
 
 Runs the same 46 E2E tests against a multi-replica Docker cluster:
@@ -104,7 +104,7 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) runs four jobs:
 
 ```yaml
 - uses: jdx/mise-action@v2
-- run: mise exec -- make check
+- run: mise exec -- bun run check
 ```
 
 Runs: golangci-lint → govulncheck → go build → go test (unit only)
@@ -113,7 +113,7 @@ Runs: golangci-lint → govulncheck → go build → go test (unit only)
 
 ```yaml
 - uses: jdx/mise-action@v2
-- run: mise exec -- make check-web
+- run: mise exec -- bun run check:web
 ```
 
 Runs: bun install → biome check → tsc --noEmit (both apps) → bun test (28 tests)
@@ -125,7 +125,7 @@ services:
   postgres:
     image: postgres:17-alpine
 - uses: pulumi/setup-pulumi@v2
-- run: mise exec -- go test -race -count=1 -tags=e2e -timeout=15m -v ./e2e/...
+- run: mise exec -- bun run e2e
 ```
 
 Uses GitHub Actions service containers for PostgreSQL. Runs the full E2E suite against an in-process server.
@@ -133,7 +133,7 @@ Uses GitHub Actions service containers for PostgreSQL. Runs the full E2E suite a
 ### 4. E2E Cluster Tests (`e2e-cluster`)
 
 ```yaml
-- run: mise exec -- make e2e-cluster
+- run: mise exec -- bun run e2e:cluster
 ```
 
 Runs the full Docker Compose cluster (3 replicas + Caddy + PostgreSQL + MinIO) and executes E2E tests against it.
@@ -192,5 +192,5 @@ func TestMyE2EFeature(t *testing.T) {
 mise exec -- go test -race -tags=e2e -timeout=15m -v -run TestStackLifecycle ./e2e/...
 
 # Run only examples
-make examples
+bun run e2e -- -run TestExamples
 ```

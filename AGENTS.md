@@ -157,7 +157,7 @@ Strata is a self-hosted Pulumi backend written in Go. It implements the Pulumi S
 
 ### Tech Stack
 
-- **Go 1.26.1** (via mise — ALL tool invocations must use `mise exec --`)
+- **Go 1.26.1** (via mise)
 - **PostgreSQL 17** (metadata, state)
 - **chi v5** (HTTP router)
 - **pgx v5** (Postgres driver)
@@ -205,10 +205,8 @@ internal/
     aes_test.go              # 6 unit tests
   storage/blobs/             # Blob storage (local + S3)
 web/                         # Bun workspace monorepo
-  package.json               # Workspace root (apps/*)
-  biome.json                 # Strict Biome linter/formatter config
-  tsconfig.json              # Strict TypeScript base config
-  bun.lock                   # Lockfile (committed for reproducible builds)
+  apps/
+    api/                     # @strata/api — tRPC web API (Hono + Drizzle ORM)
   apps/
     api/                     # @strata/api — tRPC web API (Hono + Drizzle ORM)
       src/index.ts           # Hono server + tRPC mount (port 3000)
@@ -290,10 +288,10 @@ All state lives in PostgreSQL. No in-memory caches, no local-only state.
 ### Quality Gates
 
 ```bash
-make check      # Go: lint → vuln → build → test (unit only)
-make check-web  # Web: biome lint → typecheck → bun test (28 tests)
-make e2e         # E2E tests (requires postgres + pulumi CLI)
-make check-all   # check + check-web + e2e
+bun run check      # Go: lint → vuln → build → test (unit only)
+bun run check:web  # Web: biome lint → typecheck → bun test (28 tests)
+bun run e2e        # E2E tests (requires postgres + pulumi CLI)
+bun run check:all  # check + check:web + e2e
 ```
 
 ### Environment Variables

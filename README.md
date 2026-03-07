@@ -35,10 +35,10 @@ A self-hosted [Pulumi](https://www.pulumi.com/) backend. Run `pulumi login`, `pu
 # Clone and start the dev environment
 git clone https://github.com/strata-iac/strata.git
 cd strata
-make dev
+bun run dev
 ```
 
-This starts PostgreSQL, MinIO, and a single Strata server via Docker Compose.
+This starts PostgreSQL, MinIO, and all dev servers (Go API with Air hot-reload, tRPC API, Vite UI, Caddy reverse proxy) locally.
 
 ```bash
 # Point the Pulumi CLI at your local Strata instance
@@ -56,20 +56,19 @@ pulumi up
 For horizontal scaling with multiple replicas behind a load balancer:
 
 ```bash
-make cluster        # 3 replicas + Caddy LB + PostgreSQL + MinIO
-make e2e-cluster    # Run acceptance tests against the cluster
-```
+bun run docker:cluster   # 3 replicas + Caddy LB + PostgreSQL + MinIO
+bun run e2e:cluster      # Run acceptance tests against the cluster
 
 See the [Horizontal Scaling](docs/src/content/docs/operations/horizontal-scaling.md) guide for production deployment details.
 
 ## Quality Gates
 
 ```bash
-make check          # Go: lint + vuln scan + build + unit tests
-make check-web      # Web: biome lint + typecheck + 28 unit tests
-make e2e            # E2E acceptance tests (46 tests)
-make e2e-cluster    # Cluster E2E tests (3 replicas)
-make check-all      # check + check-web + e2e
+bun run check          # Go: lint + vuln scan + build + unit tests
+bun run check:web      # Web: biome lint + typecheck + 28 unit tests
+bun run e2e            # E2E acceptance tests (46 tests)
+bun run e2e:cluster    # Cluster E2E tests (3 replicas)
+bun run check:all      # check + check:web + e2e
 ```
 
 ## Documentation
@@ -77,8 +76,8 @@ make check-all      # check + check-web + e2e
 Full documentation is available in the [`docs/`](docs/) directory, built with [Starlight](https://starlight.astro.build/):
 
 ```bash
-make docs-dev       # Start docs dev server
-make docs-build     # Build static docs site
+bun run docs:dev       # Start docs dev server
+bun run docs:build     # Build static docs site
 ```
 
 - [Introduction](docs/src/content/docs/getting-started/introduction.md)
@@ -105,8 +104,9 @@ internal/             Go backend (Pulumi CLI protocol)
 web/                  Bun workspace monorepo
   apps/api/           @strata/api — tRPC web API (Hono + Drizzle)
   apps/ui/            @strata/ui — React SPA (Vite + Tailwind)
-  biome.json          Strict Biome linter/formatter config
-  tsconfig.json       Strict TypeScript base config
+package.json          Root workspace + bun scripts (task runner)
+biome.json            Strict Biome linter/formatter config
+mise.toml             Tool versions + dev environment variables
 e2e/                  E2E acceptance tests
 docs/                 Starlight documentation site
 ```
