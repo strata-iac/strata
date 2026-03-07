@@ -24,7 +24,7 @@ jobs:
             ~/.cache/go-build
           key: go-${{ runner.os }}-${{ hashFiles('go.sum') }}
           restore-keys: go-${{ runner.os }}-
-      - run: mise exec -- make check
+      - run: mise exec -- bun run check
 
   web-check:
     name: Web Lint, Typecheck & Tests
@@ -34,13 +34,10 @@ jobs:
       - uses: jdx/mise-action@v2
       - uses: actions/cache@v4
         with:
-          path: web/node_modules
-          key: bun-${{ runner.os }}-${{ hashFiles('web/bun.lock') }}
+          path: node_modules
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
-      - run: mise exec -- make check-web
-        env:
-          STRATA_DATABASE_URL: postgres://test:test@localhost:5432/test
-          STRATA_DEV_AUTH_TOKEN: ci-test-token
+      - run: mise exec -- bun run check:web
 
   e2e:
     name: E2E Acceptance Tests
@@ -74,7 +71,7 @@ jobs:
       - name: Run E2E tests
         env:
           STRATA_DATABASE_URL: postgres://strata:strata@localhost:5432/strata?sslmode=disable
-        run: mise exec -- go test -race -count=1 -tags=e2e -timeout=15m -v ./e2e/...
+        run: mise exec -- bun run e2e
 
   e2e-cluster:
     name: E2E Cluster Tests
@@ -92,4 +89,4 @@ jobs:
           restore-keys: go-${{ runner.os }}-
       - uses: pulumi/setup-pulumi@v2
       - name: Run cluster E2E tests
-        run: mise exec -- make e2e-cluster
+        run: mise exec -- bun run e2e:cluster

@@ -1,6 +1,7 @@
 # Binary
 /strata
 /bin/
+/tmp/
 
 # Environment
 .env
@@ -19,9 +20,8 @@
 # Generated code (buf generate)
 gen/
 
-# Web workspace
-web/node_modules/
-web/apps/*/node_modules/
+# Node / Bun (root workspace)
+node_modules/
 web/apps/*/dist/
 
 # Docs site build artifacts

@@ -1,14 +1,4 @@
 {
 	"name": "strata-web",
-	"private": true,
-	"workspaces": ["apps/*"],
-	"scripts": {
-		"check": "biome check .",
-		"check:fix": "biome check --write .",
-		"typecheck": "bun run --filter '*' typecheck"
-	},
-	"devDependencies": {
-		"@biomejs/biome": "^1.9.4",
-		"typescript": "~5.9.3"
-	}
+	"private": true
 }

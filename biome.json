@@ -44,6 +44,7 @@
 		}
 	},
 	"files": {
+		"include": ["web/**/*.ts", "web/**/*.tsx", "web/**/*.json"],
 		"ignore": ["node_modules", "dist", "*.gen.*"]
 	}
 }

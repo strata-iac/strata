@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+
+# Strata pre-commit hook — runs quality gates via bun scripts.
+# Checks are scoped to what actually changed to keep commits fast.
+# All commands live in package.json — this hook only decides WHICH scripts to run.
+
+set -euo pipefail
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
+
+if [ -z "$STAGED" ]; then
+  exit 0
+fi
+
+GO_CHANGED=false
+WEB_CHANGED=false
+INFRA_CHANGED=false
+
+while IFS= read -r file; do
+  case "$file" in
+    *.go)                    GO_CHANGED=true ;;
+    web/apps/*.ts|web/apps/*.tsx|web/apps/*.json) WEB_CHANGED=true ;;
+    Dockerfile|docker-compose.yml|Caddyfile*|.github/*) INFRA_CHANGED=true ;;
+  esac
+done <<< "$STAGED"
+
+FAIL=0
+
+if [ "$GO_CHANGED" = true ]; then
+  echo "▶ bun run check (Go: lint → vuln → build → test)"
+  if ! bun run check 2>&1; then
+    FAIL=1
+  fi
+fi
+
+if [ "$WEB_CHANGED" = true ]; then
+  echo "▶ bun run check:web (Web: lint → typecheck → test)"
+  if ! bun run check:web 2>&1; then
+    FAIL=1
+  fi
+fi
+
+if [ "$GO_CHANGED" = true ] || [ "$WEB_CHANGED" = true ] || [ "$INFRA_CHANGED" = true ]; then
+  DOCS_CHANGED=false
+  while IFS= read -r file; do
+    case "$file" in
+      AGENTS.md|README.md|docs/*) DOCS_CHANGED=true; break ;;
+    esac
+  done <<< "$STAGED"
+
+  if [ "$DOCS_CHANGED" = false ]; then
+    echo ""
+    echo "⚠  Code/infra changed without docs update. Verify these are current:"
+    echo "   - AGENTS.md (directory structure, tech stack, quality gates)"
+    echo "   - README.md (project structure, tech stack table)"
+    echo "   - docs/ (architecture, testing, contributing)"
+    echo ""
+  fi
+fi
+
+if [ "$FAIL" -ne 0 ]; then
+  echo ""
+  echo "✖ Pre-commit checks failed. Fix issues above before committing."
+  exit 1
+fi

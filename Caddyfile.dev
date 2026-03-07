@@ -1,0 +1,22 @@
+{
+	auto_https off
+	admin off
+}
+
+:8080 {
+	handle /api/* {
+		reverse_proxy localhost:8081
+	}
+
+	handle /healthz {
+		reverse_proxy localhost:8081
+	}
+
+	handle /trpc/* {
+		reverse_proxy localhost:3000
+	}
+
+	handle {
+		reverse_proxy localhost:5173
+	}
+}
