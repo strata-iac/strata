@@ -19,10 +19,10 @@
 # Generated code (buf generate)
 gen/
 
-# Web SPA
-web/dist/
+# Web workspace
 web/node_modules/
-web/src/gen/
+web/apps/*/node_modules/
+web/apps/*/dist/
 
 # Docs site build artifacts
 docs/node_modules/
