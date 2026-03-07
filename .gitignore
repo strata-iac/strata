@@ -23,6 +23,7 @@ gen/
 # Node / Bun (root workspace)
 node_modules/
 web/apps/*/dist/
+web/bun.lock
 
 # Docs site build artifacts
 docs/node_modules/

@@ -5,7 +5,7 @@
 	"scripts": {
 		"prepare": "husky",
 
-		"dev": "bun run dev:deps && trap 'kill 0' EXIT && mise exec -- air & bun run --cwd web/apps/api dev & bun run --cwd web/apps/ui dev & mise exec -- caddy run --config Caddyfile.dev & wait",
+		"dev": "bun run dev:deps && trap 'kill 0' EXIT && mise exec -- air & bun run --cwd web/apps/api dev & bun run --cwd web/apps/ui dev & mise exec -- caddy run --config Caddyfile & wait",
 		"dev:deps": "docker compose up -d && printf 'Waiting for postgres' && until docker compose exec -T postgres pg_isready -U strata -q 2>/dev/null; do printf '.'; sleep 1; done && echo ' ready'",
 		"dev:down": "docker compose down -v",
 

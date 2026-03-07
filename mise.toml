@@ -19,6 +19,9 @@ STRATA_BLOB_S3_BUCKET = "strata-checkpoints"
 STRATA_BLOB_S3_ENDPOINT = "http://localhost:9000"
 AWS_ACCESS_KEY_ID = "minio"
 AWS_SECRET_ACCESS_KEY = "minio"
+CADDY_GO_UPSTREAM = "localhost:8081"
+CADDY_WEB_UPSTREAM = "localhost:3000"
+CADDY_UI_UPSTREAM = "localhost:5173"
 
 [settings]
 experimental = true
