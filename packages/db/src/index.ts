@@ -4,20 +4,20 @@
 // Drizzle ORM wraps it for type-safe queries with schema inference.
 
 import { SQL } from "bun";
-import { drizzle } from "drizzle-orm/bun-sql";
 import type { BunSQLDatabase } from "drizzle-orm/bun-sql";
+import { drizzle } from "drizzle-orm/bun-sql";
 import { schema } from "./schema.js";
 
 export type { BunSQLDatabase };
 
 // Re-export schema for consumers
-export { schema } from "./schema.js";
 export {
-	projects,
-	stacks,
-	updates,
 	checkpoints,
+	projects,
+	schema,
+	stacks,
 	updateEvents,
+	updates,
 } from "./schema.js";
 
 // ============================================================================

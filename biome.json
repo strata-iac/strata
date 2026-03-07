@@ -1,8 +1,6 @@
 {
-	"$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-	"organizeImports": {
-		"enabled": true
-	},
+	"$schema": "https://biomejs.dev/schemas/2.4.6/schema.json",
+	"assist": { "actions": { "source": { "organizeImports": "on" } } },
 	"formatter": {
 		"enabled": true,
 		"indentStyle": "tab",
@@ -44,7 +42,14 @@
 		}
 	},
 	"files": {
-		"include": ["packages/**/*.ts", "apps/**/*.ts", "apps/**/*.tsx", "e2e/**/*.ts"],
-		"ignore": ["node_modules", "dist", "*.gen.*"]
+		"includes": [
+			"**/packages/**/*.ts",
+			"**/apps/**/*.ts",
+			"**/apps/**/*.tsx",
+			"**/e2e/**/*.ts",
+			"!**/node_modules",
+			"!**/dist",
+			"!**/*.gen.*"
+		]
 	}
 }

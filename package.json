@@ -2,6 +2,32 @@
 	"name": "strata",
 	"private": true,
 	"workspaces": ["packages/*", "apps/*"],
+	"catalog": {
+		"@biomejs/biome": "^2.4.6",
+		"@descope/node-sdk": "^1.10.0",
+		"@hono/zod-validator": "^0.7.6",
+		"@tailwindcss/vite": "^4.2.1",
+		"@tanstack/react-query": "^5.80.6",
+		"@trpc/client": "^11.1.0",
+		"@trpc/react-query": "^11.1.0",
+		"@trpc/server": "^11.1.0",
+		"@types/bun": "^1.3.10",
+		"@types/react": "^19.2.7",
+		"@types/react-dom": "^19.2.3",
+		"@vitejs/plugin-react": "^5.1.1",
+		"drizzle-kit": "^0.31.9",
+		"drizzle-orm": "^0.45.1",
+		"hono": "^4.7.0",
+		"husky": "^9.1.7",
+		"react": "^19.2.0",
+		"react-dom": "^19.2.0",
+		"react-router": "^7.13.1",
+		"superjson": "^2.2.2",
+		"tailwindcss": "^4.2.1",
+		"typescript": "~5.9.3",
+		"vite": "^7.3.1",
+		"zod": "^4.3.6"
+	},
 	"scripts": {
 		"prepare": "husky",
 
@@ -27,18 +53,18 @@
 		"docs:build": "cd docs && npm run build"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^1.9.4",
-		"@types/bun": "^1.2.0",
-		"drizzle-kit": "^0.30.0",
-		"husky": "^9.1.7",
-		"typescript": "~5.8.3"
+		"@biomejs/biome": "catalog:",
+		"@types/bun": "catalog:",
+		"drizzle-kit": "catalog:",
+		"husky": "catalog:",
+		"typescript": "catalog:"
 	},
 	"dependencies": {
-		"@descope/node-sdk": "^1.10.0",
-		"@hono/zod-validator": "^0.5.0",
-		"@trpc/server": "^11.1.0",
-		"drizzle-orm": "^0.39.0",
-		"hono": "^4.7.0",
-		"zod": "^3.24.0"
+		"@descope/node-sdk": "catalog:",
+		"@hono/zod-validator": "catalog:",
+		"@trpc/server": "catalog:",
+		"drizzle-orm": "catalog:",
+		"hono": "catalog:",
+		"zod": "catalog:"
 	}
 }

@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { ForbiddenError, UnauthorizedError } from "@strata/types";
 import {
 	type AuthService,
+	createAuthService,
 	DescopeAuthService,
 	DevAuthService,
 	METHOD_ROLE_MAP,
-	createAuthService,
 	requireRole,
 } from "./index.js";
 

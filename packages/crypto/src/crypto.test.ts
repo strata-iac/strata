@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { AesCryptoService, NopCryptoService, devMasterKey } from "./index.js";
+import { AesCryptoService, devMasterKey, NopCryptoService } from "./index.js";
 
 const NONCE_LENGTH = 12;
 const TAG_LENGTH = 16;

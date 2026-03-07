@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LocalBlobStorage, createBlobStorage } from "./index";
+import { createBlobStorage, LocalBlobStorage } from "./index";
 
 describe("LocalBlobStorage", () => {
 	let basePath: string;

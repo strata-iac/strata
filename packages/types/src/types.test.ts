@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import {
 	ErrorType,
+	formatStackFQN,
 	NotFoundError,
+	parseStackFQN,
 	type StackFQN,
 	StrataError,
 	UpdateKind,
 	UpdateResult,
 	UpdateStatus,
-	formatStackFQN,
-	parseStackFQN,
 } from "./index.js";
 
 describe("@strata/types", () => {
