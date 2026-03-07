@@ -2,6 +2,8 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 export default defineConfig({
+  site: 'https://strata-iac.github.io',
+  base: '/strata',
   integrations: [
     starlight({
       title: 'Strata',
