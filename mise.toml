@@ -3,6 +3,7 @@ go = "1.26.1"
 "go:github.com/steveyegge/beads/cmd/bd" = "0.59.0"
 "go:github.com/golangci/golangci-lint/v2/cmd/golangci-lint" = "2.11.1"
 "go:golang.org/x/vuln/cmd/govulncheck" = "1.1.4"
+bun = "1.2"
 
 [settings]
 experimental = true

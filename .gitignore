@@ -16,6 +16,14 @@
 # Data (dev blobs)
 /data/
 
+# Generated code (buf generate)
+gen/
+
+# Web SPA
+web/dist/
+web/node_modules/
+web/src/gen/
+
 # Docs site build artifacts
 docs/node_modules/
 docs/dist/

@@ -4,9 +4,45 @@
 }
 
 :8080 {
-	reverse_proxy strata-cluster:8080 {
-		lb_policy round_robin
-		health_uri /healthz
-		health_interval 5s
+	# Pulumi CLI REST API → Go server
+	handle /api/* {
+		reverse_proxy strata:8080 {
+			lb_policy round_robin
+			health_uri /healthz
+			health_interval 5s
+		}
+	}
+
+	# Health check → Go server
+	handle /healthz {
+		reverse_proxy strata:8080 {
+			lb_policy round_robin
+			health_uri /healthz
+			health_interval 5s
+		}
+	}
+
+	# tRPC Web API → Bun server
+	handle /trpc/* {
+		reverse_proxy strata-web:3000 {
+			lb_policy round_robin
+			health_uri /health
+			health_interval 5s
+		}
+	}
+
+	# Docs site (Starlight)
+	handle /docs/* {
+		uri strip_prefix /docs
+		root * /srv/docs
+		try_files {path} /index.html
+		file_server
+	}
+
+	# SPA (React) — catch-all
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
 	}
 }
