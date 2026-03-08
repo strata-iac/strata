@@ -1,3 +1,56 @@
 name: component
-description: Component resources with parent-child hierarchy testing URN nesting in state
-runtime: go
+description: Multiple resources with cross-group dependencies testing state relationships
+runtime: yaml
+resources:
+  db-0-name:
+    type: random:RandomPet
+    properties:
+      length: 2
+      separator: "-"
+  db-0-password:
+    type: random:RandomPassword
+    properties:
+      length: 24
+      special: true
+  db-1-name:
+    type: random:RandomPet
+    properties:
+      length: 2
+      separator: "-"
+  db-1-password:
+    type: random:RandomPassword
+    properties:
+      length: 24
+      special: true
+  db-2-name:
+    type: random:RandomPet
+    properties:
+      length: 2
+      separator: "-"
+  db-2-password:
+    type: random:RandomPassword
+    properties:
+      length: 24
+      special: true
+  svc-0-endpoint:
+    type: random:RandomId
+    properties:
+      byteLength: 8
+    options:
+      dependsOn:
+        - ${db-0-name}
+        - ${db-0-password}
+  svc-1-endpoint:
+    type: random:RandomId
+    properties:
+      byteLength: 8
+    options:
+      dependsOn:
+        - ${db-1-name}
+        - ${db-1-password}
+outputs:
+  svc0Endpoint: ${svc-0-endpoint.hex}
+  svc1Endpoint: ${svc-1-endpoint.hex}
+  db0Name: ${db-0-name.id}
+  db1Name: ${db-1-name.id}
+  db2Name: ${db-2-name.id}

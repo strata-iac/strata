@@ -1,145 +1,77 @@
 ---
 title: Database Schema
-description: PostgreSQL schema — tables, enums, indexes, constraints, and relationships.
+description: PostgreSQL schema — tables, indexes, constraints, and relationships.
 ---
 
-Strata uses PostgreSQL 17 for all metadata and state. The schema is managed through embedded SQL migrations that run automatically on server startup.
+Strata uses PostgreSQL 17 for all metadata and state. The schema is managed through Drizzle ORM migrations that run automatically on server startup.
 
 ## Entity Relationship
 
 ```
-organizations ◄──── organization_members ────► users
-     │                                           │
-     │                                           │
-  projects                                  api_tokens
-     │
-     │
-  stacks ◄──── updates ◄──── update_events
-                  │
-                  │
-              checkpoints
+projects ◄──── stacks ◄──── updates ◄──── update_events
+                                │
+                                │
+                            checkpoints
 ```
 
 ## Tables
 
-### users
-
-Stores user accounts. Each user is identified by a unique `github_login` (used as the display identifier across the system, regardless of auth mode).
-
-| Column | Type | Constraints |
-|---|---|---|
-| `id` | `UUID` | PK, default `gen_random_uuid()` |
-| `github_login` | `TEXT` | `NOT NULL UNIQUE` |
-| `display_name` | `TEXT` | |
-| `email` | `TEXT` | |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
-| `updated_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
-
-### organizations
-
-Tenant boundaries. Each organization is an isolated namespace for projects and stacks.
-
-| Column | Type | Constraints |
-|---|---|---|
-| `id` | `UUID` | PK, default `gen_random_uuid()` |
-| `github_login` | `TEXT` | `NOT NULL UNIQUE` |
-| `display_name` | `TEXT` | |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
-| `updated_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
-
-### organization_members
-
-Maps users to organizations with a role. Composite primary key ensures one membership per user per org.
-
-| Column | Type | Constraints |
-|---|---|---|
-| `organization_id` | `UUID` | PK, `FK → organizations(id) ON DELETE CASCADE` |
-| `user_id` | `UUID` | PK, `FK → users(id) ON DELETE CASCADE` |
-| `role` | `TEXT` | `NOT NULL DEFAULT 'member'` |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
-
-### api_tokens
-
-Hashed API tokens for authentication. Tokens are stored as hashes; only the prefix is kept in plaintext for identification.
-
-| Column | Type | Constraints |
-|---|---|---|
-| `id` | `UUID` | PK, default `gen_random_uuid()` |
-| `user_id` | `UUID` | `FK → users(id) ON DELETE CASCADE` |
-| `token_hash` | `TEXT` | `NOT NULL UNIQUE` |
-| `token_prefix` | `TEXT` | `NOT NULL` |
-| `description` | `TEXT` | |
-| `last_used_at` | `TIMESTAMPTZ` | |
-| `expires_at` | `TIMESTAMPTZ` | |
-| `revoked_at` | `TIMESTAMPTZ` | |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
-
 ### projects
 
-Namespace: `{org}/{project}`. Each project belongs to one organization.
+Namespace for stacks. Each project is identified by a tenant ID (from Descope JWT) and a name.
 
 | Column | Type | Constraints |
 |---|---|---|
 | `id` | `UUID` | PK, default `gen_random_uuid()` |
-| `organization_id` | `UUID` | `FK → organizations(id) ON DELETE CASCADE` |
+| `tenantId` | `TEXT` | `NOT NULL` (from Descope JWT) |
 | `name` | `TEXT` | `NOT NULL` |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
-| | | `UNIQUE (organization_id, name)` |
+| `description` | `TEXT` | |
+| `createdAt` | `TIMESTAMP` | `NOT NULL DEFAULT now()` |
+| `updatedAt` | `TIMESTAMP` | `NOT NULL DEFAULT now()` |
+| | | `UNIQUE (tenantId, name)` |
+
+**Index**: `idx_projects_tenant_name` on `(tenantId, name)` — fast lookup by tenant and project name.
 
 ### stacks
 
-The core entity. Each stack has a fully qualified name (`org/project/stack`) and tracks its current active operation.
+The core entity. Each stack belongs to a project and tracks its current active update.
 
 | Column | Type | Constraints |
 |---|---|---|
 | `id` | `UUID` | PK, default `gen_random_uuid()` |
-| `project_id` | `UUID` | `FK → projects(id) ON DELETE CASCADE` |
+| `projectId` | `UUID` | `FK → projects(id) ON DELETE CASCADE` |
 | `name` | `TEXT` | `NOT NULL` |
-| `fully_qualified_name` | `TEXT` | `NOT NULL UNIQUE` |
-| `current_operation_id` | `UUID` | Nullable — set when an update is active |
 | `tags` | `JSONB` | `NOT NULL DEFAULT '{}'` |
-| `secrets_provider` | `TEXT` | |
-| `last_checkpoint_version` | `BIGINT` | `NOT NULL DEFAULT 0` |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
-| `updated_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
-| | | `UNIQUE (project_id, name)` |
+| `activeUpdateId` | `UUID` | Nullable — set when an update is running |
+| `createdAt` | `TIMESTAMP` | `NOT NULL DEFAULT now()` |
+| `updatedAt` | `TIMESTAMP` | `NOT NULL DEFAULT now()` |
+| | | `UNIQUE (projectId, name)` |
+
+**Index**: `idx_stacks_project_name` on `(projectId, name)` — fast lookup by project and stack name.
 
 ### updates
 
-Tracks every operation performed on a stack.
+Tracks every operation performed on a stack (update, preview, refresh, destroy, import, etc.).
 
 | Column | Type | Constraints |
 |---|---|---|
 | `id` | `UUID` | PK, default `gen_random_uuid()` |
-| `stack_id` | `UUID` | `FK → stacks(id) ON DELETE CASCADE` |
-| `kind` | `update_kind` | `NOT NULL` (enum) |
-| `status` | `update_status` | `NOT NULL DEFAULT 'not started'` (enum) |
-| `program_name` | `TEXT` | `NOT NULL DEFAULT ''` |
-| `program_runtime` | `TEXT` | `NOT NULL DEFAULT ''` |
-| `program_main` | `TEXT` | `NOT NULL DEFAULT ''` |
-| `program_description` | `TEXT` | `NOT NULL DEFAULT ''` |
-| `config` | `JSONB` | `NOT NULL DEFAULT '{}'` |
-| `metadata` | `JSONB` | `NOT NULL DEFAULT '{}'` |
-| `lease_token` | `TEXT` | Nullable |
-| `lease_expires_at` | `TIMESTAMPTZ` | Nullable |
-| `version` | `INT` | `NOT NULL DEFAULT 0` |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
-| `started_at` | `TIMESTAMPTZ` | Nullable |
-| `completed_at` | `TIMESTAMPTZ` | Nullable |
+| `stackId` | `UUID` | Soft reference (no FK) — identifies the stack |
+| `kind` | `TEXT` | `NOT NULL` — update, preview, refresh, destroy, import, etc. |
+| `status` | `TEXT` | `NOT NULL DEFAULT 'not started'` — not started, requested, running, succeeded, failed, cancelled |
+| `result` | `TEXT` | Nullable — final result message |
+| `message` | `TEXT` | Nullable — status message |
+| `version` | `INT` | `NOT NULL DEFAULT 1` — checkpoint version |
+| `leaseToken` | `TEXT` | Nullable — token for execution phase |
+| `leaseExpiresAt` | `TIMESTAMP` | Nullable — lease expiration time |
+| `startedAt` | `TIMESTAMP` | Nullable |
+| `completedAt` | `TIMESTAMP` | Nullable |
+| `createdAt` | `TIMESTAMP` | `NOT NULL DEFAULT now()` |
+| `updatedAt` | `TIMESTAMP` | `NOT NULL DEFAULT now()` |
+| `config` | `JSONB` | `NOT NULL DEFAULT '{}'` — stack config |
+| `program` | `JSONB` | `NOT NULL DEFAULT '{}'` — program metadata |
 
-### update_events
-
-Engine events emitted during an update (resource operations, diagnostics, outputs).
-
-| Column | Type | Constraints |
-|---|---|---|
-| `id` | `UUID` | PK, default `gen_random_uuid()` |
-| `update_id` | `UUID` | `FK → updates(id) ON DELETE CASCADE` |
-| `sequence` | `INT` | `NOT NULL` |
-| `timestamp` | `INT` | `NOT NULL` |
-| `event_data` | `JSONB` | `NOT NULL` |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
-| | | `UNIQUE (update_id, sequence)` |
+**Index**: `idx_updates_active` — **Partial unique** on `(stackId) WHERE status IN ('not started', 'requested', 'running')` — prevents concurrent updates on the same stack.
 
 ### checkpoints
 
@@ -148,58 +80,52 @@ Infrastructure state snapshots. Each checkpoint is associated with an update and
 | Column | Type | Constraints |
 |---|---|---|
 | `id` | `UUID` | PK, default `gen_random_uuid()` |
-| `stack_id` | `UUID` | `FK → stacks(id) ON DELETE CASCADE` |
-| `update_id` | `UUID` | `FK → updates(id) ON DELETE CASCADE` |
-| `version` | `INT` | `NOT NULL` |
-| `sequence_number` | `INT` | `NOT NULL DEFAULT 0` |
-| `deployment` | `JSONB` | Nullable |
-| `is_invalid` | `BOOLEAN` | `NOT NULL DEFAULT false` |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
+| `updateId` | `UUID` | `FK → updates(id) ON DELETE CASCADE` |
+| `stackId` | `UUID` | Soft reference — identifies the stack |
+| `version` | `INT` | `NOT NULL` — checkpoint version |
+| `data` | `JSONB` | `NOT NULL` — deployment state |
+| `blobKey` | `TEXT` | Nullable — reference to blob storage |
+| `isDelta` | `BOOLEAN` | `NOT NULL DEFAULT false` — whether this is a delta checkpoint |
+| `createdAt` | `TIMESTAMP` | `NOT NULL DEFAULT now()` |
 
-## Enums
+**Index**: `idx_checkpoints_update_version` on `(updateId, version)` — fast lookup of checkpoints per update.
 
-### update_kind
+### update_events
 
-```sql
-CREATE TYPE update_kind AS ENUM (
-    'update', 'preview', 'refresh', 'destroy',
-    'rename', 'import', 'resource-import'
-);
-```
+Engine events emitted during an update (resource operations, diagnostics, outputs).
 
-### update_status
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `UUID` | PK, default `gen_random_uuid()` |
+| `updateId` | `UUID` | `FK → updates(id) ON DELETE CASCADE` |
+| `sequence` | `INT` | `NOT NULL` — event sequence number |
+| `kind` | `TEXT` | `NOT NULL` — event type |
+| `fields` | `JSONB` | `NOT NULL` — event data |
+| `createdAt` | `TIMESTAMP` | `NOT NULL DEFAULT now()` |
+| | | `UNIQUE (updateId, sequence)` |
 
-```sql
-CREATE TYPE update_status AS ENUM (
-    'not started', 'requested', 'running',
-    'failed', 'succeeded', 'cancelled'
-);
-```
+**Index**: `idx_update_events_update_sequence` on `(updateId, sequence)` — ordered event retrieval.
 
 ## Key Indexes
 
 | Index | Table | Purpose |
 |---|---|---|
-| `idx_updates_active_per_stack` | `updates` | **Partial unique**: `(stack_id) WHERE status IN ('not started', 'requested', 'running')` — prevents concurrent updates |
-| `idx_updates_stack` | `updates` | Fast lookup of updates per stack |
-| `idx_stacks_fqn` | `stacks` | Fast lookup by fully qualified name |
-| `idx_checkpoints_stack_version` | `checkpoints` | `(stack_id, version DESC)` — latest checkpoint lookup |
-| `idx_checkpoints_update` | `checkpoints` | Checkpoints per update |
-| `idx_checkpoints_update_seq` | `checkpoints` | **Partial unique**: `(update_id, sequence_number) WHERE sequence_number > 0` — verbatim checkpoint idempotency |
-| `idx_update_events_update` | `update_events` | `(update_id, sequence)` — ordered event retrieval |
-| `idx_api_tokens_user` | `api_tokens` | Tokens per user |
-| `idx_projects_org` | `projects` | Projects per org |
+| `idx_projects_tenant_name` | `projects` | `(tenantId, name)` — fast lookup by tenant and project |
+| `idx_stacks_project_name` | `stacks` | `(projectId, name)` — fast lookup by project and stack |
+| `idx_updates_active` | `updates` | **Partial unique**: `(stackId) WHERE status IN ('not started', 'requested', 'running')` — prevents concurrent updates |
+| `idx_checkpoints_update_version` | `checkpoints` | `(updateId, version)` — fast checkpoint lookup |
+| `idx_update_events_update_sequence` | `update_events` | `(updateId, sequence)` — ordered event retrieval |
 
 ## Auto-Create Pattern
 
-When creating a stack, Strata auto-creates the organization and project if they don't exist:
+When creating a stack, Strata auto-creates the project if it doesn't exist using Drizzle's `INSERT ... ON CONFLICT DO NOTHING`:
 
-```sql
-INSERT INTO organizations (github_login) VALUES ($1)
-ON CONFLICT (github_login) DO NOTHING;
-
-INSERT INTO projects (organization_id, name) VALUES ($1, $2)
-ON CONFLICT (organization_id, name) DO NOTHING;
+```typescript
+await db.insert(projects).values({
+  id: projectId,
+  tenantId,
+  name: projectName,
+}).onConflictDoNothing();
 ```
 
 This simplifies the CLI workflow — `pulumi stack init` creates everything in one step.
@@ -208,19 +134,22 @@ This simplifies the CLI workflow — `pulumi stack init` creates everything in o
 
 The GC worker uses PostgreSQL advisory locks for cluster-safe execution:
 
-```sql
-SELECT pg_try_advisory_lock(0x5472617461_4743);  -- "StrataGC"
--- ... do GC work ...
-SELECT pg_advisory_unlock(0x5472617461_4743);
+```typescript
+const lockId = 0x5472617461_4743; // "StrataGC"
+const acquired = await db.execute(
+  sql`SELECT pg_try_advisory_lock(${lockId})`
+);
+// ... do GC work ...
+await db.execute(sql`SELECT pg_advisory_unlock(${lockId})`);
 ```
 
 This ensures only one replica runs garbage collection at a time, even in a multi-instance deployment. The lock is acquired per-cycle and released after each cycle completes.
 
 ## Cascade Deletes
 
-All foreign keys use `ON DELETE CASCADE`:
+Foreign keys use `ON DELETE CASCADE`:
 
-- Deleting an **organization** cascades to members, projects, stacks, updates, events, checkpoints
+- Deleting a **project** cascades to stacks, updates, events, checkpoints
 - Deleting a **stack** cascades to updates, events, checkpoints
 - Deleting an **update** cascades to events, checkpoints
 
@@ -228,10 +157,4 @@ This means `pulumi stack rm` cleanly removes all associated data.
 
 ## Migrations
 
-Migrations are embedded in the Go binary and run automatically on startup:
-
-| Migration | Purpose |
-|---|---|
-| `0001_initial.up.sql` | Users, organizations, members, tokens, projects, stacks |
-| `0002_updates.up.sql` | Update/status enums, updates, events, checkpoints |
-| `0003_idempotency.up.sql` | Checkpoint idempotency index for verbatim writes |
+Migrations are managed by Drizzle Kit (`drizzle-kit`) and run automatically on server startup. The schema is defined in TypeScript in `packages/db/src/schema.ts` and migrations are generated and applied via Drizzle's migration system.

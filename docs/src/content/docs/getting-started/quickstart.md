@@ -5,25 +5,26 @@ description: Get a local Strata instance running and deploy your first stack in 
 
 ## Prerequisites
 
+- [Bun](https://bun.sh/) 1.2+
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose
 - [Pulumi CLI](https://www.pulumi.com/docs/install/) (v3.x)
-- [mise](https://mise.jdx.dev/) (for Go toolchain management, only needed for development)
 
 ## Start the Dev Environment
 
 ```bash
 git clone https://github.com/strata-iac/strata.git
 cd strata
-make dev
+bun run dev
 ```
 
-This starts three containers via Docker Compose:
+This starts the following services:
 
-| Container | Purpose | Port |
+| Service | Purpose | Port |
 |---|---|---|
-| `postgres` | PostgreSQL 17 database | 5432 |
-| `minio` | S3-compatible blob storage | 9000 (API), 9001 (console) |
-| `strata` | Strata server | 8080 |
+| PostgreSQL 17 | Database | 5432 |
+| MinIO | S3-compatible blob storage | 9000 (API), 9001 (console) |
+| Strata server | Bun server with hot-reload | 9090 |
+| Vite dev server | React UI with HMR | 5173 |
 
 The server runs database migrations automatically on startup.
 
@@ -35,7 +36,7 @@ You can browse stored checkpoints at [http://localhost:9001](http://localhost:90
 
 ```bash
 export PULUMI_ACCESS_TOKEN=devtoken123
-pulumi login http://localhost:8080
+pulumi login http://localhost:9090
 ```
 
 The dev environment uses a static token (`devtoken123`) for authentication. This maps to the default dev user (`dev-user`) in the default organization (`dev-org`).
@@ -67,15 +68,15 @@ You can verify the server is running correctly:
 
 ```bash
 # Health check
-curl http://localhost:8080/healthz
+curl http://localhost:9090/healthz
 
 # Check capabilities
-curl -H "Accept: application/vnd.pulumi+8" http://localhost:8080/api/capabilities
+curl -H "Accept: application/vnd.pulumi+8" http://localhost:9090/api/capabilities
 
 # List stacks (requires auth)
 curl -H "Accept: application/vnd.pulumi+8" \
      -H "Authorization: token devtoken123" \
-     http://localhost:8080/api/user/stacks
+     http://localhost:9090/api/user/stacks
 ```
 
 ## Multi-Tenant Testing
@@ -91,7 +92,7 @@ The dev environment supports multiple users and organizations out of the box:
 ```bash
 # Log in as user-b
 export PULUMI_ACCESS_TOKEN=token-user-b
-pulumi login http://localhost:8080
+pulumi login http://localhost:9090
 
 # Stacks are isolated per organization — user-b can only see org-b stacks
 pulumi stack ls
@@ -100,7 +101,7 @@ pulumi stack ls
 ## Stop the Environment
 
 ```bash
-make down
+bun run dev:down
 ```
 
 This stops all containers and removes volumes (including database data).
@@ -108,5 +109,5 @@ This stops all containers and removes volumes (including database data).
 ## Next Steps
 
 - [Configuration](/getting-started/configuration/) — customize the server with environment variables
-- [Docker Compose](/operations/docker-compose/) — understand the dev, cluster, and deps profiles
+- [Docker Compose](/operations/docker-compose/) — understand the deployment profiles
 - [Testing](/development/testing/) — run the E2E acceptance test suite

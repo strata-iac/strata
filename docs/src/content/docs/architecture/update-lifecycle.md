@@ -106,7 +106,7 @@ POST /api/stacks/{org}/{project}/{stack}/update/{updateID}/cancel
 
 ## Garbage Collection
 
-The GC worker runs as a background goroutine and cleans up orphaned updates:
+The GC worker runs as a background interval task and cleans up orphaned updates:
 
 - **Stale running updates**: Status is `running` but lease has expired
 - **Abandoned not-started updates**: Status is `not started` or `requested` for longer than 1 hour

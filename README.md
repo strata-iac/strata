@@ -5,29 +5,29 @@ A self-hosted [Pulumi](https://www.pulumi.com/) backend. Run `pulumi login`, `pu
 ## Features
 
 - **Full Pulumi CLI compatibility** — login, stack management, updates, previews, refreshes, destroys, state import/export
+- **Web dashboard** — React SPA with real-time stack, update, and event views via tRPC
 - **Multi-tenant authentication** — dev mode with static tokens or [Descope](https://www.descope.com/) access keys with tenant RBAC
-- **Role-based access control** — viewer / member / admin roles enforced per-organization via HTTP method mapping
+- **Role-based access control** — viewer / member / admin roles enforced per-organization
 - **AES-256-GCM encryption** — per-stack key derivation via HKDF for secrets at rest
-- **Horizontal scaling** — stateless Go binary behind Caddy load balancer, PostgreSQL for all shared state
+- **Horizontal scaling** — stateless server behind Caddy load balancer, PostgreSQL for all shared state
 - **S3-compatible blob storage** — local filesystem or any S3-compatible backend (AWS S3, MinIO, R2)
-- **Microservice architecture** — Go API for Pulumi CLI, Bun tRPC API for web dashboard, standalone React SPA
-- **Minimal Docker images** — `FROM scratch` / distroless containers with built-in healthcheck
+- **Single process** — CLI API + tRPC dashboard share one Hono server
+- **Minimal Docker image** — `bun build --compile` → debian-slim
 
 ## Tech Stack
 
 | Component | Technology |
 |---|---|
-| Go API | Go 1.26.1, chi v5, pgx v5 |
-| Web API | Bun, Hono, tRPC, Drizzle ORM |
-| Web UI | React 19, Vite 7, Tailwind CSS v4 |
+| Runtime | Bun 1.2 |
+| HTTP Router | Hono v4 |
+| Dashboard API | tRPC v11 + Drizzle ORM |
+| Dashboard UI | React 19, Vite 7, Tailwind CSS v4 |
 | Database | PostgreSQL 17 |
-| Auth | Descope / static tokens (both services) |
+| Auth | Descope / static tokens |
 | Encryption | AES-256-GCM + HKDF |
 | Blob Storage | Local filesystem / S3 |
 | Reverse Proxy | Caddy 2 |
-| Quality (Go) | golangci-lint v2 |
-| Quality (Web) | Biome + TypeScript strict |
-| IaC SDK | Pulumi SDK v3 (apitype definitions) |
+| Quality | Biome + TypeScript strict |
 
 ## Quick Start
 
@@ -38,12 +38,12 @@ cd strata
 bun run dev
 ```
 
-This starts PostgreSQL, MinIO, and all dev servers (Go API with Air hot-reload, tRPC API, Vite UI, Caddy reverse proxy) locally.
+This starts PostgreSQL, MinIO, the Bun server (with hot-reload), and the Vite UI dev server locally.
 
 ```bash
 # Point the Pulumi CLI at your local Strata instance
 export PULUMI_ACCESS_TOKEN=devtoken123
-pulumi login http://localhost:8080
+pulumi login http://localhost:9090
 
 # Create and deploy a stack
 mkdir my-project && cd my-project
@@ -64,11 +64,9 @@ See the [Horizontal Scaling](docs/src/content/docs/operations/horizontal-scaling
 ## Quality Gates
 
 ```bash
-bun run check          # Go: lint + vuln scan + build + unit tests
-bun run check:web      # Web: biome lint + typecheck + 28 unit tests
-bun run e2e            # E2E acceptance tests (46 tests)
-bun run e2e:cluster    # Cluster E2E tests (3 replicas)
-bun run check:all      # check + check:web + e2e
+bun run check          # biome lint + typecheck + 320 unit tests
+bun run e2e            # E2E acceptance tests (89 tests)
+bun run check:all      # check + e2e
 ```
 
 ## Documentation
@@ -89,25 +87,21 @@ bun run docs:build     # Build static docs site
 ## Project Structure
 
 ```
-cmd/strata/           Server entrypoint, healthcheck subcommand
-internal/             Go backend (Pulumi CLI protocol)
-  auth/               Authenticator interface, dev + Descope
-  config/             Environment variable configuration
-  crypto/             AES-256-GCM encryption with HKDF key derivation
-  db/                 PostgreSQL connection, embedded migrations
-  http/
-    handlers/         HTTP handlers (stacks, updates, crypto, health)
-    middleware/        Auth, CORS, Gzip, Logging, Recovery
-  stacks/             Stack service + PostgreSQL implementation
-  updates/            Update lifecycle, GC worker, TTL caches
-  storage/blobs/      Blob storage (local + S3)
-web/                  Bun workspace monorepo
-  apps/api/           @strata/api — tRPC web API (Hono + Drizzle)
-  apps/ui/            @strata/ui — React SPA (Vite + Tailwind)
-package.json          Root workspace + bun scripts (task runner)
-biome.json            Strict Biome linter/formatter config
-mise.toml             Tool versions + dev environment variables
-e2e/                  E2E acceptance tests
+packages/
+  types/              Pulumi protocol types + domain types + errors
+  config/             Zod-validated env config (STRATA_*)
+  db/                 Drizzle schema + Bun.sql connection factory
+  crypto/             AES-256-GCM with HKDF per-stack key derivation
+  storage/            Blob storage (local filesystem + S3)
+  auth/               Dev mode (static token) + Descope (JWT)
+  stacks/             Stack CRUD, rename, tags (PostgreSQL)
+  updates/            Update lifecycle, checkpoints, events, GC worker
+apps/
+  api/                @strata/api — tRPC router (stacks, updates, events)
+  server/             @strata/server — Hono HTTP server (CLI + tRPC + middleware)
+  ui/                 @strata/ui — React SPA (Vite + Tailwind + tRPC client)
+examples/             Pulumi YAML example programs (7 examples)
+e2e/                  E2E acceptance tests (89 tests, 9 files)
 docs/                 Starlight documentation site
 ```
 

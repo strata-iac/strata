@@ -1,7 +1,22 @@
 name: stack-ref
 description: Cross-stack references testing stack output resolution from another stack
-runtime: go
+runtime: yaml
 config:
   sourceStack:
-    description: Fully-qualified stack name to reference (e.g. dev-org/multi-resource/dev)
+    type: string
     default: dev-org/multi-resource/dev
+resources:
+  source:
+    type: pulumi:pulumi:StackReference
+    properties:
+      name: ${sourceStack}
+  derived:
+    type: random:RandomPet
+    properties:
+      length: 2
+      prefix: ${source.outputs["prefixName"]}
+outputs:
+  sourceStackName: ${sourceStack}
+  derivedName: ${derived.id}
+  sourcePrefix: ${source.outputs["prefixName"]}
+  sourceRoll: ${source.outputs["rollResult"]}

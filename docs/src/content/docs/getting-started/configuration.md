@@ -9,7 +9,7 @@ Strata is configured entirely through environment variables prefixed with `STRAT
 
 | Variable | Default | Description |
 |---|---|---|
-| `STRATA_LISTEN_ADDR` | `:8080` | Address and port the HTTP server listens on |
+| `STRATA_LISTEN_ADDR` | `:9090` | Address and port the HTTP server listens on |
 | `STRATA_DATABASE_URL` | *(required)* | PostgreSQL connection string (e.g. `postgres://user:pass@host:5432/db?sslmode=disable`) |
 
 ## Authentication
@@ -105,7 +105,7 @@ The server enforces these constraints at startup:
 ## Example: Minimal Production Config
 
 ```bash
-export STRATA_LISTEN_ADDR=":8080"
+export STRATA_LISTEN_ADDR=":9090"
 export STRATA_DATABASE_URL="postgres://strata:secret@db.internal:5432/strata?sslmode=require"
 export STRATA_AUTH_MODE="descope"
 export STRATA_DESCOPE_PROJECT_ID="P3Aaha02iJvkGVbPDAF78KWuAxe6"

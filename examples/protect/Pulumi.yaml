@@ -1,3 +1,38 @@
 name: protect
 description: Protected and retain-on-delete resources testing destroy rejection and state flags
-runtime: go
+runtime: yaml
+resources:
+  protected-pet:
+    type: random:RandomPet
+    properties:
+      length: 3
+    options:
+      protect: true
+  retained-id:
+    type: random:RandomId
+    properties:
+      byteLength: 8
+    options:
+      retainOnDelete: true
+  normal-string:
+    type: random:RandomString
+    properties:
+      length: 16
+      special: false
+  aliased-pet:
+    type: random:RandomPet
+    properties:
+      length: 2
+    options:
+      aliases:
+        - urn:pulumi:protect::protect::random:RandomPet::old-pet-name
+  replace-first:
+    type: random:RandomId
+    properties:
+      byteLength: 4
+    options:
+      deleteBeforeReplace: true
+outputs:
+  protectedName: ${protected-pet.id}
+  retainedHex: ${retained-id.hex}
+  normalValue: ${normal-string.result}

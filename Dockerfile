@@ -10,13 +10,16 @@ COPY packages/storage/package.json packages/storage/
 COPY packages/auth/package.json packages/auth/
 COPY packages/stacks/package.json packages/stacks/
 COPY packages/updates/package.json packages/updates/
+COPY apps/api/package.json apps/api/
 COPY apps/server/package.json apps/server/
-RUN bun install --frozen-lockfile
+RUN mkdir -p apps/ui && echo '{"name":"@strata/ui","private":true}' > apps/ui/package.json
+RUN bun install
 
 # Stage 2: build - Compile the server
 FROM deps AS build
 COPY tsconfig.json biome.json ./
 COPY packages/ packages/
+COPY apps/api/ apps/api/
 COPY apps/server/ apps/server/
 RUN bun build apps/server/src/index.ts --compile --outfile=/strata
 
@@ -24,7 +27,7 @@ RUN bun build apps/server/src/index.ts --compile --outfile=/strata
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
 COPY --from=build /strata /strata
-EXPOSE 8080
+EXPOSE 9090
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -sf http://localhost:8080/healthz || exit 1
+  CMD curl -sf http://localhost:9090/healthz || exit 1
 ENTRYPOINT ["/strata"]

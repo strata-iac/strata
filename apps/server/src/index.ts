@@ -50,10 +50,10 @@ const stacksService = new PostgresStacksService({ db });
 const updatesService = new PostgresUpdatesService({ db, storage, crypto });
 
 // HTTP
-const app = createApp({ auth, stacks: stacksService, updates: updatesService });
+const app = createApp({ auth, db, stacks: stacksService, updates: updatesService });
 
 const [, portStr] = config.listenAddr.split(":");
-const port = Number.parseInt(portStr || "8080", 10);
+const port = Number.parseInt(portStr || "9090", 10);
 
 const server = Bun.serve({
 	fetch: app.fetch,

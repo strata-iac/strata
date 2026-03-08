@@ -1,3 +1,36 @@
 name: replace-triggers
 description: Resource replacement via triggers, create/delete lifecycle, stdout/stderr in state
-runtime: go
+runtime: yaml
+resources:
+  trigger:
+    type: random:RandomUuid
+  setup:
+    type: command:local:Command
+    properties:
+      create: "echo 'resource created' && date -u +%s"
+      delete: "echo 'resource deleted'"
+      environment:
+        STRATA_TEST: "true"
+  timestamped:
+    type: command:local:Command
+    properties:
+      create: "echo $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      delete: "echo 'cleaning up timestamped'"
+      triggers:
+        - ${trigger.result}
+  delete-first:
+    type: command:local:Command
+    properties:
+      create: "echo 'created with delete-before-replace'"
+      delete: "echo 'deleted (before replace)'"
+      triggers:
+        - ${trigger.result}
+    options:
+      deleteBeforeReplace: true
+  consumer:
+    type: command:local:Command
+    properties:
+      create: "echo 'setup said: ${setup.stdout}'"
+outputs:
+  setupStdout: ${setup.stdout}
+  timestamp: ${timestamped.stdout}

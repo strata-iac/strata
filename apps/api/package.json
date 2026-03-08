@@ -1,0 +1,17 @@
+{
+	"name": "@strata/api",
+	"private": true,
+	"type": "module",
+	"main": "src/router/index.ts",
+	"types": "src/router/index.ts",
+	"dependencies": {
+		"@strata/db": "workspace:*",
+		"@strata/stacks": "workspace:*",
+		"@strata/types": "workspace:*",
+		"@strata/updates": "workspace:*",
+		"@trpc/server": "catalog:",
+		"drizzle-orm": "catalog:",
+		"superjson": "catalog:",
+		"zod": "catalog:"
+	}
+}

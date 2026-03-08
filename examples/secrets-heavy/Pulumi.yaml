@@ -1,3 +1,80 @@
 name: secrets-heavy
 description: Secret-heavy program testing batch-decrypt, secret outputs, encrypted config
-runtime: go
+runtime: yaml
+config:
+  dbHost:
+    type: string
+    default: localhost
+resources:
+  admin-pass:
+    type: random:RandomPassword
+    properties:
+      length: 32
+      special: true
+      overrideSpecial: "!@#$%"
+  user-pass:
+    type: random:RandomPassword
+    properties:
+      length: 16
+      special: false
+  encryption-key:
+    type: random:RandomBytes
+    properties:
+      length: 32
+  signing-key:
+    type: random:RandomBytes
+    properties:
+      length: 64
+  api-key-0:
+    type: random:RandomPassword
+    properties:
+      length: 48
+      special: false
+      upper: true
+      lower: true
+      numeric: true
+  api-key-1:
+    type: random:RandomPassword
+    properties:
+      length: 48
+      special: false
+      upper: true
+      lower: true
+      numeric: true
+  api-key-2:
+    type: random:RandomPassword
+    properties:
+      length: 48
+      special: false
+      upper: true
+      lower: true
+      numeric: true
+  api-key-3:
+    type: random:RandomPassword
+    properties:
+      length: 48
+      special: false
+      upper: true
+      lower: true
+      numeric: true
+  api-key-4:
+    type: random:RandomPassword
+    properties:
+      length: 48
+      special: false
+      upper: true
+      lower: true
+      numeric: true
+  label:
+    type: random:RandomPet
+    properties:
+      length: 2
+outputs:
+  dbHost: ${dbHost}
+  label: ${label.id}
+  adminPassword: ${admin-pass.result}
+  userPassword: ${user-pass.result}
+  encryptionKeyB64: ${encryption-key.base64}
+  signingKeyHex: ${signing-key.hex}
+  manualSecret:
+    fn::secret: this-is-manually-marked-secret

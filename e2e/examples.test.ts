@@ -1,4 +1,4 @@
-// E2E — Go example programs: full lifecycle for each example.
+// E2E — YAML example programs: full lifecycle for each example.
 
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import {

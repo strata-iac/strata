@@ -121,17 +121,6 @@ export async function copyExampleDir(name: string): Promise<string> {
 	});
 	await cp.exited;
 
-	const tidy = Bun.spawn(["go", "mod", "tidy"], {
-		cwd: dir,
-		stdout: "pipe",
-		stderr: "pipe",
-	});
-	const tidyExit = await tidy.exited;
-	if (tidyExit !== 0) {
-		const stderr = await new Response(tidy.stderr).text();
-		throw new Error(`go mod tidy failed in ${name}: ${stderr}`);
-	}
-
 	return dir;
 }
 

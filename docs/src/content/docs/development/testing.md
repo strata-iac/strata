@@ -1,196 +1,128 @@
 ---
 title: Testing
-description: Unit tests, E2E acceptance tests, cluster tests, and CI pipeline.
+description: Unit tests, E2E acceptance tests, and quality gates.
 ---
 
-Strata has four levels of testing: Go unit tests, web unit tests, E2E acceptance tests (single server), and cluster E2E tests (multi-replica).
+Strata has two levels of testing: unit tests (320 tests across all packages) and E2E acceptance tests (89 tests exercising the full Pulumi CLI lifecycle).
 
-## Go Unit Tests
-
-```bash
-bun run go:test
-# or: mise exec -- go test -race -count=1 -timeout=2m ./...
-```
-
-Go unit tests use the standard `testing` package with table-driven patterns. They run without any external dependencies (no database, no Docker).
-
-Key test suites:
-- `internal/auth/descope_test.go` — 12 tests for Descope authenticator (mocked SDK)
-- `internal/crypto/aes_test.go` — 6 tests for AES-256-GCM encryption
-- `internal/http/handlers/*_test.go` — handler tests with httptest
-- `internal/storage/blobs/*_test.go` — blob storage tests
-
-All Go tests run with `-race` to detect data races.
-
-## Web Unit Tests
+## Unit Tests
 
 ```bash
-bun run check:web
-# or: mise exec -- bun test --cwd web/apps/api
+bun run check
+# or: bun test
 ```
 
-The tRPC web API (`@strata/api`) has 28 unit tests using Bun's built-in test runner. Tests use `appRouter.createCaller(ctx)` to invoke procedures directly without HTTP, with a chainable Proxy-based mock for the Drizzle database.
+Unit tests use Bun's built-in test runner (`bun:test`) with `describe`, `test`, `expect`, `beforeAll`, and `afterAll`. They run without any external dependencies (no database, no Docker).
 
-Key test suites:
-- `web/apps/api/src/__tests__/stacks.test.ts` — stacks.list and stacks.get procedures
-- `web/apps/api/src/__tests__/updates.test.ts` — updates.list and updates.latest procedures
-- `web/apps/api/src/__tests__/events.test.ts` — events.list with continuation token logic
-- `web/apps/api/src/__tests__/auth.test.ts` — dev mode authentication
-- `web/apps/api/src/__tests__/helpers.ts` — test utilities (mockDb, staticDb, testContext)
+Key test suites across packages:
 
-Tests require `STRATA_DATABASE_URL` and `STRATA_DEV_AUTH_TOKEN` env vars (dummy values are fine — no real database connection is made).
+| Package | Coverage |
+|---|---|
+| `packages/auth` | Auth service (dev + Descope mock) |
+| `packages/crypto` | AES-256-GCM encryption, HKDF key derivation |
+| `packages/storage` | Local + S3 blob storage |
+| `packages/stacks` | Stack CRUD operations |
+| `packages/updates` | Update lifecycle, GC worker |
+| `apps/server` | HTTP handlers, middleware, route matching |
+| `apps/api` | tRPC procedures (stacks, updates, events) |
+
+### Running Specific Tests
+
+```bash
+# Run tests in a specific package
+bun test --cwd packages/crypto
+
+# Run tests matching a pattern
+bun test --filter "encrypt"
+```
 
 ## E2E Acceptance Tests
 
 ```bash
 bun run e2e
-# or: mise exec -- go test -race -count=1 -tags=e2e -timeout=15m -v ./e2e/...
 ```
 
-E2E tests exercise the full Pulumi CLI lifecycle against an in-process Strata server. They require:
-- PostgreSQL (started via `bun run dev:deps` or Docker Compose)
+E2E tests exercise the full Pulumi CLI lifecycle against a real Strata server. They require:
+- PostgreSQL (started via `docker compose up -d`)
 - Pulumi CLI installed
-- `STRATA_DATABASE_URL` environment variable (set in `mise.toml` [env] for dev)
+- `STRATA_DATABASE_URL` environment variable
 
 ### Test Files
 
 | File | Coverage |
 |---|---|
-| `e2e_test.go` | Test infrastructure, server setup/teardown |
-| `login_test.go` | `pulumi login` validation |
-| `healthz_test.go` | Health endpoint |
-| `stack_lifecycle_test.go` | Create, list, get, delete stacks |
-| `stack_rename_test.go` | Stack rename operations |
-| `update_lifecycle_test.go` | Full update flow: create → start → checkpoint → events → complete |
-| `state_operations_test.go` | Export, import, versioned export |
-| `encrypt_decrypt_test.go` | Secret encryption/decryption |
-| `cancel_test.go` | Update cancellation + GC |
-| `multi_tenant_test.go` | Cross-org isolation, role-based access |
-| `examples_test.go` | Real Pulumi programs (pulumi-random, pulumi-command) |
-| `cluster_test.go` | Multi-instance specific tests |
+| `e2e/setup.ts` | Test infrastructure, server setup/teardown |
+| `e2e/login.test.ts` | `pulumi login` validation |
+| `e2e/healthz.test.ts` | Health endpoint |
+| `e2e/stacks.test.ts` | Create, list, get, delete stacks |
+| `e2e/rename.test.ts` | Stack rename operations |
+| `e2e/updates.test.ts` | Full update flow: create → start → checkpoint → events → complete |
+| `e2e/state.test.ts` | Export, import, versioned export |
+| `e2e/encryption.test.ts` | Secret encryption/decryption |
+| `e2e/cancel.test.ts` | Update cancellation + GC |
+| `e2e/examples.test.ts` | Real Pulumi YAML programs (pulumi-random, pulumi-command) |
 
 ### Test Count
 
-46 tests covering the full Pulumi CLI lifecycle, multi-tenant isolation, and edge cases.
+89 tests covering the full Pulumi CLI lifecycle, multi-tenant isolation, and edge cases.
 
 ### Example Programs
 
-The `examples_test.go` file deploys real Pulumi programs using:
+The `e2e/examples.test.ts` file deploys real Pulumi YAML programs from the `examples/` directory using:
 - **pulumi-random** — generates random resources (no cloud provider needed)
 - **pulumi-command** — runs local shell commands
 
 This validates the complete update lifecycle end-to-end without requiring cloud provider credentials.
 
-## Cluster E2E Tests
+## Quality Gates
 
 ```bash
-bun run e2e:cluster
+bun run check      # Biome lint + typecheck + 320 unit tests
+bun run e2e        # 89 E2E acceptance tests
+bun run check:all  # check + e2e
 ```
-
-Runs the same 46 E2E tests against a multi-replica Docker cluster:
-
-1. `docker compose --profile cluster up --build -d` — starts 3 Strata replicas + Caddy LB + PostgreSQL + MinIO
-2. Waits for `http://localhost:8080/healthz` to return 200
-3. Runs tests with `STRATA_E2E_URL=http://localhost:8080`
-4. Tears down the cluster regardless of test outcome
-
-This validates that all operations work correctly when requests are load-balanced across multiple replicas.
-
-## CI Pipeline
-
-The GitHub Actions workflow (`.github/workflows/ci.yml`) runs four jobs:
-
-### 1. Go Lint & Unit Tests (`check`)
-
-```yaml
-- uses: jdx/mise-action@v2
-- run: mise exec -- bun run check
-```
-
-Runs: golangci-lint → govulncheck → go build → go test (unit only)
-
-### 2. Web Lint, Typecheck & Tests (`web-check`)
-
-```yaml
-- uses: jdx/mise-action@v2
-- run: mise exec -- bun run check:web
-```
-
-Runs: bun install → biome check → tsc --noEmit (both apps) → bun test (28 tests)
-
-### 3. E2E Acceptance Tests (`e2e`)
-
-```yaml
-services:
-  postgres:
-    image: postgres:17-alpine
-- uses: pulumi/setup-pulumi@v2
-- run: mise exec -- bun run e2e
-```
-
-Uses GitHub Actions service containers for PostgreSQL. Runs the full E2E suite against an in-process server.
-
-### 4. E2E Cluster Tests (`e2e-cluster`)
-
-```yaml
-- run: mise exec -- bun run e2e:cluster
-```
-
-Runs the full Docker Compose cluster (3 replicas + Caddy + PostgreSQL + MinIO) and executes E2E tests against it.
-
-Jobs `e2e` and `e2e-cluster` depend on `check` passing first. All jobs use Go module caching for fast builds.
 
 ## Writing New Tests
 
 ### Unit Test Pattern
 
-```go
-func TestMyFeature(t *testing.T) {
-    tests := []struct {
-        name    string
-        input   string
-        want    string
-        wantErr bool
-    }{
-        {name: "valid input", input: "foo", want: "bar"},
-        {name: "empty input", input: "", wantErr: true},
-    }
+```typescript
+import { describe, expect, test } from "bun:test";
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            got, err := MyFeature(tt.input)
-            if tt.wantErr {
-                require.Error(t, err)
-                return
-            }
-            require.NoError(t, err)
-            assert.Equal(t, tt.want, got)
-        })
-    }
-}
+describe("MyFeature", () => {
+	test("handles valid input", () => {
+		const result = myFeature("foo");
+		expect(result).toBe("bar");
+	});
+
+	test("rejects empty input", () => {
+		expect(() => myFeature("")).toThrow();
+	});
+});
 ```
 
 ### E2E Test Pattern
 
-E2E tests use the `e2e` build tag and interact with the server via HTTP or the Pulumi CLI:
+E2E tests use `bun:test` and interact with the server via HTTP or the Pulumi CLI:
 
-```go
-//go:build e2e
+```typescript
+import { describe, expect, test } from "bun:test";
+import { pulumiCli, serverUrl } from "./helpers";
 
-package e2e
-
-func TestMyE2EFeature(t *testing.T) {
-    // Tests use shared test infrastructure from e2e_test.go
-    // Server URL and auth token are available from test setup
-}
+describe("MyE2EFeature", () => {
+	test("works end-to-end", async () => {
+		const result = await pulumiCli(["stack", "ls", "--json"]);
+		expect(result.exitCode).toBe(0);
+	});
+});
 ```
 
 ### Running a Subset
 
 ```bash
-# Run a specific test
-mise exec -- go test -race -tags=e2e -timeout=15m -v -run TestStackLifecycle ./e2e/...
+# Run a specific test file
+bun test e2e/stacks.test.ts
 
-# Run only examples
-bun run e2e -- -run TestExamples
+# Run tests matching a pattern
+bun test --filter "stack lifecycle"
 ```

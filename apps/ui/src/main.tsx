@@ -36,6 +36,9 @@ function App() {
 								path="stacks/:org/:project/:stack/updates/:updateID"
 								element={<UpdateDetail />}
 							/>
+							{/* CLI-generated "View in Browser" URLs omit /stacks/ prefix */}
+							<Route path=":org/:project/:stack" element={<StackDetail />} />
+							<Route path=":org/:project/:stack/updates/:updateID" element={<UpdateDetail />} />
 						</Route>
 					</Routes>
 				</BrowserRouter>

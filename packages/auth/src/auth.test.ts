@@ -21,14 +21,14 @@ const DEV_CONFIG = {
 
 /** Create a Request with a given Authorization header value. */
 function reqWithAuth(authHeader: string): Request {
-	return new Request("http://localhost:8080/api/test", {
+	return new Request("http://localhost:9090/api/test", {
 		headers: { Authorization: authHeader },
 	});
 }
 
 /** Create a Request with no Authorization header. */
 function reqWithoutAuth(): Request {
-	return new Request("http://localhost:8080/api/test");
+	return new Request("http://localhost:9090/api/test");
 }
 
 // ============================================================================

@@ -26,7 +26,7 @@ Encrypts a plaintext value using the stack's derived encryption key.
 }
 ```
 
-The `plaintext` field is `[]byte` — JSON-encoded as **base64**.
+The `plaintext` field is a byte array — JSON-encoded as **base64**.
 
 **Response** (200, `apitype.EncryptValueResponse`):
 ```json
@@ -35,7 +35,7 @@ The `plaintext` field is `[]byte` — JSON-encoded as **base64**.
 }
 ```
 
-The `ciphertext` field is also `[]byte` — JSON-encoded as base64. The raw bytes contain `nonce (12 bytes) || ciphertext + GCM tag`.
+The `ciphertext` field is also a byte array — JSON-encoded as base64. The raw bytes contain `nonce (12 bytes) || ciphertext + GCM tag`.
 
 ## Decrypt
 

@@ -5,6 +5,7 @@
 	"main": "src/index.ts",
 	"types": "src/index.ts",
 	"dependencies": {
+		"@strata/api": "workspace:*",
 		"@strata/auth": "workspace:*",
 		"@strata/config": "workspace:*",
 		"@strata/crypto": "workspace:*",

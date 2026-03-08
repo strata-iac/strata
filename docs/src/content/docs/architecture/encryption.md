@@ -51,7 +51,7 @@ A single master key derives unique encryption keys per stack using [HKDF](https:
 POST /api/stacks/{org}/{project}/{stack}/encrypt
 ```
 
-- **Request**: `{"plaintext": "<base64>"}` — `Plaintext` is `[]byte`, JSON-encoded as base64
+- **Request**: `{"plaintext": "<base64>"}` — The `plaintext` field is a byte array, JSON-encoded as base64
 - **Response**: `{"ciphertext": "<base64>"}`
 
 ### Decrypt
@@ -77,9 +77,10 @@ Decrypts multiple values in a single request. Used by the CLI when displaying st
 
 If `STRATA_ENCRYPTION_KEY` is not set and `STRATA_AUTH_MODE=dev`, a deterministic key is auto-generated:
 
-```go
-h := sha256.Sum256([]byte("strata-dev-encryption-key"))
-// h[:] is used as the 32-byte master key
+```typescript
+import { createHash } from "node:crypto";
+const key = createHash("sha256").update("strata-dev-encryption-key").digest("hex");
+// key is used as the 64-char hex master key
 ```
 
 This means all dev instances with no explicit key will share the same encryption key — convenient for development, but **not safe for production**.
@@ -104,8 +105,8 @@ The master key cannot be rotated without re-encrypting all existing secrets. Los
 | **Integrity** | GCM authentication tag detects tampering |
 | **Key isolation** | HKDF ensures each stack has a unique key — compromising one stack's ciphertext doesn't help with another |
 | **Nonce uniqueness** | 12-byte random nonce per encryption; 96-bit random nonce has negligible collision probability under normal usage |
-| **Timing safety** | Go's `crypto/cipher` uses constant-time operations |
+| **Timing safety** | Node.js `crypto` module handles constant-time operations internally |
 
-## NopService
+## NopCryptoService
 
-If no encryption key is configured and the server is not in dev mode, a `NopService` is used that returns errors for all encrypt/decrypt operations. This prevents accidental plaintext storage — the Pulumi CLI will fail with a clear error when trying to set secrets.
+If no encryption key is configured and the server is not in dev mode, a `NopCryptoService` is used that returns errors for all encrypt/decrypt operations. This prevents accidental plaintext storage — the Pulumi CLI will fail with a clear error when trying to set secrets.

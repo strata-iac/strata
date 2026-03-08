@@ -16,7 +16,7 @@ const blobBackendSchema = z.enum(["local", "s3"]);
 const configSchema = z
 	.object({
 		// Server
-		listenAddr: z.string().default(":8080"),
+		listenAddr: z.string().default(":9090"),
 
 		// Database
 		databaseUrl: z.string().url(),

@@ -9,7 +9,7 @@ All Strata configuration is via environment variables. Variables prefixed with `
 
 | Variable | Default | Required | Description |
 |---|---|---|---|
-| `STRATA_LISTEN_ADDR` | `:8080` | No | Server listen address |
+| `STRATA_LISTEN_ADDR` | `:9090` | No | Server listen address |
 | `STRATA_DATABASE_URL` | — | **Yes** | PostgreSQL connection string |
 | `STRATA_AUTH_MODE` | `dev` | No | `dev` or `descope` |
 | `STRATA_DEV_AUTH_TOKEN` | — | If dev | Primary dev user token |
@@ -29,10 +29,10 @@ All Strata configuration is via environment variables. Variables prefixed with `
 
 ### STRATA_LISTEN_ADDR
 
-The address and port the HTTP server binds to. Supports any format accepted by Go's `net.Listen`:
+The address and port the HTTP server binds to:
 
-- `:8080` — listen on all interfaces, port 8080 (default)
-- `127.0.0.1:8080` — localhost only
+- `:9090` — listen on all interfaces, port 9090 (default)
+- `127.0.0.1:9090` — localhost only
 - `0.0.0.0:3000` — all interfaces, port 3000
 
 ### STRATA_DATABASE_URL

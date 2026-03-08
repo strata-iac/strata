@@ -3,17 +3,17 @@
 	admin off
 }
 
-:8080 {
+:9090 {
 	handle /api/* {
-		reverse_proxy {$CADDY_GO_UPSTREAM:strata:8080}
+		reverse_proxy {$CADDY_GO_UPSTREAM:strata:9090}
 	}
 
 	handle /healthz {
-		reverse_proxy {$CADDY_GO_UPSTREAM:strata:8080}
+		reverse_proxy {$CADDY_GO_UPSTREAM:strata:9090}
 	}
 
 	handle /trpc/* {
-		reverse_proxy {$CADDY_WEB_UPSTREAM:strata-web:3000}
+		reverse_proxy {$CADDY_GO_UPSTREAM:strata:9090}
 	}
 
 	handle {

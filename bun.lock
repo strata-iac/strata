@@ -19,9 +19,23 @@
         "typescript": "catalog:",
       },
     },
+    "apps/api": {
+      "name": "@strata/api",
+      "dependencies": {
+        "@strata/db": "workspace:*",
+        "@strata/stacks": "workspace:*",
+        "@strata/types": "workspace:*",
+        "@strata/updates": "workspace:*",
+        "@trpc/server": "catalog:",
+        "drizzle-orm": "catalog:",
+        "superjson": "catalog:",
+        "zod": "catalog:",
+      },
+    },
     "apps/server": {
       "name": "@strata/server",
       "dependencies": {
+        "@strata/api": "workspace:*",
         "@strata/auth": "workspace:*",
         "@strata/config": "workspace:*",
         "@strata/crypto": "workspace:*",
@@ -36,6 +50,7 @@
     "apps/ui": {
       "name": "@strata/ui",
       "dependencies": {
+        "@strata/api": "workspace:*",
         "@strata/types": "workspace:*",
         "@tanstack/react-query": "catalog:",
         "@trpc/client": "catalog:",
@@ -317,6 +332,8 @@
 
     "@rollup/rollup-win32-x64-msvc": ["@rollup/rollup-win32-x64-msvc@4.59.0", "", { "os": "win32", "cpu": "x64" }, "sha512-2HRCml6OztYXyJXAvdDXPKcawukWY2GpR5/nxKp4iBgiO3wcoEGkAaqctIbZcNB6KlUQBIqt8VYkNSj2397EfA=="],
 
+    "@strata/api": ["@strata/api@workspace:apps/api"],
+
     "@strata/auth": ["@strata/auth@workspace:packages/auth"],
 
     "@strata/config": ["@strata/config@workspace:packages/config"],
@@ -554,8 +571,6 @@
     "whatwg-url": ["whatwg-url@5.0.0", "", { "dependencies": { "tr46": "~0.0.3", "webidl-conversions": "^3.0.0" } }, "sha512-saE57nupxk6v3HY35+jzBwYa0rKSy0XR8JSxZPwgLr7ys0IBzhGviA1/TUGJLmSVqs8pb9AnvICXEuOHLprYTw=="],
 
     "yallist": ["yallist@3.1.1", "", {}, "sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g=="],
-
-    "yaml": ["yaml@2.8.2", "", { "bin": { "yaml": "bin.mjs" } }, "sha512-mplynKqc1C2hTVYxd0PU2xQAc22TI1vShAYGksCCfxbn/dFwnHTNi1bvYsBTkhdUNtGIf5xNOg938rrSSYvS9A=="],
 
     "zod": ["zod@4.3.6", "", {}, "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="],
 

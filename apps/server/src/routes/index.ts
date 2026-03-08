@@ -1,8 +1,12 @@
 // @strata/server — Hono route registration.
 
+import { appRouter } from "@strata/api/src/router/index.js";
+import type { TRPCContext } from "@strata/api/src/trpc.js";
 import type { AuthService } from "@strata/auth";
+import type { Database } from "@strata/db";
 import type { StacksService } from "@strata/stacks";
 import type { UpdatesService } from "@strata/updates";
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import {
@@ -31,6 +35,7 @@ import type { Env } from "../types.js";
 
 export function createApp(deps: {
 	auth: AuthService;
+	db: Database;
 	stacks: StacksService;
 	updates: UpdatesService;
 }): Hono<Env> {
@@ -58,6 +63,32 @@ export function createApp(deps: {
 	const withApiAuth = apiAuth(deps.auth);
 	const withPulumiAccept = pulumiAccept();
 	const withUpdateAuth = updateAuth(deps.auth);
+
+	// ========================================================================
+	// tRPC routes (/trpc/*)
+	// ========================================================================
+
+	app.all("/trpc/*", async (c) => {
+		const caller = await deps.auth.authenticate(c.req.raw).catch(() => null);
+
+		if (!caller) {
+			return c.json({ code: 401, message: "Unauthorized" }, 401);
+		}
+
+		const ctx: TRPCContext = {
+			caller,
+			db: deps.db,
+			stacks: deps.stacks,
+			updates: deps.updates,
+		};
+
+		return fetchRequestHandler({
+			endpoint: "/trpc",
+			req: c.req.raw,
+			router: appRouter,
+			createContext: () => ctx,
+		});
+	});
 
 	// ========================================================================
 	// Public routes (no auth)

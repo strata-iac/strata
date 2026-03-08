@@ -9,7 +9,7 @@ x-strata: &strata
     minio-init:
       condition: service_completed_successfully
   environment: &strata-env
-    STRATA_LISTEN_ADDR: ":8080"
+    STRATA_LISTEN_ADDR: ":9090"
     STRATA_DATABASE_URL: "postgres://strata:strata@postgres:5432/strata?sslmode=disable"
     STRATA_AUTH_MODE: dev
     STRATA_DEV_AUTH_TOKEN: devtoken123
@@ -78,28 +78,7 @@ services:
     <<: *strata
     profiles: [dev]
     ports:
-      - "8080:8080"
-
-  strata-web:
-    build:
-      context: .
-      dockerfile: web/apps/api/Dockerfile
-    profiles: [dev, cluster]
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      STRATA_DATABASE_URL: "postgres://strata:strata@postgres:5432/strata?sslmode=disable"
-      STRATA_AUTH_MODE: dev
-      STRATA_DEV_AUTH_TOKEN: devtoken123
-      STRATA_DEV_USER_LOGIN: dev-user
-      STRATA_DEV_ORG_LOGIN: dev-org
-      STRATA_DEV_USERS: '[{"token":"token-user-b","login":"user-b","org":"org-b","role":"admin"},{"token":"token-viewer","login":"viewer-user","org":"dev-org","role":"viewer"}]'
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:3000/health || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+      - "9090:9090"
 
   strata-cluster:
     <<: *strata
@@ -114,7 +93,7 @@ services:
       strata-cluster:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      - "9090:9090"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
 

@@ -33,22 +33,24 @@ Strata implements the Pulumi Service API surface that the CLI uses:
 | Delta checkpoints | ✅ |
 | Update event history | ✅ |
 | Orphan update garbage collection | ✅ |
-| Embedded web UI | ✅ |
+| Web dashboard | ✅ |
+| tRPC dashboard API | ✅ |
 
 ## Tech Stack
 
 | Component | Technology |
 |---|---|
-| Language | Go 1.26.1 |
-| HTTP Router | [chi v5](https://github.com/go-chi/chi) |
-| Database | PostgreSQL 17 ([pgx v5](https://github.com/jackc/pgx)) |
+| Runtime | [Bun](https://bun.sh/) 1.2 |
+| HTTP Router | [Hono v4](https://hono.dev/) |
+| Database | PostgreSQL 17 ([Drizzle ORM](https://orm.drizzle.team/) + Bun.sql) |
+| Dashboard API | [tRPC v11](https://trpc.io/) |
 | Authentication | [Descope](https://www.descope.com/) access keys / static dev tokens |
 | Encryption | AES-256-GCM + HKDF per-stack key derivation |
 | Blob Storage | Local filesystem or S3-compatible (AWS S3, MinIO, Cloudflare R2) |
 | Frontend | React 19 + Vite 7 + Tailwind CSS v4 |
 | Load Balancer | Caddy 2 |
-| Container | Multi-stage Docker build, `FROM scratch` |
-| CI | GitHub Actions (lint, vuln scan, unit tests, E2E, cluster E2E) |
+| Container | `bun build --compile` → debian-slim |
+| Quality | Biome + TypeScript strict + bun:test (320 unit + 89 E2E tests) |
 
 ## Next Steps
 

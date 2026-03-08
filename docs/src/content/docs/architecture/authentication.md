@@ -3,10 +3,10 @@ title: Authentication
 description: Dev mode, Descope integration, role-based access control, and the update-token auth flow.
 ---
 
-Strata supports two authentication modes, configured via `STRATA_AUTH_MODE`. Both modes produce the same internal `Caller` struct — the authorization layer (OrgAuth middleware) works identically regardless of which mode is active.
+Strata supports two authentication modes, configured via `STRATA_AUTH_MODE`. Both modes produce the same internal `Caller` type — the authorization layer works identically regardless of which mode is active.
 
 :::note[Design Principle]
-The only difference between dev and Descope is **authentication** (who are you?), never **authorization** (what can you do?). Both modes feed into the same OrgAuth middleware and role hierarchy.
+The only difference between dev and Descope is **authentication** (who are you?), never **authorization** (what can you do?). Both modes produce the same Caller type used by the authorization layer and role hierarchy.
 :::
 
 ## Dev Mode
@@ -15,7 +15,7 @@ When `STRATA_AUTH_MODE=dev`, the server validates tokens against a static list c
 
 The primary user is configured with:
 - `STRATA_DEV_AUTH_TOKEN` — the token value
-- `STRATA_DEV_USER_LOGIN` — maps to `GithubLogin` on the `Caller`
+- `STRATA_DEV_USER_LOGIN` — maps to `login` on the `Caller`
 - `STRATA_DEV_ORG_LOGIN` — the user's organization
 
 Additional users can be registered via `STRATA_DEV_USERS` (a JSON array):
@@ -27,7 +27,7 @@ Additional users can be registered via `STRATA_DEV_USERS` (a JSON array):
 ]
 ```
 
-Token comparison uses constant-time comparison (`crypto/subtle.ConstantTimeCompare`) to prevent timing attacks.
+
 
 ## Descope Mode
 
@@ -56,11 +56,10 @@ When `STRATA_AUTH_MODE=descope`, the server uses [Descope access keys](https://d
 
 | JWT Claim | Caller Field |
 |---|---|
-| `email` or `name` or `sub` or token ID | `GithubLogin` (first non-empty) |
-| `name` | `DisplayName` |
-| `email` | `Email` |
-| Token ID | `UserID` |
-| Tenant memberships | `OrgMemberships[]` |
+| `sub` | `userId` |
+| `sub` | `login` |
+| Tenant memberships | `tenantId` (from `dct` claim or tenants object) |
+| Tenant roles | `roles` (admin, member, viewer) |
 
 ## Role Hierarchy
 
@@ -74,9 +73,9 @@ Three roles with a strict ordering:
 
 Roles are checked with `AtLeast` semantics — an `admin` satisfies a `member` requirement.
 
-## OrgAuth Middleware
+## Authorization Middleware
 
-The `OrgAuth` middleware enforces organization membership and role requirements on every API request that includes an `{org}` URL parameter.
+Hono middleware enforces role requirements on every API request based on HTTP method.
 
 ### Method-to-Role Mapping
 
@@ -88,16 +87,15 @@ The `OrgAuth` middleware enforces organization membership and role requirements 
 
 ### Flow
 
-1. Extract `{org}` from the URL path
-2. If no `{org}` parameter (e.g., `/api/user`), pass through
-3. Get the `Caller` from request context (set by Auth middleware)
-4. Check if the caller has a membership in the requested org with the required role
-5. Return `403 Forbidden` if insufficient permissions
+1. Extract the `Caller` from request context (set by Auth middleware)
+2. Check the HTTP method against the `METHOD_ROLE_MAP`
+3. Verify the caller has the required role
+4. Return `403 Forbidden` if insufficient permissions
 
 ```
-GET  /api/stacks/acme/myproject/dev   → requires viewer in "acme"
-POST /api/stacks/acme/myproject       → requires member in "acme"
-DELETE /api/stacks/acme/myproject/dev → requires admin in "acme"
+GET  /api/stacks/acme/myproject/dev   → requires viewer role
+POST /api/stacks/acme/myproject       → requires member role
+DELETE /api/stacks/acme/myproject/dev → requires admin role
 ```
 
 ## Update-Token Auth
@@ -105,7 +103,7 @@ DELETE /api/stacks/acme/myproject/dev → requires admin in "acme"
 During the execution phase of an update (after `StartUpdate`), a separate auth scheme is used:
 
 - **Header**: `Authorization: update-token <lease-token>`
-- **Validated by**: `UpdateAuth` middleware
+- **Validated by**: Hono middleware
 - **Scope**: Only for checkpoint, events, renew_lease, and complete endpoints
 
 The lease token is generated during `StartUpdate` and has an expiration time. The CLI periodically calls `renew_lease` to extend it. This ensures that crashed or abandoned updates can be detected and garbage-collected.
@@ -121,13 +119,12 @@ Request arrives
   │
   ├─ /api/* (most routes) → Auth middleware
   │    ├─ Extract "Authorization: token <key>"
-  │    ├─ Validate via DevAuthenticator or DescopeAuthenticator
+  │    ├─ Validate via DevAuthService or DescopeAuthService
   │    ├─ Set Caller in context
-  │    └─ OrgAuth middleware
-  │         ├─ Check {org} membership
+  │    └─ Authorization middleware
   │         └─ Check method → role mapping
   │
   └─ Execution routes (checkpoint, events, etc.) → UpdateAuth middleware
        ├─ Extract "Authorization: update-token <lease>"
-       └─ Validate against database (with TTL cache)
+       └─ Validate against database
 ```

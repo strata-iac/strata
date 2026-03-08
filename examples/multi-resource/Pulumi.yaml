@@ -1,3 +1,89 @@
 name: multi-resource
 description: Multiple resources with dependencies, various types, and stack outputs
-runtime: go
+runtime: yaml
+resources:
+  prefix:
+    type: random:RandomPet
+    properties:
+      length: 2
+  suffix:
+    type: random:RandomString
+    properties:
+      length: 8
+      special: false
+  roll:
+    type: random:RandomInteger
+    properties:
+      min: 1
+      max: 100
+  tag:
+    type: random:RandomId
+    properties:
+      byteLength: 4
+    options:
+      dependsOn:
+        - ${prefix}
+  uuid:
+    type: random:RandomUuid
+    options:
+      dependsOn:
+        - ${tag}
+        - ${suffix}
+  pet-0:
+    type: random:RandomPet
+    properties:
+      length: 3
+      separator: "_"
+    options:
+      dependsOn:
+        - ${uuid}
+  pet-1:
+    type: random:RandomPet
+    properties:
+      length: 3
+      separator: "_"
+    options:
+      dependsOn:
+        - ${uuid}
+  pet-2:
+    type: random:RandomPet
+    properties:
+      length: 3
+      separator: "_"
+    options:
+      dependsOn:
+        - ${uuid}
+  pet-3:
+    type: random:RandomPet
+    properties:
+      length: 3
+      separator: "_"
+    options:
+      dependsOn:
+        - ${uuid}
+  pet-4:
+    type: random:RandomPet
+    properties:
+      length: 3
+      separator: "_"
+    options:
+      dependsOn:
+        - ${uuid}
+  shuffled:
+    type: random:RandomShuffle
+    properties:
+      inputs:
+        - ${pet-0.id}
+        - ${pet-1.id}
+        - ${pet-2.id}
+        - ${pet-3.id}
+        - ${pet-4.id}
+      resultCount: 3
+outputs:
+  prefixName: ${prefix.id}
+  suffixValue: ${suffix.result}
+  rollResult: ${roll.result}
+  tagHex: ${tag.hex}
+  uuidValue: ${uuid.result}
+  shuffledTop3: ${shuffled.results}
+  totalResources: 12

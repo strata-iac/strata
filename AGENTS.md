@@ -153,82 +153,52 @@ For more details, see README.md and docs/QUICKSTART.md.
 
 ### Overview
 
-Strata is a self-hosted Pulumi backend written in Go. It implements the Pulumi Service API so that `pulumi login`, `pulumi stack init`, `pulumi up`, etc. work against it.
+Strata is a self-hosted Pulumi backend written in TypeScript, running on Bun. It implements the Pulumi Service API so that `pulumi login`, `pulumi stack init`, `pulumi up`, etc. work against it. A tRPC web API serves a React dashboard for viewing stacks, updates, and events.
 
 ### Tech Stack
 
-- **Go 1.26.1** (via mise)
+- **Bun 1.2** (runtime + package manager + test runner + bundler)
 - **PostgreSQL 17** (metadata, state)
-- **chi v5** (HTTP router)
-- **pgx v5** (Postgres driver)
-- **golangci-lint v2** (consolidated linting + formatting — gofumpt, goimports as formatters; gosec, govet, revive, etc. as linters)
-- **Pulumi SDK v3.225.1** (apitype definitions)
-- **Bun** (web API runtime + package manager)
-- **Hono + tRPC + Drizzle ORM** (web dashboard API in `web/apps/api/`)
-- **React 19 + Vite 7 + TailwindCSS v4** (web UI in `web/apps/ui/`)
-- **Biome** (strict linter + formatter for TypeScript/JSON)
+- **Hono v4** (HTTP router for Pulumi CLI protocol)
+- **tRPC v11** (web dashboard API, mounted on same server)
+- **Drizzle ORM** (type-safe PostgreSQL queries via `Bun.sql`)
+- **React 19 + Vite 7 + TailwindCSS v4** (web dashboard SPA)
+- **Biome** (strict linter + formatter for TypeScript)
+- **Caddy 2** (reverse proxy for production/cluster)
 
 ### Directory Structure
 
 ```
-cmd/strata/main.go          # Server entrypoint, route registration
-internal/
-  app/app.go                 # App struct (Start/Stop lifecycle)
-  auth/service.go            # Authenticator interface, DevAuthenticator
-  config/config.go           # Config from env vars (STRATA_*)
-  db/
-    connect.go               # pgxpool connection
-    migrate.go               # Embedded SQL migrations
-    migrations/              # SQL files (0001_initial.up.sql, etc.)
-  http/
-    server.go                # HTTP server lifecycle
-    encode/                  # WriteJSON, WriteError helpers
-    handlers/                # HTTP handlers (stack, user, update, health, capabilities, crypto)
-    middleware/               # Auth, CORS, Gzip, Logging, PulumiAccept, Recovery, RequestID
-  stacks/
-    service.go               # Service interface (7 methods)
-    postgres.go              # PostgreSQL implementation
-    errors.go                # Sentinel errors
-  updates/                   # Update lifecycle (Phase 3) + State ops (Phase 4) + Resilience (Phase 5)
-    service.go               # Service interface (18 methods incl. GetUpdateEvents)
-    postgres.go              # PostgreSQL implementation
-    nop.go                   # NopService stub
-    errors.go                # Sentinel errors
-    gc_worker.go             # Orphan GC with pg advisory locks for cluster-safety
-    delta.go                 # Delta checkpoint apply logic
-  checkpoints/               # Checkpoint storage (Phase 3)
-  events/                    # Event ingestion (Phase 3)
-  crypto/                    # Encrypt/decrypt (Phase 4)
-    service.go               # Service interface (Encrypt/Decrypt with stackFQN)
-    nop.go                   # NopService stub
-    aes.go                   # AES-256-GCM with HKDF per-stack key derivation
-    aes_test.go              # 6 unit tests
-  storage/blobs/             # Blob storage (local + S3)
-web/                         # Bun workspace monorepo
-  apps/
-    api/                     # @strata/api — tRPC web API (Hono + Drizzle ORM)
-  apps/
-    api/                     # @strata/api — tRPC web API (Hono + Drizzle ORM)
-      src/index.ts           # Hono server + tRPC mount (port 3000)
-      src/auth.ts            # Dev + Descope authenticator
-      src/db/schema.ts       # Drizzle schema mirroring Go migrations
-      src/router/            # tRPC router (stacks, updates, events)
-      Dockerfile             # bun build --compile → distroless
-    ui/                      # @strata/ui — React SPA (Vite + Tailwind)
-      src/                   # React pages, components, tRPC client
-      Dockerfile             # bun+vite build → scratch
-e2e/                         # E2E acceptance tests (build tag: e2e)
-.github/workflows/ci.yml    # CI: check + web-check + e2e jobs
+packages/
+  types/               # Pulumi protocol types (generated via tygo) + domain types + errors
+  config/              # Zod-validated env config (STRATA_*)
+  db/                  # Drizzle schema, connection factory (Bun.sql driver)
+  crypto/              # AES-256-GCM with HKDF per-stack key derivation
+  storage/             # Blob storage (local filesystem + S3)
+  auth/                # Authenticator: dev mode (static token) + Descope (JWT)
+  stacks/              # Stack service: CRUD, rename, tags (PostgreSQL)
+  updates/             # Update lifecycle, checkpoints, events, GC worker (PostgreSQL + blob)
+apps/
+  api/                 # @strata/api — tRPC router definition (stacks.list, updates.list/latest, events.list)
+  server/              # @strata/server — Hono HTTP server (CLI routes + tRPC mount + middleware)
+  ui/                  # @strata/ui — React SPA (Vite + Tailwind + tRPC client)
+examples/              # Pulumi YAML example programs (7 examples, used by E2E tests)
+e2e/                   # E2E acceptance tests (89 tests across 9 files)
+docs/                  # Starlight documentation site
+Dockerfile             # bun build --compile → debian-slim
+docker-compose.yml     # postgres + minio (dev), + strata replicas + caddy (cluster)
+Caddyfile              # Reverse proxy: /api/* + /trpc/* → server, /* → UI
 ```
 
 ### Key Patterns
 
-- **Accept interfaces, return structs** — service interfaces defined where used
-- **NopService pattern** — stub implementations for unimplemented phases
-- **PulumiAccept middleware** — ALL `/api/` requests require `Accept: application/vnd.pulumi+8`
+- **Single process** — CLI API + tRPC dashboard API share one Hono server on port 9090
+- **PulumiAccept middleware** — `/api/*` routes require `Accept: application/vnd.pulumi+8`; `/trpc/*` routes bypass this
+- **Dual auth on tRPC** — Same `AuthService.authenticate()` as CLI routes, using `Authorization: token <value>`
 - **DevAuthenticator** — `Authorization: token <STRATA_DEV_AUTH_TOKEN>` for dev mode
-- **Transactions** — CreateStack, RenameStack use pgx transactions
+- **Transactions** — CreateStack, RenameStack, CancelUpdate use Drizzle transactions
 - **Auto-create** — CreateStack auto-creates org + project via INSERT ON CONFLICT DO NOTHING
+- **Workspace packages** — Domain logic in `packages/*`, app assembly in `apps/*`
 
 ### Pulumi Update Lifecycle Protocol (Phase 3)
 
@@ -288,17 +258,16 @@ All state lives in PostgreSQL. No in-memory caches, no local-only state.
 ### Quality Gates
 
 ```bash
-bun run check      # Go: lint → vuln → build → test (unit only)
-bun run check:web  # Web: biome lint → typecheck → bun test (28 tests)
-bun run e2e        # E2E tests (requires postgres + pulumi CLI)
-bun run check:all  # check + check:web + e2e
+bun run check      # biome lint → typecheck → bun test (320 unit tests)
+bun run e2e        # E2E acceptance tests (89 tests, requires postgres + pulumi CLI)
+bun run check:all  # check + e2e
 ```
 
 ### Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
-| STRATA_LISTEN_ADDR | :8080 | Server listen address |
+| STRATA_LISTEN_ADDR | :9090 | Server listen address |
 | STRATA_DATABASE_URL | (required) | PostgreSQL connection string |
 | STRATA_AUTH_MODE | dev | Auth mode (dev or descope) |
 | STRATA_DEV_AUTH_TOKEN | (required in dev) | Dev auth token |

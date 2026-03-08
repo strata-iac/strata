@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AuthService } from "@strata/auth";
+import type { Database } from "@strata/db";
 import type { StackInfo, StacksService } from "@strata/stacks";
 import type { Caller } from "@strata/types";
 import { UnauthorizedError } from "@strata/types";
@@ -108,6 +109,7 @@ describe("@strata/server routes", () => {
 	function makeApp() {
 		return createApp({
 			auth: mockAuthService(),
+			db: {} as Database,
 			stacks: mockStacksService(),
 			updates: mockUpdatesService(),
 		});

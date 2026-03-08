@@ -42,7 +42,7 @@ describe("@strata/config", () => {
 			clearStrataEnv();
 			setMinimalEnv();
 			const config = loadConfig();
-			expect(config.listenAddr).toBe(":8080");
+			expect(config.listenAddr).toBe(":9090");
 			expect(config.databaseUrl).toBe(
 				"postgres://strata:strata@localhost:5432/strata?sslmode=disable",
 			);

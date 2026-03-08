@@ -1,3 +1,390 @@
 name: large-state
-description: 50+ resources stress-testing large checkpoints, delta efficiency, event batching
-runtime: go
+description: 80 resources stress-testing large checkpoints, delta efficiency, event batching
+runtime: yaml
+resources:
+  id-000:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-001:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-002:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-003:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-004:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-005:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-006:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-007:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-008:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-009:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-010:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-011:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-012:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-013:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-014:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-015:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-016:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-017:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-018:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-019:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-020:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-021:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-022:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-023:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-024:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-025:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-026:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-027:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-028:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-029:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-030:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-031:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-032:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-033:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-034:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-035:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-036:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-037:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-038:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-039:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-040:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-041:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-042:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-043:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-044:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-045:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-046:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-047:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-048:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-049:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-050:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-051:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-052:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-053:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-054:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-055:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-056:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-057:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-058:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  id-059:
+    type: random:RandomId
+    properties:
+      byteLength: 16
+  pet-00:
+    type: random:RandomPet
+    properties:
+      length: 3
+      separator: "-"
+      prefix: ${id-000.hex}
+  pet-01:
+    type: random:RandomPet
+    properties:
+      length: 3
+      separator: "-"
+      prefix: ${id-006.hex}
+  pet-02:
+    type: random:RandomPet
+    properties:
+      length: 3
+      separator: "-"
+      prefix: ${id-012.hex}
+  pet-03:
+    type: random:RandomPet
+    properties:
+      length: 3
+      separator: "-"
+      prefix: ${id-018.hex}
+  pet-04:
+    type: random:RandomPet
+    properties:
+      length: 3
+      separator: "-"
+      prefix: ${id-024.hex}
+  pet-05:
+    type: random:RandomPet
+    properties:
+      length: 3
+      separator: "-"
+      prefix: ${id-030.hex}
+  pet-06:
+    type: random:RandomPet
+    properties:
+      length: 3
+      separator: "-"
+      prefix: ${id-036.hex}
+  pet-07:
+    type: random:RandomPet
+    properties:
+      length: 3
+      separator: "-"
+      prefix: ${id-042.hex}
+  pet-08:
+    type: random:RandomPet
+    properties:
+      length: 3
+      separator: "-"
+      prefix: ${id-048.hex}
+  pet-09:
+    type: random:RandomPet
+    properties:
+      length: 3
+      separator: "-"
+      prefix: ${id-054.hex}
+  str-00:
+    type: random:RandomString
+    properties:
+      length: 32
+      special: false
+    options:
+      dependsOn:
+        - ${pet-00}
+  str-01:
+    type: random:RandomString
+    properties:
+      length: 32
+      special: false
+    options:
+      dependsOn:
+        - ${pet-01}
+  str-02:
+    type: random:RandomString
+    properties:
+      length: 32
+      special: false
+    options:
+      dependsOn:
+        - ${pet-02}
+  str-03:
+    type: random:RandomString
+    properties:
+      length: 32
+      special: false
+    options:
+      dependsOn:
+        - ${pet-03}
+  str-04:
+    type: random:RandomString
+    properties:
+      length: 32
+      special: false
+    options:
+      dependsOn:
+        - ${pet-04}
+  str-05:
+    type: random:RandomString
+    properties:
+      length: 32
+      special: false
+    options:
+      dependsOn:
+        - ${pet-05}
+  str-06:
+    type: random:RandomString
+    properties:
+      length: 32
+      special: false
+    options:
+      dependsOn:
+        - ${pet-06}
+  str-07:
+    type: random:RandomString
+    properties:
+      length: 32
+      special: false
+    options:
+      dependsOn:
+        - ${pet-07}
+  str-08:
+    type: random:RandomString
+    properties:
+      length: 32
+      special: false
+    options:
+      dependsOn:
+        - ${pet-08}
+  str-09:
+    type: random:RandomString
+    properties:
+      length: 32
+      special: false
+    options:
+      dependsOn:
+        - ${pet-09}
+outputs:
+  totalIds: 60
+  firstId: ${id-000.hex}
+  lastId: ${id-059.hex}
+  firstPet: ${pet-00.id}
+  lastString: ${str-09.result}
