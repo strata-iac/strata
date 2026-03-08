@@ -1,6 +1,8 @@
 // @strata/server — Health and capabilities handlers.
 
+import type { Database } from "@strata/db";
 import type { CapabilitiesResponse, CLIVersionResponse } from "@strata/types";
+import { sql } from "drizzle-orm";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
 
@@ -8,9 +10,16 @@ import type { Env } from "../types.js";
 // Health Handlers
 // ============================================================================
 
-export function healthHandlers() {
+export function healthHandlers(deps: { db: Database }) {
 	return {
-		health: (c: Context<Env>) => c.json({ status: "ok" }, 200),
+		health: async (c: Context<Env>) => {
+			try {
+				await deps.db.execute(sql`SELECT 1`);
+				return c.json({ status: "ok" }, 200);
+			} catch {
+				return c.json({ status: "error", message: "database unreachable" }, 503);
+			}
+		},
 
 		capabilities: (c: Context<Env>) =>
 			c.json({

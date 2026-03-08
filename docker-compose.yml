@@ -8,6 +8,8 @@ x-strata: &strata
       condition: service_healthy
     minio-init:
       condition: service_completed_successfully
+    migrate:
+      condition: service_completed_successfully
   environment: &strata-env
     STRATA_LISTEN_ADDR: ":9090"
     STRATA_DATABASE_URL: "postgres://strata:strata@postgres:5432/strata?sslmode=disable"
@@ -22,7 +24,7 @@ x-strata: &strata
     AWS_ACCESS_KEY_ID: minio
     AWS_SECRET_ACCESS_KEY: minio
   healthcheck: &strata-health
-    test: ["CMD", "/strata", "healthcheck"]
+    test: ["CMD-SHELL", "curl -sf http://localhost:9090/healthz || exit 1"]
     interval: 5s
     timeout: 3s
     retries: 10
@@ -86,11 +88,40 @@ services:
     deploy:
       replicas: 3
 
+  migrate:
+    build:
+      context: .
+      target: build
+    profiles: [dev, cluster]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      STRATA_DATABASE_URL: "postgres://strata:strata@postgres:5432/strata?sslmode=disable"
+    entrypoint: ["bun", "drizzle-kit", "migrate", "--config", "packages/db/drizzle.config.ts"]
+    restart: "no"
+
+  strata-ui:
+    build:
+      context: .
+      dockerfile: apps/ui/Dockerfile
+    profiles: [cluster]
+    depends_on:
+      strata-cluster:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/ || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   caddy:
     image: caddy:2-alpine
     profiles: [cluster]
     depends_on:
       strata-cluster:
+        condition: service_healthy
+      strata-ui:
         condition: service_healthy
     ports:
       - "9090:9090"

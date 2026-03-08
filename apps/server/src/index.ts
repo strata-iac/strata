@@ -43,14 +43,27 @@ const storage = createBlobStorage(
 			},
 );
 
-const encryptionKey = config.encryptionKey ?? devMasterKey();
+const encryptionKey =
+	config.encryptionKey ??
+	(config.authMode === "dev"
+		? devMasterKey()
+		: (() => {
+				throw new Error("STRATA_ENCRYPTION_KEY is required in production");
+			})());
 const crypto = new AesCryptoService(encryptionKey);
 
 const stacksService = new PostgresStacksService({ db });
 const updatesService = new PostgresUpdatesService({ db, storage, crypto });
 
 // HTTP
-const app = createApp({ auth, authConfig, db, stacks: stacksService, updates: updatesService });
+const app = createApp({
+	auth,
+	authConfig,
+	corsOrigins: config.corsOrigins,
+	db,
+	stacks: stacksService,
+	updates: updatesService,
+});
 
 const [, portStr] = config.listenAddr.split(":");
 const port = Number.parseInt(portStr || "9090", 10);
@@ -68,10 +81,17 @@ console.log(`Strata listening on ${server.hostname}:${server.port}`);
 const gc = new GCWorker({ db });
 gc.start();
 
-// Graceful shutdown
+// Graceful shutdown — stop accepting new connections, drain in-flight requests,
+// then force-close after timeout.
+const DRAIN_TIMEOUT_MS = 10_000;
 const shutdown = async () => {
+	await server.stop();
 	await gc.stop();
-	server.stop();
+	setTimeout(() => {
+		server.stop(true);
+		client.close();
+		process.exit(1);
+	}, DRAIN_TIMEOUT_MS).unref();
 	client.close();
 	process.exit(0);
 };

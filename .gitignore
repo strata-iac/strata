@@ -13,6 +13,7 @@ apps/ui/vite.config.d.ts.map
 
 # Environment
 .env
+.env.local
 
 # IDE
 .idea/

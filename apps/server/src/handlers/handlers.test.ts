@@ -68,9 +68,11 @@ describe("@strata/server handlers", () => {
 	// ========================================================================
 
 	describe("healthHandlers", () => {
-		test("health returns { status: ok }", async () => {
+		const mockDb = { execute: async () => [{ "?column?": 1 }] } as never;
+
+		test("health returns { status: ok } when db is reachable", async () => {
 			const app = new Hono<Env>();
-			const health = healthHandlers();
+			const health = healthHandlers({ db: mockDb });
 			app.get("/healthz", health.health);
 
 			const res = await app.request("/healthz");
@@ -79,9 +81,25 @@ describe("@strata/server handlers", () => {
 			expect(body.status).toBe("ok");
 		});
 
+		test("health returns 503 when db is unreachable", async () => {
+			const failDb = {
+				execute: async () => {
+					throw new Error("connection refused");
+				},
+			} as never;
+			const app = new Hono<Env>();
+			const health = healthHandlers({ db: failDb });
+			app.get("/healthz", health.health);
+
+			const res = await app.request("/healthz");
+			expect(res.status).toBe(503);
+			const body = await res.json();
+			expect(body.status).toBe("error");
+		});
+
 		test("capabilities returns array with expected capabilities", async () => {
 			const app = new Hono<Env>();
-			const health = healthHandlers();
+			const health = healthHandlers({ db: mockDb });
 			app.get("/capabilities", health.capabilities);
 
 			const res = await app.request("/capabilities");
@@ -98,7 +116,7 @@ describe("@strata/server handlers", () => {
 
 		test("cliVersion returns version info", async () => {
 			const app = new Hono<Env>();
-			const health = healthHandlers();
+			const health = healthHandlers({ db: mockDb });
 			app.get("/version", health.cliVersion);
 
 			const res = await app.request("/version");

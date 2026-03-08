@@ -36,6 +36,7 @@ import type { Env } from "../types.js";
 export function createApp(deps: {
 	auth: AuthService;
 	authConfig: AuthConfig;
+	corsOrigins?: string[];
 	db: Database;
 	stacks: StacksService;
 	updates: UpdatesService;
@@ -47,11 +48,11 @@ export function createApp(deps: {
 
 	// Global middleware
 	app.use("*", requestLogger());
-	app.use("*", cors());
+	app.use("*", cors(deps.corsOrigins ? { origin: deps.corsOrigins } : undefined));
 	app.use("*", decompress());
 
 	// Create handler instances
-	const health = healthHandlers();
+	const health = healthHandlers({ db: deps.db });
 	const user = userHandlers(deps.stacks);
 	const stackH = stackHandlers(deps.stacks);
 	const updateH = updateHandlers(deps.updates, deps.stacks);

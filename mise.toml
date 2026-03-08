@@ -3,6 +3,7 @@ bun = "1.2"
 "github:caddyserver/caddy" = "2.11.2"
 
 [env]
+_.file = ".env.local"
 STRATA_LISTEN_ADDR = ":8081"
 STRATA_DATABASE_URL = "postgres://strata:strata@localhost:5432/strata?sslmode=disable"
 STRATA_AUTH_MODE = "dev"

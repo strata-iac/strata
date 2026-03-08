@@ -117,7 +117,7 @@ describe("@strata/server routes", () => {
 		return createApp({
 			auth: mockAuthService(),
 			authConfig,
-			db: {} as Database,
+			db: { execute: async () => [] } as unknown as Database,
 			stacks: mockStacksService(),
 			updates: mockUpdatesService(),
 		});

@@ -40,6 +40,12 @@ const configSchema = z
 			.string()
 			.regex(/^[0-9a-fA-F]{64}$/, "Must be 64 hex chars (32 bytes)")
 			.optional(),
+
+		// CORS
+		corsOrigins: z
+			.string()
+			.transform((s) => s.split(",").map((o) => o.trim()))
+			.optional(),
 	})
 	.superRefine((data, ctx) => {
 		if (data.authMode === "dev" && !data.devAuthToken) {
@@ -61,6 +67,14 @@ const configSchema = z
 				code: z.ZodIssueCode.custom,
 				message: "STRATA_BLOB_S3_BUCKET is required when STRATA_BLOB_BACKEND=s3",
 				path: ["blobS3Bucket"],
+			});
+		}
+		if (data.authMode !== "dev" && !data.encryptionKey) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message:
+					"STRATA_ENCRYPTION_KEY is required in production (non-dev auth mode). Must be 64 hex chars (32 bytes).",
+				path: ["encryptionKey"],
 			});
 		}
 	});
@@ -94,6 +108,7 @@ function envToConfig(): Record<string, unknown> {
 		blobS3Endpoint: env.STRATA_BLOB_S3_ENDPOINT,
 		blobS3Region: env.STRATA_BLOB_S3_REGION,
 		encryptionKey: env.STRATA_ENCRYPTION_KEY,
+		corsOrigins: env.STRATA_CORS_ORIGINS,
 	};
 }
 

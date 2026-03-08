@@ -1,24 +1,31 @@
-FROM oven/bun:1.2-alpine AS builder
-
+# Stage 1: deps — install workspace dependencies
+FROM oven/bun:1.2-alpine AS deps
 WORKDIR /app
+COPY package.json bun.lock ./
+COPY packages/types/package.json packages/types/
+COPY packages/config/package.json packages/config/
+COPY packages/db/package.json packages/db/
+COPY packages/crypto/package.json packages/crypto/
+COPY packages/storage/package.json packages/storage/
+COPY packages/auth/package.json packages/auth/
+COPY packages/stacks/package.json packages/stacks/
+COPY packages/updates/package.json packages/updates/
+COPY apps/api/package.json apps/api/
+COPY apps/ui/package.json apps/ui/
+RUN mkdir -p apps/server && echo '{"name":"@strata/server","private":true}' > apps/server/package.json
+RUN bun install
 
-# Copy workspace root files
-COPY web/package.json web/bun.lock ./
-COPY web/apps/ui/package.json apps/ui/package.json
-COPY web/apps/api/package.json apps/api/package.json
-
-# Install deps (need @strata/api for type imports)
-RUN bun install --frozen-lockfile
-
-# Copy source
-COPY web/tsconfig.json ./tsconfig.json
-COPY web/apps/api/ apps/api/
-COPY web/apps/ui/ apps/ui/
-
-# Build
+# Stage 2: build — compile UI static assets
+FROM deps AS build
+COPY tsconfig.json ./
+COPY packages/ packages/
+COPY apps/api/ apps/api/
+COPY apps/ui/ apps/ui/
 WORKDIR /app/apps/ui
-ARG VITE_API_URL=""
 RUN bun run build
 
-FROM scratch
-COPY --from=builder /app/apps/ui/dist /dist
+# Stage 3: serve — Caddy static file server with SPA fallback
+FROM caddy:2-alpine
+COPY --from=build /app/apps/ui/dist /srv
+COPY apps/ui/Caddyfile /etc/caddy/Caddyfile
+EXPOSE 80

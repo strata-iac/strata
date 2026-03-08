@@ -5,15 +5,15 @@
 
 :9090 {
 	handle /api/* {
-		reverse_proxy {$CADDY_GO_UPSTREAM:strata:9090}
+		reverse_proxy {$CADDY_GO_UPSTREAM:strata-cluster:9090}
 	}
 
 	handle /healthz {
-		reverse_proxy {$CADDY_GO_UPSTREAM:strata:9090}
+		reverse_proxy {$CADDY_GO_UPSTREAM:strata-cluster:9090}
 	}
 
 	handle /trpc/* {
-		reverse_proxy {$CADDY_GO_UPSTREAM:strata:9090}
+		reverse_proxy {$CADDY_GO_UPSTREAM:strata-cluster:9090}
 	}
 
 	handle {

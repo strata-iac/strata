@@ -20,6 +20,16 @@ Starts only the shared infrastructure:
 
 Use this when running the Strata server directly on your machine (e.g., via `bun run dev`).
 
+### Dev Profile — Single Server
+
+```bash
+docker compose --profile dev up --build
+```
+
+Starts the dependencies plus:
+- **Migrate** — one-shot container that runs database migrations via `drizzle-kit`
+- **Strata** — single server instance on port 9090
+
 ### Cluster Profile — Multi-Replica
 
 ```bash
@@ -28,48 +38,53 @@ bun run docker:cluster
 ```
 
 Starts the dependencies plus:
+- **Migrate** — one-shot container that runs database migrations via `drizzle-kit`
 - **3 Strata replicas** — using Docker Compose `deploy.replicas: 3`
-- **Caddy** — reverse proxy on port 9090 with round-robin load balancing and health checks
+- **Strata UI** — Caddy serving the React SPA on port 80
+- **Caddy** — reverse proxy on port 9090, routing `/api/*` and `/trpc/*` to server replicas and `/*` to the UI
 
 ## Caddy Configuration
 
-Caddy routes all requests to the Strata server(s):
+Caddy routes requests based on path:
 
 ```
 :9090 {
     handle /api/* {
-        reverse_proxy strata:9090
+        reverse_proxy strata-cluster:9090
     }
     handle /trpc/* {
-        reverse_proxy strata:9090
+        reverse_proxy strata-cluster:9090
     }
     handle {
-        # Static SPA fallback
+        reverse_proxy strata-ui:80
     }
 }
 ```
 
-Both `/api/*` (Pulumi CLI protocol) and `/trpc/*` (dashboard API) route to the same Strata server, since both are served by a single Bun process.
-
-In the cluster profile, Caddy load-balances across 3 replicas with health checks.
+`/api/*` (Pulumi CLI protocol) and `/trpc/*` (dashboard API) route to the Strata server replicas. All other paths route to the UI container, which serves the React SPA with client-side routing fallback.
 
 ## Healthcheck
 
-All Strata containers expose a health endpoint:
+All Strata containers expose a health endpoint that checks both the server and database connectivity:
 
 ```
-GET /healthz → 200 OK
+GET /healthz → 200 OK (server + database healthy)
+GET /healthz → 503 Service Unavailable (database unreachable)
 ```
 
 Docker Compose uses `curl` to check health:
 
 ```yaml
 healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:9090/healthz"]
+  test: ["CMD-SHELL", "curl -sf http://localhost:9090/healthz || exit 1"]
   interval: 5s
   timeout: 3s
   retries: 10
 ```
+
+## Database Migrations
+
+Migrations run automatically via a one-shot `migrate` container that executes `drizzle-kit migrate` before the server starts. Both the dev and cluster profiles depend on the migrate container completing successfully.
 
 ## Bun Scripts
 

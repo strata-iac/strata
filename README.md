@@ -58,8 +58,33 @@ For horizontal scaling with multiple replicas behind a load balancer:
 ```bash
 bun run docker:cluster   # 3 replicas + Caddy LB + PostgreSQL + MinIO
 bun run e2e:cluster      # Run acceptance tests against the cluster
+```
 
 See the [Horizontal Scaling](apps/docs/src/content/docs/operations/horizontal-scaling.md) guide for production deployment details.
+
+## Configuration
+
+All configuration is via `STRATA_*` environment variables. See `.env.example` for a complete reference.
+
+| Variable | Default | Description |
+|---|---|---|
+| `STRATA_LISTEN_ADDR` | `:9090` | Server listen address |
+| `STRATA_DATABASE_URL` | *(required)* | PostgreSQL connection string |
+| `STRATA_AUTH_MODE` | `dev` | `dev` (static tokens) or `descope` (Descope access keys) |
+| `STRATA_DEV_AUTH_TOKEN` | *(required if dev)* | Static auth token for dev mode |
+| `STRATA_DEV_USER_LOGIN` | `dev-user` | Dev user login name |
+| `STRATA_DEV_ORG_LOGIN` | `dev-org` | Dev org login name |
+| `STRATA_DEV_USERS` | | JSON array of additional dev users |
+| `STRATA_DESCOPE_PROJECT_ID` | *(required if descope)* | Descope project ID |
+| `STRATA_BLOB_BACKEND` | `local` | `local` (filesystem) or `s3` (S3-compatible) |
+| `STRATA_BLOB_LOCAL_PATH` | `./data/blobs` | Local blob storage path |
+| `STRATA_BLOB_S3_BUCKET` | *(required if s3)* | S3 bucket name |
+| `STRATA_BLOB_S3_ENDPOINT` | | Custom S3 endpoint (MinIO, R2, etc.) |
+| `STRATA_BLOB_S3_REGION` | `us-east-1` | S3 region |
+| `STRATA_ENCRYPTION_KEY` | *(auto in dev)* | 64 hex chars (32 bytes) for AES-256-GCM |
+| `STRATA_CORS_ORIGINS` | *(unrestricted)* | Comma-separated allowed CORS origins |
+
+Encryption keys are auto-generated in dev mode via `mise` (see `mise.toml`). For production, generate one with `openssl rand -hex 32`.
 
 ## Quality Gates
 

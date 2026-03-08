@@ -1,0 +1,12 @@
+{
+	auto_https off
+	admin off
+}
+
+:80 {
+	root * /srv
+	file_server
+
+	# SPA fallback — serve index.html for client-side routes
+	try_files {path} /index.html
+}

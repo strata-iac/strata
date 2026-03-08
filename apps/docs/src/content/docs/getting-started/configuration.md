@@ -58,6 +58,7 @@ The primary dev user (configured via `STRATA_DEV_AUTH_TOKEN`, `STRATA_DEV_USER_L
 | `STRATA_BLOB_LOCAL_PATH` | `./data/blobs` | Directory for local blob storage |
 | `STRATA_BLOB_S3_BUCKET` | *(required if s3)* | S3 bucket name for checkpoint storage |
 | `STRATA_BLOB_S3_ENDPOINT` | *(empty)* | Custom S3 endpoint (for MinIO, R2, etc.) |
+| `STRATA_BLOB_S3_REGION` | `us-east-1` | S3 region |
 
 When using `s3` with a custom endpoint, you must also set the standard AWS credentials:
 
@@ -89,6 +90,18 @@ openssl rand -hex 32
 The encryption key is used to derive per-stack keys via HKDF. Losing this key means losing access to all encrypted secrets. Back it up securely.
 :::
 
+## CORS
+
+| Variable | Default | Description |
+|---|---|---|
+| `STRATA_CORS_ORIGINS` | *(unrestricted)* | Comma-separated list of allowed origins |
+
+When set, only the listed origins are allowed in CORS preflight responses. When unset, all origins are permitted (suitable for development, not recommended for production).
+
+```bash
+export STRATA_CORS_ORIGINS="https://dashboard.example.com,https://admin.example.com"
+```
+
 ## Validation Rules
 
 The server enforces these constraints at startup:
@@ -101,6 +114,7 @@ The server enforces these constraints at startup:
 - `STRATA_DESCOPE_PROJECT_ID` is required when `STRATA_AUTH_MODE=descope`
 - `STRATA_DEV_AUTH_TOKEN` is required when `STRATA_AUTH_MODE=dev`
 - `STRATA_ENCRYPTION_KEY`, if set, must be exactly 64 hex characters (32 bytes)
+- `STRATA_ENCRYPTION_KEY` is required when `STRATA_AUTH_MODE=descope` (production)
 
 ## Example: Minimal Production Config
 
@@ -112,4 +126,5 @@ export STRATA_DESCOPE_PROJECT_ID="P3Aaha02iJvkGVbPDAF78KWuAxe6"
 export STRATA_BLOB_BACKEND="s3"
 export STRATA_BLOB_S3_BUCKET="my-strata-checkpoints"
 export STRATA_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+export STRATA_CORS_ORIGINS="https://strata.example.com"
 ```

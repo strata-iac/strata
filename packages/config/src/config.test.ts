@@ -109,6 +109,22 @@ describe("@strata/config", () => {
 			Bun.env.STRATA_ENCRYPTION_KEY = "not-hex";
 			expect(() => loadConfig()).toThrow();
 		});
+
+		test("throws when non-dev mode lacks encryption key", () => {
+			clearStrataEnv();
+			Bun.env.STRATA_DATABASE_URL = "postgres://localhost:5432/strata?sslmode=disable";
+			Bun.env.STRATA_AUTH_MODE = "descope";
+			Bun.env.STRATA_DESCOPE_PROJECT_ID = "P3test";
+			expect(() => loadConfig()).toThrow(/STRATA_ENCRYPTION_KEY is required/);
+		});
+
+		test("allows missing encryption key in dev mode", () => {
+			clearStrataEnv();
+			setMinimalEnv();
+			// No STRATA_ENCRYPTION_KEY set — should be fine in dev
+			const config = loadConfig();
+			expect(config.encryptionKey).toBeUndefined();
+		});
 	});
 
 	describe("tryLoadConfig", () => {

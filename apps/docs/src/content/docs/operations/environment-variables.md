@@ -21,7 +21,9 @@ All Strata configuration is via environment variables. Variables prefixed with `
 | `STRATA_BLOB_LOCAL_PATH` | `./data/blobs` | If local | Local blob directory |
 | `STRATA_BLOB_S3_BUCKET` | — | If s3 | S3 bucket name |
 | `STRATA_BLOB_S3_ENDPOINT` | — | No | Custom S3 endpoint |
-| `STRATA_ENCRYPTION_KEY` | *(auto in dev)* | No | 64 hex chars (32 bytes) |
+| `STRATA_BLOB_S3_REGION` | `us-east-1` | No | S3 region |
+| `STRATA_ENCRYPTION_KEY` | *(auto in dev)* | If non-dev | 64 hex chars (32 bytes) |
+| `STRATA_CORS_ORIGINS` | *(unrestricted)* | No | Comma-separated allowed origins |
 | `AWS_ACCESS_KEY_ID` | — | If custom endpoint | S3 access key |
 | `AWS_SECRET_ACCESS_KEY` | — | If custom endpoint | S3 secret key |
 
@@ -107,6 +109,10 @@ When set, path-style addressing is used and `AWS_ACCESS_KEY_ID` + `AWS_SECRET_AC
 
 When not set, the standard AWS SDK credential chain is used.
 
+### STRATA_BLOB_S3_REGION
+
+The AWS region for the S3 bucket. Defaults to `us-east-1`. Only relevant when using real AWS S3 (not MinIO or other custom endpoints).
+
 ## Encryption
 
 ### STRATA_ENCRYPTION_KEY
@@ -119,6 +125,20 @@ openssl rand -hex 32
 ```
 
 If not set and `STRATA_AUTH_MODE=dev`, a deterministic key is derived from `sha256("strata-dev-encryption-key")`. This is not safe for production.
+
+When `STRATA_AUTH_MODE=descope` (production), this variable is **required**. The server will refuse to start without it.
+
+## CORS
+
+### STRATA_CORS_ORIGINS
+
+Comma-separated list of allowed origins for CORS preflight responses:
+
+```bash
+STRATA_CORS_ORIGINS=https://dashboard.example.com,https://admin.example.com
+```
+
+When not set, all origins are permitted. For production deployments, restrict this to the origins that host your dashboard UI.
 
 ## AWS Credentials
 
