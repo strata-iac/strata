@@ -44,8 +44,8 @@
 		"docker:build": "docker build -t strata:dev .",
 		"docker:cluster": "docker compose --profile cluster up --build",
 		"docker:cluster:down": "docker compose --profile cluster down -v",
-		"docs:dev": "cd docs && npm run dev",
-		"docs:build": "cd docs && npm run build"
+		"docs:dev": "bun run --cwd apps/docs dev",
+		"docs:build": "bun run --cwd apps/docs build"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "catalog:",

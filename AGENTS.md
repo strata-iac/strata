@@ -119,7 +119,7 @@ bd automatically syncs with git:
 - ❌ Do NOT use external issue trackers
 - ❌ Do NOT duplicate tracking systems
 
-For more details, see README.md and docs/QUICKSTART.md.
+For more details, see README.md.
 
 ## Landing the Plane (Session Completion)
 
@@ -182,9 +182,9 @@ apps/
   api/                 # @strata/api — tRPC router definition (stacks.list, updates.list/latest, events.list)
   server/              # @strata/server — Hono HTTP server (CLI routes + tRPC mount + middleware)
   ui/                  # @strata/ui — React SPA (Vite + Tailwind + tRPC client)
+  docs/                # @strata/docs — Starlight documentation site
 examples/              # Pulumi YAML example programs (7 examples, used by E2E tests)
 e2e/                   # E2E acceptance tests (89 tests across 9 files)
-docs/                  # Starlight documentation site
 Dockerfile             # bun build --compile → debian-slim
 docker-compose.yml     # postgres + minio (dev), + strata replicas + caddy (cluster)
 Caddyfile              # Reverse proxy: /api/* + /trpc/* → server, /* → UI

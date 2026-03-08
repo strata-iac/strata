@@ -59,7 +59,7 @@ For horizontal scaling with multiple replicas behind a load balancer:
 bun run docker:cluster   # 3 replicas + Caddy LB + PostgreSQL + MinIO
 bun run e2e:cluster      # Run acceptance tests against the cluster
 
-See the [Horizontal Scaling](docs/src/content/docs/operations/horizontal-scaling.md) guide for production deployment details.
+See the [Horizontal Scaling](apps/docs/src/content/docs/operations/horizontal-scaling.md) guide for production deployment details.
 
 ## Quality Gates
 
@@ -71,18 +71,18 @@ bun run check:all      # check + e2e
 
 ## Documentation
 
-Full documentation is available in the [`docs/`](docs/) directory, built with [Starlight](https://starlight.astro.build/):
+Full documentation is available in the [`apps/docs/`](apps/docs/) directory, built with [Starlight](https://starlight.astro.build/):
 
 ```bash
 bun run docs:dev       # Start docs dev server
 bun run docs:build     # Build static docs site
 ```
 
-- [Introduction](docs/src/content/docs/getting-started/introduction.md)
-- [Quick Start](docs/src/content/docs/getting-started/quickstart.md)
-- [Configuration](docs/src/content/docs/getting-started/configuration.md)
-- [Architecture Overview](docs/src/content/docs/architecture/overview.md)
-- [API Reference](docs/src/content/docs/api/stacks.md)
+- [Introduction](apps/docs/src/content/docs/getting-started/introduction.md)
+- [Quick Start](apps/docs/src/content/docs/getting-started/quickstart.md)
+- [Configuration](apps/docs/src/content/docs/getting-started/configuration.md)
+- [Architecture Overview](apps/docs/src/content/docs/architecture/overview.md)
+- [API Reference](apps/docs/src/content/docs/api/stacks.md)
 
 ## Project Structure
 
@@ -102,7 +102,7 @@ apps/
   ui/                 @strata/ui — React SPA (Vite + Tailwind + tRPC client)
 examples/             Pulumi YAML example programs (7 examples)
 e2e/                  E2E acceptance tests (89 tests, 9 files)
-docs/                 Starlight documentation site
+  docs/               @strata/docs — Starlight documentation site
 ```
 
 ## License

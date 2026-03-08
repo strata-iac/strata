@@ -1,5 +1,5 @@
 {
-  "name": "strata-docs",
+  "name": "@strata/docs",
   "version": "0.0.1",
   "private": true,
   "scripts": {
@@ -10,6 +10,7 @@
   "dependencies": {
     "@astrojs/starlight": "^0.34.0",
     "astro": "^5.7.0",
-    "sharp": "^0.33.0"
+    "sharp": "^0.33.0",
+    "zod": "^3.25.76"
   }
 }
