@@ -12,7 +12,9 @@ import { SQL } from "bun";
 
 export const TEST_PORT = 18_080;
 export const TEST_TOKEN = "devtoken123";
-export const TEST_DB_URL = "postgres://strata:strata@localhost:5432/strata?sslmode=disable";
+export const TEST_DB_URL =
+	process.env.PROCELLA_DATABASE_URL ||
+	"postgres://procella:procella@localhost:5432/procella?sslmode=disable";
 export const BACKEND_URL = `http://127.0.0.1:${TEST_PORT}`;
 export const PROJECT_ROOT = path.resolve(import.meta.dir, "..");
 
@@ -31,7 +33,7 @@ export async function resetDatabase(): Promise<void> {
 	const proc = Bun.spawn(
 		["bunx", "drizzle-kit", "migrate", "--config", "packages/db/drizzle.config.ts"],
 		{
-			env: { ...cleanEnv(), STRATA_DATABASE_URL: TEST_DB_URL },
+			env: { ...cleanEnv(), PROCELLA_DATABASE_URL: TEST_DB_URL },
 			stdout: "pipe",
 			stderr: "pipe",
 		},
@@ -54,8 +56,13 @@ export async function truncateTables(): Promise<void> {
 // Docker Compose
 // ============================================================================
 
-/** Start postgres via docker compose and wait for it to be ready. */
 export async function ensureDeps(): Promise<void> {
+	// In CI, the database is provided as a service — skip docker compose.
+	// Locally, .env may define PROCELLA_DATABASE_URL but we still need docker compose.
+	if (process.env.CI) {
+		return;
+	}
+
 	const proc = Bun.spawn(["docker", "compose", "up", "-d", "postgres"], {
 		stdout: "pipe",
 		stderr: "pipe",
@@ -70,7 +77,7 @@ export async function ensureDeps(): Promise<void> {
 	const start = Date.now();
 	while (Date.now() - start < 30_000) {
 		const pg = Bun.spawn(
-			["docker", "compose", "exec", "-T", "postgres", "pg_isready", "-U", "strata"],
+			["docker", "compose", "exec", "-T", "postgres", "pg_isready", "-U", "procella"],
 			{ stdout: "pipe", stderr: "pipe", cwd: PROJECT_ROOT },
 		);
 		if ((await pg.exited) === 0) return;
@@ -84,7 +91,7 @@ export async function ensureDeps(): Promise<void> {
 // ============================================================================
 
 export async function createPulumiHome(): Promise<string> {
-	const home = await mkdtemp(path.join(tmpdir(), "strata-e2e-pulumi-"));
+	const home = await mkdtemp(path.join(tmpdir(), "procella-e2e-pulumi-"));
 	// Copy plugins from system PULUMI_HOME to avoid GitHub rate limits
 	const systemHome = process.env.PULUMI_HOME ?? path.join(process.env.HOME ?? "", ".pulumi");
 	const systemPlugins = path.join(systemHome, "plugins");
@@ -106,14 +113,14 @@ export async function cleanupDir(dir: string): Promise<void> {
 }
 
 export async function newProjectDir(name: string): Promise<string> {
-	const dir = await mkdtemp(path.join(tmpdir(), `strata-e2e-${name}-`));
+	const dir = await mkdtemp(path.join(tmpdir(), `procella-e2e-${name}-`));
 	await Bun.write(path.join(dir, "Pulumi.yaml"), `name: ${name}\nruntime: yaml\n`);
 	return dir;
 }
 
 export async function copyExampleDir(name: string): Promise<string> {
 	const src = path.join(PROJECT_ROOT, "examples", name);
-	const dir = await mkdtemp(path.join(tmpdir(), `strata-e2e-${name}-`));
+	const dir = await mkdtemp(path.join(tmpdir(), `procella-e2e-${name}-`));
 
 	const cp = Bun.spawn(["cp", "-rf", `${src}/.`, dir], {
 		stdout: "pipe",
@@ -131,7 +138,7 @@ export async function copyExampleDir(name: string): Promise<string> {
 function cleanEnv(): Record<string, string> {
 	const env: Record<string, string> = {};
 	for (const [key, value] of Object.entries(process.env)) {
-		if (key.startsWith("STRATA_")) continue;
+		if (key.startsWith("PROCELLA_")) continue;
 		if (key.startsWith("AWS_")) continue;
 		if (value !== undefined) env[key] = value;
 	}
@@ -142,12 +149,12 @@ export async function startServer(): Promise<Subprocess> {
 	const proc = Bun.spawn(["bun", "run", "apps/server/src/index.ts"], {
 		env: {
 			...cleanEnv(),
-			STRATA_LISTEN_ADDR: `:${TEST_PORT}`,
-			STRATA_DATABASE_URL: TEST_DB_URL,
-			STRATA_AUTH_MODE: "dev",
-			STRATA_DEV_AUTH_TOKEN: TEST_TOKEN,
-			STRATA_BLOB_BACKEND: "local",
-			STRATA_BLOB_LOCAL_PATH: "./data/e2e-blobs",
+			PROCELLA_LISTEN_ADDR: `:${TEST_PORT}`,
+			PROCELLA_DATABASE_URL: TEST_DB_URL,
+			PROCELLA_AUTH_MODE: "dev",
+			PROCELLA_DEV_AUTH_TOKEN: TEST_TOKEN,
+			PROCELLA_BLOB_BACKEND: "local",
+			PROCELLA_BLOB_LOCAL_PATH: "./data/e2e-blobs",
 		},
 		stdout: "pipe",
 		stderr: "pipe",

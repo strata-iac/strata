@@ -1,12 +1,12 @@
-// @strata/server — Hono HTTP server entrypoint.
+// @procella/server — Hono HTTP server entrypoint.
 
-import { createAuthService } from "@strata/auth";
-import { loadConfig } from "@strata/config";
-import { AesCryptoService, devMasterKey } from "@strata/crypto";
-import { createDb } from "@strata/db";
-import { PostgresStacksService } from "@strata/stacks";
-import { createBlobStorage } from "@strata/storage";
-import { GCWorker, PostgresUpdatesService } from "@strata/updates";
+import { createAuthService } from "@procella/auth";
+import { loadConfig } from "@procella/config";
+import { AesCryptoService, devMasterKey } from "@procella/crypto";
+import { createDb } from "@procella/db";
+import { PostgresStacksService } from "@procella/stacks";
+import { createBlobStorage } from "@procella/storage";
+import { GCWorker, PostgresUpdatesService } from "@procella/updates";
 import { createApp } from "./routes/index.js";
 
 // ============================================================================
@@ -52,7 +52,7 @@ const encryptionKey =
 	(config.authMode === "dev"
 		? devMasterKey()
 		: (() => {
-				throw new Error("STRATA_ENCRYPTION_KEY is required in production");
+				throw new Error("PROCELLA_ENCRYPTION_KEY is required in production");
 			})());
 const crypto = new AesCryptoService(encryptionKey);
 
@@ -79,11 +79,11 @@ const server = Bun.serve({
 });
 
 // biome-ignore lint/suspicious/noConsole: server startup log
-console.log(`Strata listening on ${server.hostname}:${server.port}`);
+console.log(`Procella listening on ${server.hostname}:${server.port}`);
 
-// GC Worker
+// GC Worker (errors caught internally — won't crash the process)
 const gc = new GCWorker({ db });
-gc.start();
+void gc.start();
 
 // Graceful shutdown — stop accepting new connections, drain in-flight requests,
 // then force-close after timeout.

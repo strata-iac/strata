@@ -1,4 +1,4 @@
-// @strata/db — Database connection via Bun's built-in SQL + Drizzle ORM.
+// @procella/db — Database connection via Bun's built-in SQL + Drizzle ORM.
 //
 // Uses Bun.sql (import { SQL } from "bun") as the connection driver.
 // Drizzle ORM wraps it for type-safe queries with schema inference.
@@ -48,11 +48,27 @@ export interface CreateDbOptions {
  * SQL client (for cases where raw queries or lifecycle management is needed).
  */
 export function createDb(options: CreateDbOptions): { db: Database; client: SQL } {
-	const client = new SQL({
-		url: options.url,
+	const parsed = new URL(options.url);
+
+	const sqlOpts: Record<string, unknown> = {
+		hostname: parsed.hostname,
+		port: parsed.port ? Number(parsed.port) : 5432,
+		username: decodeURIComponent(parsed.username),
+		password: decodeURIComponent(parsed.password),
+		database: parsed.pathname.slice(1),
 		max: options.max ?? 20,
 		idleTimeout: options.idleTimeout ?? 30,
-	});
+	};
+
+	for (const [key, value] of parsed.searchParams) {
+		if (key === "sslmode") {
+			sqlOpts.tls = value !== "disable";
+		} else if (!(key in sqlOpts)) {
+			sqlOpts[key] = value;
+		}
+	}
+
+	const client = new SQL(sqlOpts);
 	const db = drizzle({ client, schema });
 	return { db, client };
 }

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { GCWorker } from "./gc-worker.js";
 import { GC_ADVISORY_LOCK_ID, GC_INTERVAL_MS, GC_STALE_THRESHOLD_MS } from "./types.js";
 
-describe("@strata/updates GCWorker", () => {
+describe("@procella/updates GCWorker", () => {
 	// ========================================================================
 	// Construction
 	// ========================================================================
@@ -47,6 +47,21 @@ describe("@strata/updates GCWorker", () => {
 			const worker = new GCWorker({ db: {} as never });
 			expect(typeof worker.start).toBe("function");
 			expect(typeof worker.stop).toBe("function");
+		});
+	});
+
+	// ========================================================================
+	// Resilience
+	// ========================================================================
+
+	describe("resilience", () => {
+		test("start does not throw when db.execute rejects", async () => {
+			const failDb = {
+				execute: () => Promise.reject(new Error("connection refused")),
+			};
+			const worker = new GCWorker({ db: failDb as never, interval: 60_000 });
+			await expect(worker.start()).resolves.toBeUndefined();
+			await worker.stop();
 		});
 	});
 });

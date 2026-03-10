@@ -5,15 +5,15 @@
 
 :9090 {
 	handle /api/* {
-		reverse_proxy {$CADDY_GO_UPSTREAM:strata-cluster:9090}
+		reverse_proxy {$CADDY_GO_UPSTREAM:procella-cluster:9090}
 	}
 
 	handle /healthz {
-		reverse_proxy {$CADDY_GO_UPSTREAM:strata-cluster:9090}
+		reverse_proxy {$CADDY_GO_UPSTREAM:procella-cluster:9090}
 	}
 
 	handle /trpc/* {
-		reverse_proxy {$CADDY_GO_UPSTREAM:strata-cluster:9090}
+		reverse_proxy {$CADDY_GO_UPSTREAM:procella-cluster:9090}
 	}
 
 	handle /docs* {
@@ -26,6 +26,6 @@
 	}
 
 	handle {
-		reverse_proxy {$CADDY_UI_UPSTREAM:strata-ui:80}
+		reverse_proxy {$CADDY_UI_UPSTREAM:procella-ui:80}
 	}
 }

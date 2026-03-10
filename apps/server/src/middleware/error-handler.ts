@@ -1,13 +1,17 @@
-// @strata/server — Global error handler.
+// @procella/server — Global error handler.
 
-import { StrataError } from "@strata/types";
+import { ProcellaError } from "@procella/types";
 import type { ErrorHandler } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 
 /** Catch errors and return structured JSON responses. Used with app.onError(). */
 export function errorHandler(): ErrorHandler {
 	return (error, c) => {
-		if (error instanceof StrataError) {
-			return c.json({ code: error.statusCode, message: error.message }, error.statusCode as 500);
+		if (error instanceof ProcellaError) {
+			return c.json(
+				{ code: error.statusCode, message: error.message },
+				error.statusCode as ContentfulStatusCode,
+			);
 		}
 		// biome-ignore lint/suspicious/noConsole: server error logging
 		console.error("Unhandled error:", error);

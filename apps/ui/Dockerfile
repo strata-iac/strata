@@ -10,16 +10,15 @@ COPY packages/storage/package.json packages/storage/
 COPY packages/auth/package.json packages/auth/
 COPY packages/stacks/package.json packages/stacks/
 COPY packages/updates/package.json packages/updates/
-COPY apps/api/package.json apps/api/
+COPY packages/api/package.json packages/api/
 COPY apps/ui/package.json apps/ui/
-RUN mkdir -p apps/server && echo '{"name":"@strata/server","private":true}' > apps/server/package.json
+RUN mkdir -p apps/server && echo '{"name":"@procella/server","private":true}' > apps/server/package.json
 RUN bun install
 
 # Stage 2: build — compile UI static assets
 FROM deps AS build
 COPY tsconfig.json ./
 COPY packages/ packages/
-COPY apps/api/ apps/api/
 COPY apps/ui/ apps/ui/
 WORKDIR /app/apps/ui
 RUN bun run build

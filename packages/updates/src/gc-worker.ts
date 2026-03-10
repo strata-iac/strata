@@ -1,7 +1,7 @@
-// @strata/updates — GC Worker for cleaning up stale/orphaned updates.
+// @procella/updates — GC Worker for cleaning up stale/orphaned updates.
 
-import type { Database } from "@strata/db";
-import { stacks, updates } from "@strata/db";
+import type { Database } from "@procella/db";
+import { stacks, updates } from "@procella/db";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { GC_ADVISORY_LOCK_ID, GC_INTERVAL_MS, GC_STALE_THRESHOLD_MS } from "./types.js";
 
@@ -102,6 +102,10 @@ export class GCWorker {
 				// Always release the advisory lock
 				await this.db.execute(sql`SELECT pg_advisory_unlock(${GC_ADVISORY_LOCK_ID})`);
 			}
+		} catch (err) {
+			// GC is best-effort — log and retry on next interval. Never crash the server.
+			// biome-ignore lint/suspicious/noConsole: GC worker error logging
+			console.error("[gc] cycle failed:", err);
 		} finally {
 			this.running = false;
 		}

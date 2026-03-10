@@ -21,25 +21,25 @@ const accessKeyJwtTemplate = JSON.stringify({
 });
 
 const project = new descope.Project(
-	"Strata",
+	"Procella",
 	{
 		// ── Project-level settings ──────────────────────────────────────────────
 		projectSettings: {
 			// Reference the JWT templates defined below by name.
-			userJwtTemplate: "Strata User",
-			accessKeyJwtTemplate: "Strata Access Key",
+			userJwtTemplate: "Procella User",
+			accessKeyJwtTemplate: "Procella Access Key",
 		},
 
 		// ── JWT templates ────────────────────────────────────────────────────────
 		// These are the templates that Descope uses when issuing JWTs.
-		// The Strata auth service (packages/auth) requires:
+		// The Procella auth service (packages/auth) requires:
 		//   - `dct` claim (auto-set by autoTenantClaim) for tenant detection
 		//   - `roles` claim for RBAC (viewer / member / admin)
 		jwtTemplates: {
 			userTemplates: [
 				{
-					name: "Strata User",
-					description: "Default JWT template for Strata users — includes tenant and role claims",
+					name: "Procella User",
+					description: "Default JWT template for Procella users — includes tenant and role claims",
 					template: userJwtTemplate,
 					authSchema: "default",
 					autoTenantClaim: true,
@@ -47,8 +47,8 @@ const project = new descope.Project(
 			],
 			accessKeyTemplates: [
 				{
-					name: "Strata Access Key",
-					description: "Default JWT template for Strata access keys — includes tenant and role claims",
+					name: "Procella Access Key",
+					description: "Default JWT template for Procella access keys — includes tenant and role claims",
 					template: accessKeyJwtTemplate,
 					authSchema: "default",
 					autoTenantClaim: true,
@@ -57,7 +57,7 @@ const project = new descope.Project(
 		},
 
 		// ── Authorization ────────────────────────────────────────────────────────
-		// Roles and permissions that map to Strata's RBAC model.
+		// Roles and permissions that map to Procella's RBAC model.
 		// The auth service in packages/auth validates these role names in JWT claims.
 		authorization: {
 			roles: [
