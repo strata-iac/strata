@@ -1,5 +1,5 @@
 {
-	"name": "strata",
+	"name": "procella",
 	"private": true,
 	"workspaces": ["packages/*", "apps/*"],
 	"catalog": {
@@ -31,7 +31,7 @@
 	"scripts": {
 		"prepare": "husky",
 		"dev": "bun run dev:deps && trap 'kill 0' EXIT && bun --watch apps/server/src/index.ts & bun run --cwd apps/ui dev & bun run --cwd apps/docs dev --port 4321 & mise exec -- caddy run --config Caddyfile & wait",
-		"dev:deps": "docker compose up -d && printf 'Waiting for postgres' && until docker compose exec -T postgres pg_isready -U strata -q 2>/dev/null; do printf '.'; sleep 1; done && echo ' ready'",
+		"dev:deps": "docker compose up -d && printf 'Waiting for postgres' && until docker compose exec -T postgres pg_isready -U procella -q 2>/dev/null; do printf '.'; sleep 1; done && echo ' ready'",
 		"dev:down": "docker compose down -v",
 		"check": "biome check . && bun run typecheck && bun test packages/ apps/",
 		"check:ui": "biome check apps/ui/ && bun run --cwd apps/ui typecheck",
@@ -41,7 +41,7 @@
 		"check:all": "bun run check && bun run e2e",
 		"db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
 		"db:migrate": "drizzle-kit migrate --config packages/db/drizzle.config.ts",
-		"docker:build": "docker build -t strata:dev .",
+		"docker:build": "docker build -t procella:dev .",
 		"docker:cluster": "docker compose --profile cluster up --build",
 		"docker:cluster:down": "docker compose --profile cluster down -v",
 		"docs:dev": "bun run --cwd apps/docs dev",

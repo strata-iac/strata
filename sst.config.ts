@@ -3,7 +3,7 @@
 export default $config({
 	app(input) {
 		return {
-			name: "strata",
+			name: "procella",
 			removal: input?.stage === "production" ? "retain" : "remove",
 			protect: ["production"].includes(input?.stage),
 			home: "aws",
@@ -22,7 +22,7 @@ export default $config({
 		// CONFIGURATION
 		// ========================================================================
 
-		const appName = "strata";
+		const appName = "procella";
 		const region = aws.config.region || "us-east-1";
 
 		// Networking
@@ -49,7 +49,7 @@ export default $config({
 		const checkpointBlobsBucketName = `${appName}-checkpoints-${Date.now()}`;
 
 		// Database password (ops team provides in Secrets Manager, or use default for dev)
-		const dbPassword = process.env.STRATA_DB_PASSWORD || "strata";
+		const dbPassword = process.env.PROCELLA_DB_PASSWORD || "procella";
 
 		// ========================================================================
 		// VPC + NETWORKING (Wave 1.1)
@@ -347,7 +347,7 @@ export default $config({
 		// ========================================================================
 
 		const descopeKeySecret = new aws.secretsmanager.Secret(`${appName}-descope-key`, {
-			description: "Descope Management Key for Strata",
+			description: "Descope Management Key for Procella",
 		});
 
 		// Descope Management Key - fetched from environment (DESCOPE_MANAGEMENT_KEY) or use placeholder
@@ -358,7 +358,7 @@ export default $config({
 
 		// Generate encryption key (64 hex chars = 32 bytes for AES-256)
 		const encryptionKeySecret = new aws.secretsmanager.Secret(`${appName}-encryption-key`, {
-			description: "STRATA_ENCRYPTION_KEY for AES-256-GCM",
+			description: "PROCELLA_ENCRYPTION_KEY for AES-256-GCM",
 		});
 
 		// Generate random 64-char hex string
@@ -478,7 +478,7 @@ export default $config({
 		});
 
 		// ========================================================================
-		// STRATA SERVER TASK DEFINITION (Wave 1.2)
+		// PROCELLA SERVER TASK DEFINITION (Wave 1.2)
 		// ========================================================================
 
 		const stratoServerTaskDef = new aws.ecs.TaskDefinition(`${appName}-task`, {
@@ -497,7 +497,7 @@ export default $config({
 			]).apply(([descopeKeyArn, encryptionKeyArn, logName, ecrUrl]) =>
 				JSON.stringify([
 					{
-						name: "strata",
+						name: "procella",
 						image: `${ecrUrl}:latest`,
 						portMappings: [
 							{
@@ -508,45 +508,45 @@ export default $config({
 						],
 						environment: [
 							{
-								name: "STRATA_LISTEN_ADDR",
+								name: "PROCELLA_LISTEN_ADDR",
 								value: ":9090",
 							},
 							{
-								name: "STRATA_AUTH_MODE",
+								name: "PROCELLA_AUTH_MODE",
 								value: "descope",
 							},
 							{
-								name: "STRATA_DESCOPE_PROJECT_ID",
+								name: "PROCELLA_DESCOPE_PROJECT_ID",
 								value: descope.descopeProjectId,
 							},
 							{
-								name: "STRATA_BLOB_BACKEND",
+								name: "PROCELLA_BLOB_BACKEND",
 								value: "s3",
 							},
 							{
-								name: "STRATA_BLOB_S3_BUCKET",
+								name: "PROCELLA_BLOB_S3_BUCKET",
 								value: checkpointBlobsBucketName,
 							},
 							{
-								name: "STRATA_BLOB_S3_REGION",
+								name: "PROCELLA_BLOB_S3_REGION",
 								value: region,
 							},
 							{
-								name: "STRATA_CORS_ORIGINS",
-								value: `https://${$app.stage === "production" ? "strata" : $app.stage}.strata.com`,
+								name: "PROCELLA_CORS_ORIGINS",
+								value: `https://${$app.stage === "production" ? "procella" : $app.stage}.procella.dev`,
 							},
 							{
-								name: "STRATA_DATABASE_URL",
-								value: `postgresql://strata:${dbPassword}@strata-db.local:5432/strata`,
+								name: "PROCELLA_DATABASE_URL",
+								value: `postgresql://procella:${dbPassword}@procella-db.local:5432/procella`,
 							},
 						],
 						secrets: [
 							{
-								name: "STRATA_DESCOPE_MANAGEMENT_KEY",
+								name: "PROCELLA_DESCOPE_MANAGEMENT_KEY",
 								valueFrom: descopeKeyArn,
 							},
 							{
-								name: "STRATA_ENCRYPTION_KEY",
+								name: "PROCELLA_ENCRYPTION_KEY",
 								valueFrom: encryptionKeyArn,
 							},
 						],
@@ -555,7 +555,7 @@ export default $config({
 							options: {
 								"awslogs-group": logName,
 								"awslogs-region": region,
-								"awslogs-stream-prefix": "strata",
+								"awslogs-stream-prefix": "procella",
 							},
 						},
 						healthCheck: {
@@ -614,11 +614,11 @@ export default $config({
 						environment: [
 							{
 								name: "POSTGRES_USER",
-								value: "strata",
+								value: "procella",
 							},
 							{
 								name: "POSTGRES_DB",
-								value: "strata",
+								value: "procella",
 							},
 							{
 								name: "POSTGRES_PASSWORD",
@@ -641,7 +641,7 @@ export default $config({
 							},
 						},
 						healthCheck: {
-							command: ["CMD-SHELL", "pg_isready -U strata"],
+							command: ["CMD-SHELL", "pg_isready -U procella"],
 							interval: 5,
 							timeout: 5,
 							retries: 10,
@@ -712,8 +712,8 @@ export default $config({
 		// ECS SERVICES (Wave 1.2 + 1.3)
 		// ========================================================================
 
-		// Strata Server Service
-		const strataService = new aws.ecs.Service(`${appName}-service`, {
+		// Procella Server Service
+		const procellaService = new aws.ecs.Service(`${appName}-service`, {
 			cluster: ecsCluster.arn,
 			taskDefinition: stratoServerTaskDef.arn,
 			desiredCount: ecsDesiredCount,
@@ -726,7 +726,7 @@ export default $config({
 			loadBalancers: [
 				{
 					targetGroupArn: targetGroup.arn,
-					containerName: "strata",
+					containerName: "procella",
 					containerPort: 9090,
 				},
 			],
@@ -762,7 +762,7 @@ export default $config({
 		const autoscalingTarget = new aws.appautoscaling.Target(`${appName}-asg-target`, {
 			maxCapacity: ecsMaxCount,
 			minCapacity: ecsMinCount,
-			resourceId: pulumi.concat("service/", ecsCluster.name, "/", strataService.name),
+			resourceId: pulumi.concat("service/", ecsCluster.name, "/", procellaService.name),
 			scalableDimension: "ecs:service:DesiredCount",
 			serviceNamespace: "ecs",
 		});
@@ -890,7 +890,7 @@ export default $config({
 			// ECS
 			EcsClusterId: ecsCluster.id,
 			EcsClusterName: ecsCluster.name,
-			StrataServiceName: strataService.name,
+			ProcellaServiceName: procellaService.name,
 			DbServiceName: dbSvc.name,
 
 			// ALB
