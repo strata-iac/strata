@@ -52,6 +52,8 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "catalog:",
+		"@pulumi/aws": "^7.21.0",
+		"@pulumi/pulumi": "^3.225.1",
 		"@types/bun": "catalog:",
 		"drizzle-kit": "catalog:",
 		"husky": "catalog:",
