@@ -48,8 +48,13 @@ export interface CreateDbOptions {
  * SQL client (for cases where raw queries or lifecycle management is needed).
  */
 export function createDb(options: CreateDbOptions): { db: Database; client: SQL } {
+	const parsed = new URL(options.url);
 	const client = new SQL({
-		url: options.url,
+		hostname: parsed.hostname,
+		port: parsed.port ? Number(parsed.port) : 5432,
+		username: decodeURIComponent(parsed.username),
+		password: decodeURIComponent(parsed.password),
+		database: parsed.pathname.slice(1),
 		max: options.max ?? 20,
 		idleTimeout: options.idleTimeout ?? 30,
 	});

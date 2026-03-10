@@ -49,4 +49,19 @@ describe("@procella/updates GCWorker", () => {
 			expect(typeof worker.stop).toBe("function");
 		});
 	});
+
+	// ========================================================================
+	// Resilience
+	// ========================================================================
+
+	describe("resilience", () => {
+		test("start does not throw when db.execute rejects", async () => {
+			const failDb = {
+				execute: () => Promise.reject(new Error("connection refused")),
+			};
+			const worker = new GCWorker({ db: failDb as never, interval: 60_000 });
+			await expect(worker.start()).resolves.toBeUndefined();
+			await worker.stop();
+		});
+	});
 });

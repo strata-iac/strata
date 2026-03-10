@@ -81,9 +81,9 @@ const server = Bun.serve({
 // biome-ignore lint/suspicious/noConsole: server startup log
 console.log(`Procella listening on ${server.hostname}:${server.port}`);
 
-// GC Worker
+// GC Worker (errors caught internally — won't crash the process)
 const gc = new GCWorker({ db });
-gc.start();
+void gc.start();
 
 // Graceful shutdown — stop accepting new connections, drain in-flight requests,
 // then force-close after timeout.

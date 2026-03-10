@@ -102,6 +102,10 @@ export class GCWorker {
 				// Always release the advisory lock
 				await this.db.execute(sql`SELECT pg_advisory_unlock(${GC_ADVISORY_LOCK_ID})`);
 			}
+		} catch (err) {
+			// GC is best-effort — log and retry on next interval. Never crash the server.
+			// biome-ignore lint/suspicious/noConsole: GC worker error logging
+			console.error("[gc] cycle failed:", err);
 		} finally {
 			this.running = false;
 		}
