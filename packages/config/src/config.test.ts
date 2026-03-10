@@ -11,7 +11,7 @@ function setMinimalEnv() {
 	Bun.env.PROCELLA_DEV_AUTH_TOKEN = "devtoken123";
 }
 
-function clearStrataEnv() {
+function clearProcellaEnv() {
 	for (const key of Object.keys(Bun.env)) {
 		if (key.startsWith("PROCELLA_")) {
 			delete Bun.env[key];
@@ -29,7 +29,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-	clearStrataEnv();
+	clearProcellaEnv();
 	for (const [key, value] of Object.entries(savedEnv)) {
 		if (value !== undefined) {
 			Bun.env[key] = value;
@@ -40,7 +40,7 @@ afterEach(() => {
 describe("@procella/config", () => {
 	describe("loadConfig", () => {
 		test("loads minimal dev config with defaults", () => {
-			clearStrataEnv();
+			clearProcellaEnv();
 			setMinimalEnv();
 			const config = loadConfig();
 			expect(config.listenAddr).toBe(":9090");
@@ -56,7 +56,7 @@ describe("@procella/config", () => {
 		});
 
 		test("loads full config with all overrides", () => {
-			clearStrataEnv();
+			clearProcellaEnv();
 			setMinimalEnv();
 			Bun.env.PROCELLA_LISTEN_ADDR = ":9090";
 			Bun.env.PROCELLA_DEV_USER_LOGIN = "custom-user";
@@ -77,42 +77,42 @@ describe("@procella/config", () => {
 		});
 
 		test("throws on missing database URL", () => {
-			clearStrataEnv();
+			clearProcellaEnv();
 			Bun.env.PROCELLA_AUTH_MODE = "dev";
 			Bun.env.PROCELLA_DEV_AUTH_TOKEN = "token";
 			expect(() => loadConfig()).toThrow();
 		});
 
 		test("throws when dev mode lacks auth token", () => {
-			clearStrataEnv();
+			clearProcellaEnv();
 			Bun.env.PROCELLA_DATABASE_URL = "postgres://localhost:5432/procella?sslmode=disable";
 			Bun.env.PROCELLA_AUTH_MODE = "dev";
 			expect(() => loadConfig()).toThrow();
 		});
 
 		test("throws when descope mode lacks project ID", () => {
-			clearStrataEnv();
+			clearProcellaEnv();
 			Bun.env.PROCELLA_DATABASE_URL = "postgres://localhost:5432/procella?sslmode=disable";
 			Bun.env.PROCELLA_AUTH_MODE = "descope";
 			expect(() => loadConfig()).toThrow();
 		});
 
 		test("throws when s3 backend lacks bucket", () => {
-			clearStrataEnv();
+			clearProcellaEnv();
 			setMinimalEnv();
 			Bun.env.PROCELLA_BLOB_BACKEND = "s3";
 			expect(() => loadConfig()).toThrow();
 		});
 
 		test("throws on invalid encryption key format", () => {
-			clearStrataEnv();
+			clearProcellaEnv();
 			setMinimalEnv();
 			Bun.env.PROCELLA_ENCRYPTION_KEY = "not-hex";
 			expect(() => loadConfig()).toThrow();
 		});
 
 		test("throws when non-dev mode lacks encryption key", () => {
-			clearStrataEnv();
+			clearProcellaEnv();
 			Bun.env.PROCELLA_DATABASE_URL = "postgres://localhost:5432/procella?sslmode=disable";
 			Bun.env.PROCELLA_AUTH_MODE = "descope";
 			Bun.env.PROCELLA_DESCOPE_PROJECT_ID = "P3test";
@@ -120,7 +120,7 @@ describe("@procella/config", () => {
 		});
 
 		test("allows missing encryption key in dev mode", () => {
-			clearStrataEnv();
+			clearProcellaEnv();
 			setMinimalEnv();
 			// No PROCELLA_ENCRYPTION_KEY set — should be fine in dev
 			const config = loadConfig();
@@ -130,7 +130,7 @@ describe("@procella/config", () => {
 
 	describe("tryLoadConfig", () => {
 		test("returns ok result on valid config", () => {
-			clearStrataEnv();
+			clearProcellaEnv();
 			setMinimalEnv();
 			const result = tryLoadConfig();
 			expect(result.ok).toBe(true);
@@ -140,7 +140,7 @@ describe("@procella/config", () => {
 		});
 
 		test("returns error result on invalid config", () => {
-			clearStrataEnv();
+			clearProcellaEnv();
 			const result = tryLoadConfig();
 			expect(result.ok).toBe(false);
 			if (!result.ok) {
@@ -151,7 +151,7 @@ describe("@procella/config", () => {
 
 	describe("formatConfigErrors", () => {
 		test("formats errors as readable lines", () => {
-			clearStrataEnv();
+			clearProcellaEnv();
 			const result = tryLoadConfig();
 			expect(result.ok).toBe(false);
 			if (!result.ok) {

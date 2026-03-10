@@ -1,4 +1,4 @@
-name: Deploy Strata to ECS
+name: Deploy Procella to ECS
 
 on:
   push:

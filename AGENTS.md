@@ -153,7 +153,7 @@ For more details, see README.md.
 
 ### Overview
 
-Strata is a self-hosted Pulumi backend written in TypeScript, running on Bun. It implements the Pulumi Service API so that `pulumi login`, `pulumi stack init`, `pulumi up`, etc. work against it. A tRPC web API serves a React dashboard for viewing stacks, updates, and events.
+Procella is a self-hosted Pulumi backend written in TypeScript, running on Bun. It implements the Pulumi Service API so that `pulumi login`, `pulumi stack init`, `pulumi up`, etc. work against it. A tRPC web API serves a React dashboard for viewing stacks, updates, and events.
 
 ### Tech Stack
 
@@ -171,7 +171,7 @@ Strata is a self-hosted Pulumi backend written in TypeScript, running on Bun. It
 ```
 packages/
   types/               # Pulumi protocol types (generated via tygo) + domain types + errors
-  config/              # Zod-validated env config (STRATA_*)
+  config/              # Zod-validated env config (PROCELLA_*)
   db/                  # Drizzle schema, connection factory (Bun.sql driver)
   crypto/              # AES-256-GCM with HKDF per-stack key derivation
   storage/             # Blob storage (local filesystem + S3)
@@ -179,14 +179,14 @@ packages/
   stacks/              # Stack service: CRUD, rename, tags (PostgreSQL)
   updates/             # Update lifecycle, checkpoints, events, GC worker (PostgreSQL + blob)
 apps/
-  api/                 # @strata/api — tRPC router definition (stacks.list, updates.list/latest, events.list)
-  server/              # @strata/server — Hono HTTP server (CLI routes + tRPC mount + middleware)
-  ui/                  # @strata/ui — React SPA (Vite + Tailwind + tRPC client)
-  docs/                # @strata/docs — Starlight documentation site
+  api/                 # @procella/api — tRPC router definition (stacks.list, updates.list/latest, events.list)
+  server/              # @procella/server — Hono HTTP server (CLI routes + tRPC mount + middleware)
+  ui/                  # @procella/ui — React SPA (Vite + Tailwind + tRPC client)
+  docs/                # @procella/docs — Starlight documentation site
 examples/              # Pulumi YAML example programs (7 examples, used by E2E tests)
 e2e/                   # E2E acceptance tests (89 tests across 9 files)
 Dockerfile             # bun build --compile → debian-slim
-docker-compose.yml     # postgres + minio (dev), + strata replicas + caddy (cluster)
+docker-compose.yml     # postgres + minio (dev), + procella replicas + caddy (cluster)
 Caddyfile              # Reverse proxy: /api/* + /trpc/* → server, /* → UI
 ```
 
@@ -195,7 +195,7 @@ Caddyfile              # Reverse proxy: /api/* + /trpc/* → server, /* → UI
 - **Single process** — CLI API + tRPC dashboard API share one Hono server on port 9090
 - **PulumiAccept middleware** — `/api/*` routes require `Accept: application/vnd.pulumi+8`; `/trpc/*` routes bypass this
 - **Dual auth on tRPC** — Same `AuthService.authenticate()` as CLI routes, using `Authorization: token <value>`
-- **DevAuthenticator** — `Authorization: token <STRATA_DEV_AUTH_TOKEN>` for dev mode
+- **DevAuthenticator** — `Authorization: token <PROCELLA_DEV_AUTH_TOKEN>` for dev mode
 - **Transactions** — CreateStack, RenameStack, CancelUpdate use Drizzle transactions
 - **Auto-create** — CreateStack auto-creates org + project via INSERT ON CONFLICT DO NOTHING
 - **Workspace packages** — Domain logic in `packages/*`, app assembly in `apps/*`
@@ -232,7 +232,7 @@ The sequence the CLI follows during `pulumi up`:
 - `POST .../decrypt` takes `DecryptValueRequest{Ciphertext []byte}`, returns `DecryptValueResponse{Plaintext []byte}`.
 - `Plaintext`/`Ciphertext` are `[]byte` → JSON-encoded as base64.
 - Uses AES-256-GCM with HKDF per-stack key derivation from a master key.
-- Dev mode auto-generates deterministic key from `sha256("strata-dev-encryption-key")`.
+- Dev mode auto-generates deterministic key from `sha256("procella-dev-encryption-key")`.
 
 ### Resilience Protocol (Phase 5)
 
@@ -253,7 +253,7 @@ All state lives in PostgreSQL. No in-memory caches, no local-only state.
 - **Transactions** protect critical sections (create stack, rename, cancel update).
 - **Unique index** prevents multiple active updates per stack.
 - **pg advisory locks** ensure only one GC worker runs across the cluster.
-- **Local blob storage** is the only non-clusterable component — use S3 (`STRATA_BLOB_BACKEND=s3`) for multi-node.
+- **Local blob storage** is the only non-clusterable component — use S3 (`PROCELLA_BLOB_BACKEND=s3`) for multi-node.
 
 ### Quality Gates
 
@@ -267,12 +267,12 @@ bun run check:all  # check + e2e
 
 | Variable | Default | Description |
 |---|---|---|
-| STRATA_LISTEN_ADDR | :9090 | Server listen address |
-| STRATA_DATABASE_URL | (required) | PostgreSQL connection string |
-| STRATA_AUTH_MODE | dev | Auth mode (dev or descope) |
-| STRATA_DEV_AUTH_TOKEN | (required in dev) | Dev auth token |
-| STRATA_DEV_USER_LOGIN | dev-user | Dev user login name |
-| STRATA_DEV_ORG_LOGIN | dev-org | Dev org login name |
-| STRATA_BLOB_BACKEND | local | Blob storage (local or s3) |
-| STRATA_BLOB_LOCAL_PATH | ./data/blobs | Local blob path |
-| STRATA_ENCRYPTION_KEY | (auto in dev) | 64 hex chars (32 bytes) for AES-256 encryption |
+| PROCELLA_LISTEN_ADDR | :9090 | Server listen address |
+| PROCELLA_DATABASE_URL | (required) | PostgreSQL connection string |
+| PROCELLA_AUTH_MODE | dev | Auth mode (dev or descope) |
+| PROCELLA_DEV_AUTH_TOKEN | (required in dev) | Dev auth token |
+| PROCELLA_DEV_USER_LOGIN | dev-user | Dev user login name |
+| PROCELLA_DEV_ORG_LOGIN | dev-org | Dev org login name |
+| PROCELLA_BLOB_BACKEND | local | Blob storage (local or s3) |
+| PROCELLA_BLOB_LOCAL_PATH | ./data/blobs | Local blob path |
+| PROCELLA_ENCRYPTION_KEY | (auto in dev) | 64 hex chars (32 bytes) for AES-256 encryption |

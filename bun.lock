@@ -9,7 +9,7 @@
         "@trpc/server": "catalog:",
         "drizzle-orm": "catalog:",
         "hono": "catalog:",
-        "pg": "^8.20.0",
+        "postgres": "^3.4.8",
         "zod": "catalog:",
       },
       "devDependencies": {
@@ -110,6 +110,9 @@
       "name": "@procella/db",
       "dependencies": {
         "@procella/config": "workspace:*",
+        "drizzle-kit": "catalog:",
+        "drizzle-orm": "catalog:",
+        "postgres": "^3.4.8",
       },
     },
     "packages/stacks": {
@@ -1484,6 +1487,8 @@
     "postcss-nested": ["postcss-nested@6.2.0", "", { "dependencies": { "postcss-selector-parser": "^6.1.1" }, "peerDependencies": { "postcss": "^8.2.14" } }, "sha512-HQbt28KulC5AJzG+cZtj9kvKB93CFCdLvog1WFLf1D+xmMvPGlBstkpTEZfK5+AN9hfJocyBFCNiqyS48bpgzQ=="],
 
     "postcss-selector-parser": ["postcss-selector-parser@7.1.1", "", { "dependencies": { "cssesc": "^3.0.0", "util-deprecate": "^1.0.2" } }, "sha512-orRsuYpJVw8LdAwqqLykBj9ecS5/cRHlI5+nvTo8LcCKmzDmqVORXtOIYEEQuL9D4BxtA1lm5isAqzQZCoQ6Eg=="],
+
+    "postgres": ["postgres@3.4.8", "", {}, "sha512-d+JFcLM17njZaOLkv6SCev7uoLaBtfK86vMUXhW1Z4glPWh4jozno9APvW/XKFJ3CCxVoC7OL38BqRydtu5nGg=="],
 
     "postgres-array": ["postgres-array@2.0.0", "", {}, "sha512-VpZrUqU5A69eQyW2c5CA1jtLecCsN2U/bD6VilrFDWq5+5UIEVO7nazS3TEcHf1zuPYO/sqGvUvW62g86RXZuA=="],
 

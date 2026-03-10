@@ -5,6 +5,9 @@
 	"main": "src/index.ts",
 	"types": "src/index.ts",
 	"dependencies": {
-		"@procella/config": "workspace:*"
+		"@procella/config": "workspace:*",
+		"drizzle-kit": "catalog:",
+		"drizzle-orm": "catalog:",
+		"postgres": "^3.4.8"
 	}
 }
