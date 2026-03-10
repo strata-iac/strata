@@ -12,7 +12,9 @@ import { SQL } from "bun";
 
 export const TEST_PORT = 18_080;
 export const TEST_TOKEN = "devtoken123";
-export const TEST_DB_URL = "postgres://procella:procella@localhost:5432/procella?sslmode=disable";
+export const TEST_DB_URL =
+	process.env.PROCELLA_DATABASE_URL ||
+	"postgres://procella:procella@localhost:5432/procella?sslmode=disable";
 export const BACKEND_URL = `http://127.0.0.1:${TEST_PORT}`;
 export const PROJECT_ROOT = path.resolve(import.meta.dir, "..");
 
@@ -54,8 +56,11 @@ export async function truncateTables(): Promise<void> {
 // Docker Compose
 // ============================================================================
 
-/** Start postgres via docker compose and wait for it to be ready. */
 export async function ensureDeps(): Promise<void> {
+	if (process.env.PROCELLA_DATABASE_URL) {
+		return;
+	}
+
 	const proc = Bun.spawn(["docker", "compose", "up", "-d", "postgres"], {
 		stdout: "pipe",
 		stderr: "pipe",

@@ -14,7 +14,7 @@ description: Prerequisites, setup, code style, and development workflow.
 ## Setup
 
 ```bash
-git clone https://github.com/strata-iac/strata.git
+git clone https://github.com/procella-dev/procella.git
 cd procella
 bun install
 

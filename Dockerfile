@@ -10,7 +10,7 @@ COPY packages/storage/package.json packages/storage/
 COPY packages/auth/package.json packages/auth/
 COPY packages/stacks/package.json packages/stacks/
 COPY packages/updates/package.json packages/updates/
-COPY apps/api/package.json apps/api/
+COPY packages/api/package.json packages/api/
 COPY apps/server/package.json apps/server/
 RUN mkdir -p apps/ui && echo '{"name":"@procella/ui","private":true}' > apps/ui/package.json
 RUN bun install
@@ -19,7 +19,6 @@ RUN bun install
 FROM deps AS build
 COPY tsconfig.json biome.json ./
 COPY packages/ packages/
-COPY apps/api/ apps/api/
 COPY apps/server/ apps/server/
 RUN bun build apps/server/src/index.ts --compile --outfile=/procella
 

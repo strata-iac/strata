@@ -18,12 +18,12 @@ Before starting, ensure you have:
   - Ability to create VPCs, subnets, security groups, and other networking resources
 
 ### Domain
-- Domain name (e.g., `strata.com`)
+- Domain name (e.g., `procella.dev`)
 - Route53 hosted zone for your domain (SST will create or update this)
 - Subdomains will be created automatically:
-  - `strata.strata.com` — React SPA web UI
-  - `api.strata.com` — API server (Pulumi CLI)
-  - `docs.strata.com` — Astro documentation site
+  - `procella.procella.dev` — React SPA web UI
+  - `api.procella.dev` — API server (Pulumi CLI)
+  - `docs.procella.dev` — Astro documentation site
 
 ### Descope Authentication
 - Descope account and project
@@ -48,9 +48,9 @@ The deployment uses these variables, set via `.env` file or environment:
 |----------|--------|---------|----------|
 | `PROCELLA_DESCOPE_PROJECT_ID` | Your Descope dashboard | `proj_abc123xyz...` | ✅ Yes |
 | `PROCELLA_DESCOPE_MANAGEMENT_KEY` | Your Descope API key | (sensitive, 100+ chars) | ✅ Yes |
-| `PROCELLA_DB_PASSWORD` | You set or auto-generate | (any strong password) | ❌ No (defaults to "strata") |
-| `PROCELLA_CORS_ORIGINS` | Auto-configured | `https://strata.strata.com` | Auto |
-| `PROCELLA_DATABASE_URL` | Auto-configured | `postgresql://strata:...@strata-db.local:5432/strata` | Auto |
+| `PROCELLA_DB_PASSWORD` | You set or auto-generate | (any strong password) | ❌ No (defaults to "procella") |
+| `PROCELLA_CORS_ORIGINS` | Auto-configured | `https://procella.procella.dev` | Auto |
+| `PROCELLA_DATABASE_URL` | Auto-configured | `postgresql://procella:...@procella-db.local:5432/procella` | Auto |
 | `PROCELLA_BLOB_S3_BUCKET` | Auto-created | `procella-checkpoints-1234...` | Auto |
 | `PROCELLA_ENCRYPTION_KEY` | Auto-generated | (64 hex chars) | Auto |
 
@@ -78,8 +78,8 @@ git --version
 ### 2. Clone Repository
 
 ```bash
-git clone https://github.com/your-org/strata-iac.git
-cd strata
+git clone https://github.com/procella-dev/procella.git
+cd procella
 ```
 
 ### 3. Configure Environment
@@ -95,7 +95,7 @@ cat > .env << 'EOF'
 PROCELLA_DESCOPE_PROJECT_ID=your-project-id-from-descope-dashboard
 PROCELLA_DESCOPE_MANAGEMENT_KEY=your-management-api-key-from-descope-dashboard
 
-# Optional: Database password (defaults to "strata" if not provided)
+# Optional: Database password (defaults to "procella" if not provided)
 PROCELLA_DB_PASSWORD=your-secure-password-here
 EOF
 
@@ -137,7 +137,7 @@ SST_STAGE=production bun run infra:deploy
 ```
 
 The deployment will output stack information including:
-- ALB DNS name (e.g., `strata-alb-123.us-east-1.elb.amazonaws.com`)
+- ALB DNS name (e.g., `procella-alb-123.us-east-1.elb.amazonaws.com`)
 - CloudFront domain names (UI and docs CDNs)
 - S3 bucket names
 - RDS endpoint (or PostgreSQL ECS service for ECS-based database)
@@ -155,11 +155,11 @@ If SST created a Route53 hosted zone:
 # List Route53 zones
 aws route53 list-hosted-zones-by-name
 
-# Find your strata.com zone
+# Find your procella.dev zone
 # SST automatically created A records for:
-#   - strata.strata.com → CloudFront UI distribution
-#   - api.strata.com → ALB DNS
-#   - docs.strata.com → CloudFront docs distribution
+#   - procella.procella.dev → CloudFront UI distribution
+#   - api.procella.dev → ALB DNS
+#   - docs.procella.dev → CloudFront docs distribution
 
 # Verify records were created
 aws route53 list-resource-record-sets --hosted-zone-id /hostedzone/Z1234567890ABC
@@ -179,9 +179,9 @@ If you're using your existing domain registrar:
 aws route53 get-hosted-zone --id /hostedzone/Z1234567890ABC
 
 # Create CNAME records at your registrar:
-#   - strata.strata.com CNAME → <CloudFront-UI-domain>
-#   - api.strata.com CNAME → <ALB-DNS-name>
-#   - docs.strata.com CNAME → <CloudFront-docs-domain>
+#   - procella.procella.dev CNAME → <CloudFront-UI-domain>
+#   - api.procella.dev CNAME → <ALB-DNS-name>
+#   - docs.procella.dev CNAME → <CloudFront-docs-domain>
 ```
 
 ### 6. Initialize Database (First Deployment Only)
@@ -190,7 +190,7 @@ For a new deployment, initialize the database:
 
 ```bash
 # Get database connection URL from stack output
-PROCELLA_DB_URL=$(aws ssm get-parameter --name /strata/database-url --query Parameter.Value --output text)
+PROCELLA_DB_URL=$(aws ssm get-parameter --name /procella/database-url --query Parameter.Value --output text)
 
 # Run database migrations (if any exist)
 bun run --cwd packages/db migrate
@@ -207,11 +207,11 @@ Once DNS has propagated (5-15 minutes), verify all services are running:
 
 ```bash
 # API server health check
-curl https://api.strata.com/healthz
+curl https://api.procella.dev/healthz
 # Should return: HTTP 200 OK
 
 # Get Pulumi stacks (should be empty list initially)
-curl -H "Authorization: token <your-api-token>" https://api.strata.com/api/stacks
+curl -H "Authorization: token <your-api-token>" https://api.procella.dev/api/stacks
 # Should return: {"stacks": []} or similar
 ```
 
@@ -219,7 +219,7 @@ curl -H "Authorization: token <your-api-token>" https://api.strata.com/api/stack
 
 ```bash
 # Open React SPA
-open https://strata.strata.com
+open https://procella.procella.dev
 
 # Should display: Procella login page or stack list
 ```
@@ -228,7 +228,7 @@ open https://strata.strata.com
 
 ```bash
 # Open Astro docs
-open https://docs.strata.com
+open https://docs.procella.dev
 
 # Should display: Procella documentation homepage
 ```
@@ -239,11 +239,11 @@ Verify CloudFront is caching correctly:
 
 ```bash
 # Check cache headers for static assets
-curl -I https://strata.strata.com/assets/main.js
+curl -I https://procella.procella.dev/assets/main.js
 # Should include: Cache-Control: max-age=31536000,immutable
 
 # Check cache headers for HTML
-curl -I https://strata.strata.com/index.html
+curl -I https://procella.procella.dev/index.html
 # Should include: Cache-Control: max-age=0,s-maxage=3600 (no browser cache, 1hr CDN cache)
 ```
 
@@ -299,10 +299,10 @@ Monitor deployment progress:
 
 ```bash
 # Watch ECS service
-aws ecs describe-services --cluster strata --services strata-server --region us-east-1
+aws ecs describe-services --cluster procella --services procella-server --region us-east-1
 
 # Stream logs
-aws logs tail /ecs/strata-server --follow --region us-east-1
+aws logs tail /ecs/procella-server --follow --region us-east-1
 ```
 
 ### Configuration Changes
@@ -321,16 +321,16 @@ bun run infra:deploy
 
 ```bash
 # List previous task definitions
-aws ecs list-task-definitions --family-prefix strata-server --region us-east-1
+aws ecs list-task-definitions --family-prefix procella-server --region us-east-1
 
 # Describe previous task definition to get its ARN
-aws ecs describe-task-definition --task-definition strata-server:5 --region us-east-1
+aws ecs describe-task-definition --task-definition procella-server:5 --region us-east-1
 
 # Update service to use previous task definition
 aws ecs update-service \
-  --cluster strata \
-  --service strata-server \
-  --task-definition strata-server:4 \
+  --cluster procella \
+  --service procella-server \
+  --task-definition procella-server:4 \
   --region us-east-1
 ```
 
@@ -340,31 +340,31 @@ aws ecs update-service \
 
 ```bash
 # Check ECS task status
-aws ecs describe-services --cluster strata --services strata-server --region us-east-1
+aws ecs describe-services --cluster procella --services procella-server --region us-east-1
 
 # Stream logs to find errors
-aws logs tail /ecs/strata-server --follow --region us-east-1
+aws logs tail /ecs/procella-server --follow --region us-east-1
 
 # Look for: Database connection errors, port binding issues, missing env vars
 
 # If task is crashing, check task definition
-aws ecs describe-task-definition --task-definition strata-server --region us-east-1
+aws ecs describe-task-definition --task-definition procella-server --region us-east-1
 ```
 
 ### Database Connection Failed
 
 ```bash
 # Check PostgreSQL task logs
-aws logs tail /ecs/strata-db --follow --region us-east-1
+aws logs tail /ecs/procella-db --follow --region us-east-1
 
 # Verify security group allows ECS → PostgreSQL (port 5432)
-aws ec2 describe-security-groups --filters "Name=group-name,Values=strata-db" --region us-east-1
+aws ec2 describe-security-groups --filters "Name=group-name,Values=procella-db" --region us-east-1
 
 # Connect to database container
 aws ecs execute-command \
-  --cluster strata \
+  --cluster procella \
   --task <task-id> \
-  --container strata-db \
+  --container procella-db \
   --interactive \
   --command "/bin/bash" \
   --region us-east-1
@@ -396,8 +396,8 @@ aws route53 list-resource-record-sets \
   --hosted-zone-id /hostedzone/Z1234567890ABC
 
 # Test DNS resolution
-nslookup strata.strata.com
-dig strata.strata.com +short
+nslookup procella.procella.dev
+dig procella.procella.dev +short
 
 # If not resolving:
 # 1. Check Route53 records exist for all subdomains
@@ -414,7 +414,7 @@ aws elbv2 describe-target-health \
   --region us-east-1
 
 # If unhealthy, check ECS task logs
-aws logs tail /ecs/strata-server --follow --region us-east-1
+aws logs tail /ecs/procella-server --follow --region us-east-1
 
 # Health check endpoint
 curl http://ALB_DNS/healthz
@@ -429,16 +429,16 @@ Monitor infrastructure:
 
 ```bash
 # View CloudWatch logs for application errors
-aws logs tail /ecs/strata-server --follow
+aws logs tail /ecs/procella-server --follow
 
 # View CloudWatch logs for database
-aws logs tail /ecs/strata-db --follow
+aws logs tail /ecs/procella-db --follow
 
 # Get CloudWatch metrics (CPU, memory, requests)
 aws cloudwatch get-metric-statistics \
   --namespace AWS/ECS \
   --metric-name CPUUtilization \
-  --dimensions Name=ServiceName,Value=strata-server Name=ClusterName,Value=strata \
+  --dimensions Name=ServiceName,Value=procella-server Name=ClusterName,Value=procella \
   --start-time 2024-01-01T00:00:00Z \
   --end-time 2024-01-02T00:00:00Z \
   --period 3600 \
@@ -458,12 +458,12 @@ Monitor scaling:
 
 ```bash
 # Check current replica count
-aws ecs describe-services --cluster strata --services strata-server
+aws ecs describe-services --cluster procella --services procella-server
 
 # View scaling history
 aws application-autoscaling describe-scaling-activities \
   --service-namespace ecs \
-  --resource-id service/strata/strata-server
+  --resource-id service/procella/procella-server
 ```
 
 ### Backups
@@ -498,7 +498,7 @@ aws s3api get-object \
 
 ## Support & Resources
 
-- **Procella Documentation**: https://docs.strata.com/
+- **Procella Documentation**: https://docs.procella.dev/
 - **Pulumi Service API**: https://www.pulumi.com/docs/concepts/how-pulumi-works/service/
 - **AWS ECS Documentation**: https://docs.aws.amazon.com/ecs/
 - **SST Documentation**: https://sst.dev/docs/
