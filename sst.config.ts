@@ -228,6 +228,9 @@ export default $config({
 			path: "apps/docs",
 			build: { command: "bun run build", output: "dist" },
 			domain: { name: docsDomain, dns: sst.aws.dns() },
+			environment: {
+				SITE_URL: `https://${docsDomain}`,
+			},
 		});
 
 		// ========================================================================

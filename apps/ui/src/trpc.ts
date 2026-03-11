@@ -4,6 +4,7 @@ import { createTRPCUntypedClient, httpBatchLink } from "@trpc/client";
 import { type CreateTRPCReact, createTRPCReact } from "@trpc/react-query";
 import superjson from "superjson";
 import { getAuthConfig } from "./hooks/useAuthConfig";
+import { apiBase } from "./config";
 
 export const trpc: CreateTRPCReact<AppRouter, unknown> = createTRPCReact<AppRouter>();
 
@@ -25,7 +26,7 @@ export function createTRPCClient() {
 	return createTRPCUntypedClient({
 		links: [
 			httpBatchLink({
-				url: "/trpc",
+				url: `${apiBase}/trpc`,
 				headers: getAuthHeaders,
 				transformer: superjson,
 			}),
