@@ -10,7 +10,7 @@ export default $config({
 			providers: {
 				"@pulumi/random": "4.16.7",
 				// Descope Pulumi provider — manages Descope project config as code.
-				// Credentials: set DESCOPE_MANAGEMENT_KEY env var.
+				// Credentials: run `sst secret set DescopeManagementKey <your-key>`
 				"@descope/pulumi-descope": "0.3.4",
 			},
 		};
