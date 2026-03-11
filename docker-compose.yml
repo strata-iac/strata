@@ -24,7 +24,7 @@ x-procella: &procella
     AWS_ACCESS_KEY_ID: minio
     AWS_SECRET_ACCESS_KEY: minio
   healthcheck: &procella-health
-    test: ["CMD-SHELL", "curl -sf http://localhost:9090/healthz || exit 1"]
+    test: ["CMD", "/procella", "--healthz"]
     interval: 5s
     timeout: 3s
     retries: 10

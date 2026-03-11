@@ -201,11 +201,11 @@ export default $config({
 				},
 			},
 			health: {
-				command: ["CMD-SHELL", "curl -sf http://localhost:9090/healthz || exit 1"],
-				interval: "5 seconds",
+				command: ["CMD", "/procella", "--healthz"],
+				interval: "10 seconds",
 				timeout: "3 seconds",
-				retries: 10,
-				startPeriod: "30 seconds",
+				retries: 3,
+				startPeriod: "10 seconds",
 			},
 			scaling: {
 				min: 2,

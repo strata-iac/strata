@@ -72,11 +72,11 @@ GET /healthz → 200 OK (server + database healthy)
 GET /healthz → 503 Service Unavailable (database unreachable)
 ```
 
-Docker Compose uses `curl` to check health:
+Docker Compose uses the built-in `--healthz` flag to check health:
 
 ```yaml
 healthcheck:
-  test: ["CMD-SHELL", "curl -sf http://localhost:9090/healthz || exit 1"]
+  test: ["CMD", "/procella", "--healthz"]
   interval: 5s
   timeout: 3s
   retries: 10

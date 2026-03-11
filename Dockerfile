@@ -22,11 +22,10 @@ COPY packages/ packages/
 COPY apps/server/ apps/server/
 RUN bun build apps/server/src/index.ts --compile --outfile=/procella
 
-# Stage 3: runtime - Minimal runtime image
-FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
-COPY --from=build /procella /procella
+# Stage 3: runtime - Distroless nonroot (glibc required by bun compiled binaries)
+FROM gcr.io/distroless/base-debian12:nonroot
+COPY --from=build --chown=nonroot:nonroot /procella /procella
 EXPOSE 9090
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -sf http://localhost:9090/healthz || exit 1
+  CMD ["/procella", "--healthz"]
 ENTRYPOINT ["/procella"]

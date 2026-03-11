@@ -1,5 +1,11 @@
 // @procella/server — Hono HTTP server entrypoint.
 
+if (process.argv.includes("--healthz")) {
+	const port = (Bun.env.PROCELLA_LISTEN_ADDR ?? ":9090").split(":").pop() || "9090";
+	const res = await fetch(`http://localhost:${port}/healthz`).catch(() => null);
+	process.exit(res?.ok ? 0 : 1);
+}
+
 import { createAuthService } from "@procella/auth";
 import { loadConfig } from "@procella/config";
 import { AesCryptoService, devMasterKey } from "@procella/crypto";
