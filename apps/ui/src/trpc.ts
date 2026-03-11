@@ -3,8 +3,8 @@ import type { AppRouter } from "@procella/api/src/router/index.js";
 import { createTRPCUntypedClient, httpBatchLink } from "@trpc/client";
 import { type CreateTRPCReact, createTRPCReact } from "@trpc/react-query";
 import superjson from "superjson";
-import { getAuthConfig } from "./hooks/useAuthConfig";
 import { apiBase } from "./config";
+import { getAuthConfig } from "./hooks/useAuthConfig";
 
 export const trpc: CreateTRPCReact<AppRouter, unknown> = createTRPCReact<AppRouter>();
 

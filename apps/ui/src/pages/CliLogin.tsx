@@ -1,8 +1,8 @@
 import { Descope, useDescope, useSession, useUser } from "@descope/react-sdk";
 import { useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { useAuthConfig } from "../hooks/useAuthConfig";
 import { apiBase } from "../config";
+import { useAuthConfig } from "../hooks/useAuthConfig";
 
 export function CliLogin() {
 	const { config, isLoading } = useAuthConfig();
