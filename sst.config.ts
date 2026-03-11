@@ -119,6 +119,7 @@ export default $config({
 		// service uses to connect (via `db.service` output).
 		const db = new sst.aws.Service("ProcellaDb", {
 			cluster,
+			architecture: "arm64",
 			cpu: "0.25 vCPU",
 			memory: "0.5 GB",
 			image: "postgres:17-alpine",
@@ -163,6 +164,7 @@ export default $config({
 
 		const app = new sst.aws.Service("ProcellaApp", {
 			cluster,
+			architecture: "arm64",
 			cpu: "0.5 vCPU",
 			memory: "1 GB",
 			image: {
