@@ -200,13 +200,6 @@ export default $config({
 					},
 				},
 			},
-			health: {
-				command: ["CMD", "/procella", "--healthz"],
-				interval: "10 seconds",
-				timeout: "3 seconds",
-				retries: 3,
-				startPeriod: "10 seconds",
-			},
 			scaling: {
 				min: 2,
 				max: 10,
