@@ -20,7 +20,16 @@ FROM deps AS build
 COPY tsconfig.json biome.json ./
 COPY packages/ packages/
 COPY apps/server/ apps/server/
-RUN bun build apps/server/src/index.ts --compile --outfile=/procella
+RUN bun build apps/server/src/index.ts \
+      --compile \
+      --target=bun-linux-x64 \
+      --minify \
+      --sourcemap \
+      --bytecode \
+      --compile-exec-argv="--smol" \
+      --no-compile-autoload-dotenv \
+      --no-compile-autoload-bunfig \
+      --outfile=/procella
 
 # Stage 3: runtime - Distroless nonroot (glibc required by bun compiled binaries)
 FROM gcr.io/distroless/base-debian12:nonroot
