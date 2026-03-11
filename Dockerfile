@@ -17,12 +17,13 @@ RUN bun install
 
 # Stage 2: build - Compile the server
 FROM deps AS build
+ARG TARGETARCH
 COPY tsconfig.json biome.json ./
 COPY packages/ packages/
 COPY apps/server/ apps/server/
 RUN bun build apps/server/src/index.ts \
       --compile \
-      --target=bun-linux-x64 \
+      --target=bun-linux-$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "x64") \
       --minify \
       --sourcemap \
       --bytecode \
