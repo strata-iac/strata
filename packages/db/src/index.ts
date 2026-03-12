@@ -1,17 +1,20 @@
-// @procella/db — Database connection via Bun's built-in SQL + Drizzle ORM.
+// @procella/db — Database connection via Neon serverless + Drizzle ORM.
 //
-// Uses Bun.sql (import { SQL } from "bun") as the connection driver.
+// Uses @neondatabase/serverless (WebSocket mode) as the connection driver.
 // Drizzle ORM wraps it for type-safe queries with schema inference.
+// WebSocket mode is required for interactive transactions (db.transaction()).
 
-import { SQL } from "bun";
-import type { BunSQLDatabase } from "drizzle-orm/bun-sql";
-import { drizzle } from "drizzle-orm/bun-sql";
+import { Pool, neonConfig } from "@neondatabase/serverless";
+import type { NeonDatabase } from "drizzle-orm/neon-serverless";
+import { drizzle } from "drizzle-orm/neon-serverless";
+import ws from "ws";
 import { schema } from "./schema.js";
 
-export type { BunSQLDatabase };
+// Node.js does not have a global WebSocket — provide the ws library.
+neonConfig.webSocketConstructor = ws;
 
-// Re-export schema for consumers
-export {
+	// Re-export schema for consumers
+	export {
 	checkpoints,
 	projects,
 	schema,
@@ -25,57 +28,54 @@ export {
 // ============================================================================
 
 /** Drizzle database instance with full schema type inference. */
-export type Database = BunSQLDatabase<typeof schema>;
+export type Database = NeonDatabase<typeof schema>;
 
-/** Options for creating a database connection. */
-export interface CreateDbOptions {
+	/** Options for creating a database connection. */
+	export interface CreateDbOptions {
 	/** PostgreSQL connection URL. */
 	url: string;
 	/** Maximum number of connections in the pool. Defaults to 20. */
 	max?: number;
-	/** Idle connection timeout in seconds. Defaults to 30. */
+	/** Idle connection timeout in milliseconds. Defaults to 30 000. */
 	idleTimeout?: number;
 }
 
-// ============================================================================
+/** Wrapper around Neon Pool for lifecycle management. */
+export interface DbClient {
+	/** Shut down the connection pool. */
+	close(): Promise<void>;
+ }
+
+ // ============================================================================
 // Factory
-// ============================================================================
+	// ============================================================================
 
-/**
- * Create a Drizzle database instance backed by Bun's built-in SQL driver.
+	/**
+ * Create a Drizzle database instance backed by Neon serverless (WebSocket).
  *
- * Returns both the Drizzle instance (for type-safe queries) and the raw
- * SQL client (for cases where raw queries or lifecycle management is needed).
+ * Returns both the Drizzle instance (for type-safe queries) and a client
+ * handle (for lifecycle management — call client.close() on shutdown).
  */
-export function createDb(options: CreateDbOptions): { db: Database; client: SQL } {
-	const parsed = new URL(options.url);
-
-	const sqlOpts: Record<string, unknown> = {
-		hostname: parsed.hostname,
-		port: parsed.port ? Number(parsed.port) : 5432,
-		username: decodeURIComponent(parsed.username),
-		password: decodeURIComponent(parsed.password),
-		database: parsed.pathname.slice(1),
+		export function createDb(options: CreateDbOptions): { db: Database; client: DbClient } {
+	const pool = new Pool({
+		connectionString: options.url,
 		max: options.max ?? 20,
-		idleTimeout: options.idleTimeout ?? 30,
+		idleTimeoutMillis: (options.idleTimeout ?? 30) * 1000,
+	});
+
+	const db = drizzle({ client: pool, schema });
+
+	return {
+		db,
+		client: {
+			close: () => pool.end(),
+		},
 	};
-
-	for (const [key, value] of parsed.searchParams) {
-		if (key === "sslmode") {
-			sqlOpts.tls = value !== "disable";
-		} else if (!(key in sqlOpts)) {
-			sqlOpts[key] = value;
-		}
-	}
-
-	const client = new SQL(sqlOpts);
-	const db = drizzle({ client, schema });
-	return { db, client };
 }
 
 /**
  * Convenience overload — create a Drizzle instance from just a URL string.
  */
-export function createDbFromUrl(databaseUrl: string): { db: Database; client: SQL } {
+export function createDbFromUrl(databaseUrl: string): { db: Database; client: DbClient } {
 	return createDb({ url: databaseUrl });
 }

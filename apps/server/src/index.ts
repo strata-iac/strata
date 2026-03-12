@@ -12,7 +12,7 @@ import { createApp } from "./routes/index.js";
 // Healthcheck probe — runs inside the same compiled binary to avoid shipping
 // a separate health binary. Must exit before any server bootstrap.
 if (process.argv.includes("--healthz")) {
-	const port = (Bun.env.PROCELLA_LISTEN_ADDR ?? ":9090").split(":").pop() || "9090";
+	const port = (process.env.PROCELLA_LISTEN_ADDR ?? ":9090").split(":").pop() || "9090";
 	fetch(`http://localhost:${port}/healthz`)
 		.then((res) => process.exit(res.ok ? 0 : 1))
 		.catch(() => process.exit(1));
@@ -50,8 +50,8 @@ if (process.argv.includes("--healthz")) {
 					bucket: config.blobS3Bucket as string,
 					endpoint: config.blobS3Endpoint,
 					region: config.blobS3Region,
-					accessKeyId: (Bun.env.AWS_ACCESS_KEY_ID ?? "") as string,
-					secretAccessKey: (Bun.env.AWS_SECRET_ACCESS_KEY ?? "") as string,
+					accessKeyId: (process.env.AWS_ACCESS_KEY_ID ?? "") as string,
+					secretAccessKey: (process.env.AWS_SECRET_ACCESS_KEY ?? "") as string,
 				},
 	);
 
@@ -101,10 +101,10 @@ if (process.argv.includes("--healthz")) {
 		await gc.stop();
 		setTimeout(() => {
 			server.stop(true);
-			client.close();
+			void client.close();
 			process.exit(1);
 		}, DRAIN_TIMEOUT_MS).unref();
-		client.close();
+		void client.close();
 		process.exit(0);
 	};
 	process.on("SIGTERM", shutdown);

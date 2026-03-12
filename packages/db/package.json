@@ -5,9 +5,13 @@
 	"main": "src/index.ts",
 	"types": "src/index.ts",
 	"dependencies": {
+		"@neondatabase/serverless": "^1.0.2",
 		"@procella/config": "workspace:*",
 		"drizzle-kit": "catalog:",
 		"drizzle-orm": "catalog:",
-		"postgres": "^3.4.8"
+		"ws": "^8.19.0"
+	},
+	"devDependencies": {
+		"@types/ws": "^8.18.1"
 	}
 }

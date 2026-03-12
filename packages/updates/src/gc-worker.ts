@@ -46,7 +46,7 @@ export class GCWorker {
 				sql`SELECT pg_try_advisory_lock(${GC_ADVISORY_LOCK_ID}) as acquired`,
 			);
 
-			const acquired = (lockResult[0] as { acquired?: boolean })?.acquired;
+			const acquired = (lockResult.rows[0] as { acquired?: boolean })?.acquired;
 			if (!acquired) {
 				return;
 			}
