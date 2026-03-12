@@ -3,20 +3,14 @@ name: Deploy Procella
 on:
   workflow_dispatch:
     inputs:
-      stage:
-        description: "SST stage to deploy"
+      environment:
+        description: "Vercel environment (production or preview)"
         required: false
         default: "production"
-
-env:
-  AWS_REGION: us-east-1
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
 
     steps:
       - name: Checkout code
@@ -30,11 +24,13 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Deploy with SST
-        run: bunx sst deploy --stage ${{ github.event.inputs.stage || 'production' }}
+      - name: Deploy to Vercel
+        run: |
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            bunx vercel deploy --prod --token ${{ secrets.VERCEL_TOKEN }}
+          else
+            bunx vercel deploy --token ${{ secrets.VERCEL_TOKEN }}
+          fi
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
