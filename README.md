@@ -123,7 +123,7 @@ bun run docs:build     # Build static docs site
 packages/
   types/              Pulumi protocol types + domain types + errors
   config/             Zod-validated env config (PROCELLA_*)
-  db/                 Drizzle schema + Bun.sql connection factory
+  db/                 Drizzle schema + Neon serverless connection factory
   crypto/             AES-256-GCM with HKDF per-stack key derivation
   storage/            Blob storage (local filesystem + S3)
   auth/               Dev mode (static token) + Descope (JWT)
