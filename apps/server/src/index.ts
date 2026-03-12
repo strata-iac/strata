@@ -35,14 +35,17 @@ if (process.argv.includes("--healthz")) {
 	// then force-close after timeout.
 	const DRAIN_TIMEOUT_MS = 10_000;
 	const shutdown = async () => {
-		await server.stop();
-		await gc.stop();
-		setTimeout(() => {
+		const forceTimer = setTimeout(() => {
 			server.stop(true);
 			void client.close();
 			process.exit(1);
-		}, DRAIN_TIMEOUT_MS).unref();
-		void client.close();
+		}, DRAIN_TIMEOUT_MS);
+		forceTimer.unref();
+
+		await server.stop();
+		await gc.stop();
+		await client.close();
+		clearTimeout(forceTimer);
 		process.exit(0);
 	};
 	process.on("SIGTERM", shutdown);

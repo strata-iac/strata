@@ -142,7 +142,11 @@ export class S3BlobStorage implements BlobStorage {
 
 			return await S3BlobStorage.bodyToUint8Array(response.Body);
 		} catch (err: unknown) {
-			if (isS3ErrorName(err, "NoSuchKey")) {
+			if (
+				isS3ErrorName(err, "NoSuchKey") ||
+				isS3ErrorName(err, "NotFound") ||
+				(isS3Error(err) && err.$metadata?.httpStatusCode === 404)
+			) {
 				return null;
 			}
 

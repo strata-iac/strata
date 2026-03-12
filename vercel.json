@@ -1,18 +1,18 @@
 {
 	"$schema": "https://openapi.vercel.sh/vercel.json",
-	"buildCommand": "bun install --frozen-lockfile && bun run typecheck",
+	"buildCommand": "bun run typecheck",
 	"installCommand": "bun install --frozen-lockfile",
 	"framework": null,
 	"bunVersion": "1.x",
 	"functions": {
-		"apps/server/src/vercel.ts": {
+		"api/index.ts": {
 			"maxDuration": 60
 		}
 	},
 	"rewrites": [
-		{ "source": "/api/:path(.*)", "destination": "/apps/server/src/vercel.ts" },
-		{ "source": "/trpc/:path(.*)", "destination": "/apps/server/src/vercel.ts" },
-		{ "source": "/healthz", "destination": "/apps/server/src/vercel.ts" }
+		{ "source": "/api/:path(.*)", "destination": "/api/index" },
+		{ "source": "/trpc/:path(.*)", "destination": "/api/index" },
+		{ "source": "/healthz", "destination": "/api/index" }
 	],
 	"crons": [
 		{

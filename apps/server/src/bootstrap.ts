@@ -15,7 +15,7 @@ import { createApp } from "./routes/index.js";
 const config = loadConfig();
 
 // Database
-const { db, client } = createDb({ url: config.databaseUrl });
+const { db, client } = await createDb({ url: config.databaseUrl });
 
 // Auth
 const authConfig =

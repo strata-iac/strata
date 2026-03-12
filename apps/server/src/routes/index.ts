@@ -104,7 +104,15 @@ export function createApp(deps: {
 	// Secured via CRON_SECRET header (set by Vercel automatically).
 	app.get("/api/cron/gc", async (c) => {
 		const secret = process.env.CRON_SECRET;
-		if (secret && c.req.header("authorization") !== `Bearer ${secret}`) {
+		const nodeEnv = process.env.NODE_ENV;
+
+		if (!secret) {
+			// Fail closed in non-development environments if the cron secret is missing.
+			if (nodeEnv !== "development" && nodeEnv !== "test") {
+				return c.json({ error: "Server misconfigured: CRON_SECRET is not set" }, 500);
+			}
+			// In development/test, allow running without auth to ease local testing.
+		} else if (c.req.header("authorization") !== `Bearer ${secret}`) {
 			return c.json({ error: "Unauthorized" }, 401);
 		}
 		const gc = new GCWorker({ db: deps.db });
