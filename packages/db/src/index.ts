@@ -50,13 +50,13 @@ export interface DbClient {
 // Driver Detection
 // ============================================================================
 
-function isLocalPostgres(url: string): boolean {
+function isNeonHost(url: string): boolean {
 	try {
 		// PostgreSQL URLs use postgres:// or postgresql:// scheme.
 		// URL parser needs a known scheme — swap to http for parsing.
 		const normalized = url.replace(/^postgres(ql)?:\/\//, "http://");
 		const { hostname } = new URL(normalized);
-		return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+		return hostname.endsWith(".neon.tech");
 	} catch {
 		return false;
 	}
@@ -69,8 +69,8 @@ function isLocalPostgres(url: string): boolean {
 /**
  * Create a Drizzle database instance with automatic driver selection.
  *
- * - Neon hosts → @neondatabase/serverless (WebSocket)
- * - Local hosts → pg / node-postgres (TCP)
+ * - Neon hosts (*.neon.tech) → @neondatabase/serverless (WebSocket)
+ * - All other hosts → pg / node-postgres (TCP)
  *
  * Returns both the Drizzle instance (for type-safe queries) and a client
  * handle (for lifecycle management — call client.close() on shutdown).
@@ -84,8 +84,8 @@ export async function createDb(
 		idleTimeoutMillis: options.idleTimeout ?? 30_000,
 	};
 
-	if (isLocalPostgres(options.url)) {
-		// Local dev / CI — use node-postgres (TCP).
+	if (!isNeonHost(options.url)) {
+		// Local dev / CI / Docker / any non-Neon host — use node-postgres (TCP).
 		const pg = await import("pg");
 		const { drizzle } = await import("drizzle-orm/node-postgres");
 		const pool = new pg.default.Pool(poolOpts);

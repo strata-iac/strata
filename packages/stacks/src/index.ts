@@ -175,14 +175,14 @@ export class PostgresStacksService implements StacksService {
 				};
 			});
 		} catch (err: unknown) {
-			// Drizzle wraps Postgres errors in DrizzleQueryError with cause
+			// Drizzle wraps Postgres errors in DrizzleQueryError with cause.
+			// Bun.sql uses `errno`, node-postgres uses `code` for PG error codes.
 			const pgErr = err instanceof Error && err.cause instanceof Error ? err.cause : err;
-			if (
-				typeof pgErr === "object" &&
-				pgErr !== null &&
-				"errno" in pgErr &&
-				(pgErr as { errno: string }).errno === "23505"
-			) {
+			const errCode =
+				typeof pgErr === "object" && pgErr !== null
+					? ((pgErr as Record<string, unknown>).code ?? (pgErr as Record<string, unknown>).errno)
+					: undefined;
+			if (errCode === "23505") {
 				throw new StackAlreadyExistsError(tenantId, project, stack);
 			}
 			throw err;
