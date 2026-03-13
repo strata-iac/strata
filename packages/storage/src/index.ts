@@ -136,7 +136,7 @@ export class S3BlobStorage implements BlobStorage {
 				: {}),
 			endpoint: config.endpoint,
 			region: config.region,
-			forcePathStyle: true,
+			forcePathStyle: !!config.endpoint,
 		});
 	}
 

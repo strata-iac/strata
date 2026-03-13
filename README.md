@@ -76,7 +76,7 @@ All configuration is via `PROCELLA_*` environment variables. Set these as Vercel
 | Variable | Default | Description |
 |---|---|---|
 | `PROCELLA_LISTEN_ADDR` | `:9090` | Server listen address |
-| `PROCELLA_DATABASE_URL` | *(required)* | Neon serverless PostgreSQL connection string |
+| `PROCELLA_DATABASE_URL` | *(required)* | PostgreSQL connection string (Neon on Vercel, any PostgreSQL locally) |
 | `PROCELLA_AUTH_MODE` | `dev` | `dev` (static tokens) or `descope` (Descope access keys) |
 | `PROCELLA_DEV_AUTH_TOKEN` | *(required if dev)* | Static auth token for dev mode |
 | `PROCELLA_DEV_USER_LOGIN` | `dev-user` | Dev user login name |
@@ -123,7 +123,7 @@ bun run docs:build     # Build static docs site
 packages/
   types/              Pulumi protocol types + domain types + errors
   config/             Zod-validated env config (PROCELLA_*)
-  db/                 Drizzle schema + Neon serverless connection factory
+  db/                 Drizzle schema + dual-driver connection factory (Neon / node-postgres)
   crypto/             AES-256-GCM with HKDF per-stack key derivation
   storage/            Blob storage (local filesystem + S3)
   auth/               Dev mode (static token) + Descope (JWT)
