@@ -36,6 +36,11 @@ export class GCWorker {
 		}
 	}
 
+	/** Run a single GC cycle (for use by cron endpoints). */
+	async runOnce(): Promise<void> {
+		await this.runCycle();
+	}
+
 	private async runCycle(): Promise<void> {
 		if (this.running) return;
 		this.running = true;
@@ -46,7 +51,7 @@ export class GCWorker {
 				sql`SELECT pg_try_advisory_lock(${GC_ADVISORY_LOCK_ID}) as acquired`,
 			);
 
-			const acquired = (lockResult[0] as { acquired?: boolean })?.acquired;
+			const acquired = (lockResult.rows[0] as { acquired?: boolean })?.acquired;
 			if (!acquired) {
 				return;
 			}

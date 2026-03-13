@@ -117,7 +117,7 @@ describe("@procella/server routes", () => {
 		return createApp({
 			auth: mockAuthService(),
 			authConfig,
-			db: { execute: async () => [] } as unknown as Database,
+			db: { execute: async () => ({ rows: [{ acquired: false }] }) } as unknown as Database,
 			stacks: mockStacksService(),
 			updates: mockUpdatesService(),
 		});
@@ -171,6 +171,70 @@ describe("@procella/server routes", () => {
 			expect(res.status).toBe(200);
 			const body = await res.json();
 			expect(body).toEqual({ mode: "descope", projectId: "P3test123" });
+		});
+	});
+
+	// ========================================================================
+	// Cron GC endpoint
+	// ========================================================================
+
+	describe("GET /cron/gc", () => {
+		test("returns 500 when CRON_SECRET missing in production", async () => {
+			const prev = { secret: process.env.CRON_SECRET, env: process.env.NODE_ENV };
+			delete process.env.CRON_SECRET;
+			process.env.NODE_ENV = "production";
+			try {
+				const app = makeApp();
+				const res = await app.request("/cron/gc");
+				expect(res.status).toBe(500);
+				const body = await res.json();
+				expect(body.error).toContain("CRON_SECRET");
+			} finally {
+				process.env.CRON_SECRET = prev.secret;
+				process.env.NODE_ENV = prev.env;
+			}
+		});
+
+		test("returns 200 when CRON_SECRET missing in test env", async () => {
+			const prev = { secret: process.env.CRON_SECRET, env: process.env.NODE_ENV };
+			delete process.env.CRON_SECRET;
+			process.env.NODE_ENV = "test";
+			try {
+				const app = makeApp();
+				const res = await app.request("/cron/gc");
+				expect(res.status).toBe(200);
+			} finally {
+				process.env.CRON_SECRET = prev.secret;
+				process.env.NODE_ENV = prev.env;
+			}
+		});
+
+		test("returns 401 with wrong Bearer token", async () => {
+			const prev = process.env.CRON_SECRET;
+			process.env.CRON_SECRET = "correct-secret";
+			try {
+				const app = makeApp();
+				const res = await app.request("/cron/gc", {
+					headers: { Authorization: "Bearer wrong-secret" },
+				});
+				expect(res.status).toBe(401);
+			} finally {
+				process.env.CRON_SECRET = prev;
+			}
+		});
+
+		test("returns 200 with correct Bearer token", async () => {
+			const prev = process.env.CRON_SECRET;
+			process.env.CRON_SECRET = "correct-secret";
+			try {
+				const app = makeApp();
+				const res = await app.request("/cron/gc", {
+					headers: { Authorization: "Bearer correct-secret" },
+				});
+				expect(res.status).toBe(200);
+			} finally {
+				process.env.CRON_SECRET = prev;
+			}
 		});
 	});
 

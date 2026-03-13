@@ -12,10 +12,10 @@ A self-hosted [Pulumi](https://www.pulumi.com/) backend. Run `pulumi login`, `pu
 - **Multi-tenant authentication** — dev mode with static tokens or [Descope](https://www.descope.com/) with tenant RBAC
 - **Role-based access control** — viewer / member / admin roles enforced per-organization
 - **AES-256-GCM encryption** — per-stack key derivation via HKDF for secrets at rest
-- **Horizontal scaling** — stateless server behind Caddy load balancer, PostgreSQL for all shared state
+- **Horizontal scaling** — serverless functions on Vercel with Neon database, stateless and zero-ops
 - **S3-compatible blob storage** — local filesystem or any S3-compatible backend (AWS S3, MinIO, R2)
 - **Single process** — CLI API + tRPC dashboard share one Hono server
-- **Minimal Docker image** — `bun build --compile` → debian-slim
+- **Production deployment** — Deploy to Vercel with a single git push
 
 ## Tech Stack
 
@@ -25,11 +25,11 @@ A self-hosted [Pulumi](https://www.pulumi.com/) backend. Run `pulumi login`, `pu
 | HTTP Router | Hono v4 |
 | Dashboard API | tRPC v11 + Drizzle ORM |
 | Dashboard UI | React 19, Vite 7, Tailwind CSS v4 |
-| Database | PostgreSQL 17 |
+| Database | Neon Serverless PostgreSQL |
 | Auth | Descope / static tokens |
 | Encryption | AES-256-GCM + HKDF |
 | Blob Storage | Local filesystem / S3 |
-| Reverse Proxy | Caddy 2 |
+| Hosting | Vercel (serverless functions + static sites) |
 | Quality | Biome + TypeScript strict |
 
 ## Quick Start
@@ -61,23 +61,22 @@ pulumi up
 
 ## Running in Production
 
-For horizontal scaling with multiple replicas behind a load balancer:
+Deploy to Vercel via GitHub integration:
 
 ```bash
-bun run docker:cluster   # 3 replicas + Caddy LB + PostgreSQL + MinIO
-bun run e2e:cluster      # Run acceptance tests against the cluster
+vercel deploy --prod
 ```
 
-See the [Horizontal Scaling](apps/docs/src/content/docs/operations/horizontal-scaling.md) guide for production deployment details.
+All `PROCELLA_*` environment variables are set as Vercel environment variables in the dashboard or via `vercel env` CLI. The GC worker runs as a Vercel Cron job. The database uses a Neon serverless PostgreSQL connection string.
 
 ## Configuration
 
-All configuration is via `PROCELLA_*` environment variables. See `.env.example` for a complete reference.
+All configuration is via `PROCELLA_*` environment variables. Set these as Vercel environment variables for production deployment. See `.env.example` for a complete reference.
 
 | Variable | Default | Description |
 |---|---|---|
 | `PROCELLA_LISTEN_ADDR` | `:9090` | Server listen address |
-| `PROCELLA_DATABASE_URL` | *(required)* | PostgreSQL connection string |
+| `PROCELLA_DATABASE_URL` | *(required)* | PostgreSQL connection string (Neon on Vercel, any PostgreSQL locally) |
 | `PROCELLA_AUTH_MODE` | `dev` | `dev` (static tokens) or `descope` (Descope access keys) |
 | `PROCELLA_DEV_AUTH_TOKEN` | *(required if dev)* | Static auth token for dev mode |
 | `PROCELLA_DEV_USER_LOGIN` | `dev-user` | Dev user login name |
@@ -124,7 +123,7 @@ bun run docs:build     # Build static docs site
 packages/
   types/              Pulumi protocol types + domain types + errors
   config/             Zod-validated env config (PROCELLA_*)
-  db/                 Drizzle schema + Bun.sql connection factory
+  db/                 Drizzle schema + dual-driver connection factory (Neon / node-postgres)
   crypto/             AES-256-GCM with HKDF per-stack key derivation
   storage/            Blob storage (local filesystem + S3)
   auth/               Dev mode (static token) + Descope (JWT)

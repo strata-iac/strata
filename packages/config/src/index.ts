@@ -2,7 +2,7 @@
 //
 // All configuration is sourced from environment variables (PROCELLA_* prefix).
 // Zod schemas validate and parse at startup — fail fast on misconfiguration.
-// Bun.env is used directly (native .env file support, no dotenv needed).
+// Uses process.env for portability across Bun, Node.js, and Vercel.
 
 import { z } from "zod";
 
@@ -94,7 +94,7 @@ export type BlobBackend = z.infer<typeof blobBackendSchema>;
 
 /** Map PROCELLA_* env vars to config object shape. */
 function envToConfig(): Record<string, unknown> {
-	const env = Bun.env;
+	const env = process.env;
 	return {
 		listenAddr: env.PROCELLA_LISTEN_ADDR,
 		databaseUrl: env.PROCELLA_DATABASE_URL,

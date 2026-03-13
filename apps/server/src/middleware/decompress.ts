@@ -4,6 +4,7 @@
 // Content-Encoding: gzip. Hono does not auto-decompress request bodies,
 // so this middleware transparently inflates them before handlers run.
 
+import { gunzipSync } from "node:zlib";
 import type { MiddlewareHandler } from "hono";
 
 /** Decompress gzip request bodies so downstream handlers can use c.req.json(). */
@@ -12,7 +13,7 @@ export function decompress(): MiddlewareHandler {
 		const encoding = c.req.header("Content-Encoding");
 		if (encoding === "gzip") {
 			const compressed = await c.req.arrayBuffer();
-			const decompressed = Bun.gunzipSync(new Uint8Array(compressed));
+			const decompressed = gunzipSync(Buffer.from(compressed));
 			const text = new TextDecoder().decode(decompressed);
 			const json = JSON.parse(text);
 			// Hono's #cachedBody expects Promise values in bodyCache
