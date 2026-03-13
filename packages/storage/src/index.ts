@@ -116,6 +116,15 @@ export class S3BlobStorage implements BlobStorage {
 
 	constructor(config: Omit<S3StorageConfig, "backend">) {
 		this.bucket = config.bucket;
+
+		// Custom endpoints (MinIO, R2) require explicit credentials — the AWS SDK
+		// default credential chain won't work. Fail fast on misconfiguration.
+		if (config.endpoint && (!config.accessKeyId || !config.secretAccessKey)) {
+			throw new Error(
+				"S3 credentials (accessKeyId + secretAccessKey) are required when using a custom endpoint",
+			);
+		}
+
 		this.client = new S3Client({
 			...(config.accessKeyId && config.secretAccessKey
 				? {
