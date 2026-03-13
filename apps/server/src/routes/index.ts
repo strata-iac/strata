@@ -101,8 +101,9 @@ export function createApp(deps: {
 	app.get("/api/cli/version", health.cliVersion);
 
 	// Vercel Cron endpoint — GC worker runs as a scheduled job.
+	// Registered outside /api/* to avoid pulumiAccept + apiAuth middleware.
 	// Secured via Authorization: Bearer <CRON_SECRET> (set by Vercel automatically).
-	app.get("/api/cron/gc", async (c) => {
+	app.get("/cron/gc", async (c) => {
 		const secret = process.env.CRON_SECRET;
 		const nodeEnv = process.env.NODE_ENV;
 

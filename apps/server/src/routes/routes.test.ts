@@ -178,14 +178,14 @@ describe("@procella/server routes", () => {
 	// Cron GC endpoint
 	// ========================================================================
 
-	describe("GET /api/cron/gc", () => {
+	describe("GET /cron/gc", () => {
 		test("returns 500 when CRON_SECRET missing in production", async () => {
 			const prev = { secret: process.env.CRON_SECRET, env: process.env.NODE_ENV };
 			delete process.env.CRON_SECRET;
 			process.env.NODE_ENV = "production";
 			try {
 				const app = makeApp();
-				const res = await app.request("/api/cron/gc");
+				const res = await app.request("/cron/gc");
 				expect(res.status).toBe(500);
 				const body = await res.json();
 				expect(body.error).toContain("CRON_SECRET");
@@ -201,7 +201,7 @@ describe("@procella/server routes", () => {
 			process.env.NODE_ENV = "test";
 			try {
 				const app = makeApp();
-				const res = await app.request("/api/cron/gc");
+				const res = await app.request("/cron/gc");
 				expect(res.status).toBe(200);
 			} finally {
 				process.env.CRON_SECRET = prev.secret;
@@ -214,7 +214,7 @@ describe("@procella/server routes", () => {
 			process.env.CRON_SECRET = "correct-secret";
 			try {
 				const app = makeApp();
-				const res = await app.request("/api/cron/gc", {
+				const res = await app.request("/cron/gc", {
 					headers: { Authorization: "Bearer wrong-secret" },
 				});
 				expect(res.status).toBe(401);
@@ -228,7 +228,7 @@ describe("@procella/server routes", () => {
 			process.env.CRON_SECRET = "correct-secret";
 			try {
 				const app = makeApp();
-				const res = await app.request("/api/cron/gc", {
+				const res = await app.request("/cron/gc", {
 					headers: { Authorization: "Bearer correct-secret" },
 				});
 				expect(res.status).toBe(200);
