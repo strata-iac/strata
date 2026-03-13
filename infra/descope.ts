@@ -6,7 +6,7 @@ const stylesData = JSON.stringify(stylesJson);
 
 /**
  * Initialize the Descope Pulumi provider and project configuration.
- * @param managementKey - SST secret containing the Descope management key.
+ * @param managementKey - Secret containing the Descope management key.
  */
 export function createDescopeProject(managementKey: sst.Secret) {
 	const provider = new descope.Provider("DescopeProvider", {

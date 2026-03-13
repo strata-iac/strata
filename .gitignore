@@ -37,8 +37,6 @@ apps/docs/.astro/
 .dolt/
 *.db
 
-# SST
-.sst/
 
 # Agent / tool artifacts
 .sisyphus/
@@ -52,5 +50,4 @@ node-compile-cache/
 *.node-gyp/
 
 # Vercel
-.vercel
 .vercel
