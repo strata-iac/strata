@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { createBlobStorage, LocalBlobStorage } from "./index";
 
 describe("LocalBlobStorage", () => {
@@ -97,6 +97,37 @@ describe("LocalBlobStorage", () => {
 		expect(result).not.toBeNull();
 		expect(result?.length).toBe(size);
 		expect(result).toEqual(data);
+	});
+});
+
+describe("LocalBlobStorage with relative basePath", () => {
+	let absPath: string;
+	let relPath: string;
+	let storage: LocalBlobStorage;
+
+	beforeAll(() => {
+		absPath = join(tmpdir(), `procella-rel-test-${randomUUID()}`);
+		relPath = relative(process.cwd(), absPath);
+		storage = new LocalBlobStorage(relPath);
+	});
+
+	afterAll(async () => {
+		await rm(absPath, { recursive: true, force: true });
+	});
+
+	test("put + get works with relative basePath (no path traversal false positive)", async () => {
+		const key = "checkpoints/stack-1/update-1/1";
+		const data = new TextEncoder().encode("checkpoint data");
+
+		await storage.put(key, data);
+		const result = await storage.get(key);
+
+		expect(result).not.toBeNull();
+		expect(result).toEqual(data);
+	});
+
+	test("path traversal is still rejected", async () => {
+		await expect(storage.get("../../etc/passwd")).rejects.toThrow("path traversal detected");
 	});
 });
 
