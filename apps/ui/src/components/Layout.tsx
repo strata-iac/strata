@@ -1,6 +1,6 @@
 import { getCurrentTenant, getJwtRoles, useDescope, useSession, useUser } from "@descope/react-sdk";
 import { useEffect, useRef, useState } from "react";
-import { Link, Outlet, useNavigate } from "react-router";
+import { Link, NavLink, Outlet, useNavigate } from "react-router";
 import { useAuthConfig } from "../hooks/useAuthConfig";
 
 function useIsAdmin() {
@@ -16,35 +16,68 @@ export function Layout() {
 	const isAdmin = useIsAdmin();
 
 	return (
-		<div className="min-h-screen flex flex-col">
-			<header className="bg-zinc-950 border-b border-zinc-800 sticky top-0 z-10">
-				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-					<div className="flex items-center gap-4">
+		<div className="min-h-screen flex flex-col bg-zinc-950">
+			<header className="border-b border-zinc-800/60 sticky top-0 z-10 backdrop-blur-md bg-zinc-950/80">
+				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+					<div className="flex items-center gap-6">
 						<Link
 							to="/"
-							className="text-xl font-bold tracking-tight text-zinc-100 hover:text-white transition-colors"
+							className="flex items-center gap-2.5 text-zinc-100 hover:text-white transition-colors"
 						>
-							Procella
+							<svg viewBox="0 0 24 24" fill="none" className="w-5 h-5 text-blue-500">
+								<path
+									d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
+									stroke="currentColor"
+									strokeWidth="2"
+									strokeLinecap="round"
+									strokeLinejoin="round"
+								/>
+							</svg>
+							<span className="text-[15px] font-semibold tracking-tight">Procella</span>
 						</Link>
-						<span className="px-2 py-1 rounded-md bg-zinc-800 text-xs font-medium text-zinc-400 border border-zinc-700">
-							Pulumi Backend
-						</span>
-						{config?.mode === "descope" && (
-							<Link
-								to="/tokens"
-								className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors"
+						<nav className="hidden sm:flex items-center gap-1">
+							<NavLink
+								to="/"
+								end
+								className={({ isActive }) =>
+									`px-3 py-1.5 rounded-md text-sm transition-colors ${
+										isActive
+											? "bg-zinc-800 text-zinc-100 font-medium"
+											: "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+									}`
+								}
 							>
-								Tokens
-							</Link>
-						)}
-						{config?.mode === "descope" && isAdmin && (
-							<Link
-								to="/settings"
-								className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors"
-							>
-								Settings
-							</Link>
-						)}
+								Stacks
+							</NavLink>
+							{config?.mode === "descope" && (
+								<NavLink
+									to="/tokens"
+									className={({ isActive }) =>
+										`px-3 py-1.5 rounded-md text-sm transition-colors ${
+											isActive
+												? "bg-zinc-800 text-zinc-100 font-medium"
+												: "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+										}`
+									}
+								>
+									Tokens
+								</NavLink>
+							)}
+							{config?.mode === "descope" && isAdmin && (
+								<NavLink
+									to="/settings"
+									className={({ isActive }) =>
+										`px-3 py-1.5 rounded-md text-sm transition-colors ${
+											isActive
+												? "bg-zinc-800 text-zinc-100 font-medium"
+												: "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+										}`
+									}
+								>
+									Settings
+								</NavLink>
+							)}
+						</nav>
 					</div>
 					{config?.mode === "descope" ? <DescopeUserMenu /> : <DevTokenInput />}
 				</div>
@@ -150,7 +183,7 @@ function DevTokenInput() {
 
 	return (
 		<div className="flex items-center gap-3">
-			<label htmlFor="token" className="text-sm font-medium text-zinc-400">
+			<label htmlFor="token" className="text-sm font-medium text-zinc-500">
 				Token
 			</label>
 			<input

@@ -1,6 +1,6 @@
 import { Descope } from "@descope/react-sdk";
 import { useState } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { useAuthConfig } from "../hooks/useAuthConfig";
 
 export function Login() {
@@ -27,11 +27,20 @@ function DescopeLogin({ returnTo }: { returnTo: string }) {
 	const navigate = useNavigate();
 
 	return (
-		<div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center">
-			<div className="mb-8 text-center">
-				<h1 className="text-3xl font-bold text-zinc-100">Procella</h1>
-				<p className="mt-2 text-sm text-zinc-400">Sign in to your Pulumi backend</p>
-			</div>
+		<div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-4">
+			<Link to="/" className="flex items-center gap-2.5 mb-8">
+				<svg viewBox="0 0 24 24" fill="none" className="w-6 h-6 text-blue-500">
+					<path
+						d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
+						stroke="currentColor"
+						strokeWidth="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					/>
+				</svg>
+				<span className="text-2xl font-bold tracking-tight text-zinc-100">Procella</span>
+			</Link>
+			<p className="text-sm text-zinc-400 mb-8">Sign in to your Pulumi backend</p>
 			<div className="w-full max-w-md">
 				<Descope
 					flowId="sign-up-or-in"
@@ -56,11 +65,20 @@ function DevLogin({ returnTo }: { returnTo: string }) {
 	};
 
 	return (
-		<div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center">
-			<div className="mb-8 text-center">
-				<h1 className="text-3xl font-bold text-zinc-100">Procella</h1>
-				<p className="mt-2 text-sm text-zinc-400">Enter your API token to continue</p>
-			</div>
+		<div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-4">
+			<Link to="/" className="flex items-center gap-2.5 mb-3">
+				<svg viewBox="0 0 24 24" fill="none" className="w-6 h-6 text-blue-500">
+					<path
+						d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
+						stroke="currentColor"
+						strokeWidth="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					/>
+				</svg>
+				<span className="text-2xl font-bold tracking-tight text-zinc-100">Procella</span>
+			</Link>
+			<p className="text-sm text-zinc-400 mb-8">Enter your API token to continue</p>
 			<form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
 				<input
 					type="password"
@@ -77,7 +95,10 @@ function DevLogin({ returnTo }: { returnTo: string }) {
 					Connect
 				</button>
 			</form>
-			<p className="mt-6 text-xs text-zinc-600">Dev mode</p>
+			<div className="mt-6 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-800/50 border border-zinc-700/50">
+				<span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+				<span className="text-xs text-zinc-500">Dev mode</span>
+			</div>
 		</div>
 	);
 }

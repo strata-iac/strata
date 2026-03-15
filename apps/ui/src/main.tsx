@@ -7,7 +7,7 @@ import "./index.css";
 
 import { ProcellaAuthProvider } from "./components/AuthProvider";
 import { Layout } from "./components/Layout";
-import { ProtectedRoute } from "./components/ProtectedRoute";
+import { HomeRoute } from "./components/HomeRoute";
 import { CliLogin } from "./pages/CliLogin";
 import { Settings } from "./pages/Settings";
 import { StackDetail } from "./pages/StackDetail";
@@ -79,7 +79,7 @@ function App() {
 						/>
 						<Route path="/cli-login" element={<CliLogin />} />
 						<Route path="/welcome/cli" element={<WelcomeCli />} />
-						<Route element={<ProtectedRoute />}>
+						<Route element={<HomeRoute />}>
 							<Route path="/" element={<Layout />}>
 								<Route index element={<StackList />} />
 								<Route path="tokens" element={<Tokens />} />
