@@ -66,6 +66,7 @@ function EmptyState() {
 							stroke="currentColor"
 							strokeWidth="1.5"
 							className="w-5 h-5 text-blue-400"
+							aria-hidden="true"
 						>
 							<path
 								strokeLinecap="round"

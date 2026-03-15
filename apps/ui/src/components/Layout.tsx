@@ -1,7 +1,8 @@
 import { getCurrentTenant, getJwtRoles, useDescope, useSession, useUser } from "@descope/react-sdk";
 import { useEffect, useRef, useState } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router";
+import { NavLink, Outlet, useNavigate } from "react-router";
 import { useAuthConfig } from "../hooks/useAuthConfig";
+import { ProcellaLogo } from "./ProcellaLogo";
 
 function useIsAdmin() {
 	const { sessionToken } = useSession();
@@ -9,6 +10,14 @@ function useIsAdmin() {
 	const tenantId = getCurrentTenant(sessionToken);
 	if (!tenantId) return false;
 	return getJwtRoles(sessionToken, tenantId).includes("admin");
+}
+
+function navLinkClass({ isActive }: { isActive: boolean }) {
+	return `px-3 py-1.5 rounded-md text-sm transition-colors ${
+		isActive
+			? "bg-zinc-800 text-zinc-100 font-medium"
+			: "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+	}`;
 }
 
 export function Layout() {
@@ -20,60 +29,22 @@ export function Layout() {
 			<header className="border-b border-zinc-800/60 sticky top-0 z-10 backdrop-blur-md bg-zinc-950/80">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
 					<div className="flex items-center gap-6">
-						<Link
-							to="/"
-							className="flex items-center gap-2.5 text-zinc-100 hover:text-white transition-colors"
-						>
-							<svg viewBox="0 0 24 24" fill="none" className="w-5 h-5 text-blue-500">
-								<path
-									d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-									stroke="currentColor"
-									strokeWidth="2"
-									strokeLinecap="round"
-									strokeLinejoin="round"
-								/>
-							</svg>
-							<span className="text-[15px] font-semibold tracking-tight">Procella</span>
-						</Link>
+						<ProcellaLogo
+							size="sm"
+							linkTo="/"
+							className="text-zinc-100 hover:text-white transition-colors"
+						/>
 						<nav className="hidden sm:flex items-center gap-1">
-							<NavLink
-								to="/"
-								end
-								className={({ isActive }) =>
-									`px-3 py-1.5 rounded-md text-sm transition-colors ${
-										isActive
-											? "bg-zinc-800 text-zinc-100 font-medium"
-											: "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
-									}`
-								}
-							>
+							<NavLink to="/" end className={navLinkClass}>
 								Stacks
 							</NavLink>
 							{config?.mode === "descope" && (
-								<NavLink
-									to="/tokens"
-									className={({ isActive }) =>
-										`px-3 py-1.5 rounded-md text-sm transition-colors ${
-											isActive
-												? "bg-zinc-800 text-zinc-100 font-medium"
-												: "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
-										}`
-									}
-								>
+								<NavLink to="/tokens" className={navLinkClass}>
 									Tokens
 								</NavLink>
 							)}
 							{config?.mode === "descope" && isAdmin && (
-								<NavLink
-									to="/settings"
-									className={({ isActive }) =>
-										`px-3 py-1.5 rounded-md text-sm transition-colors ${
-											isActive
-												? "bg-zinc-800 text-zinc-100 font-medium"
-												: "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
-										}`
-									}
-								>
+								<NavLink to="/settings" className={navLinkClass}>
 									Settings
 								</NavLink>
 							)}

@@ -2,6 +2,7 @@ import { useSession } from "@descope/react-sdk";
 import { Navigate, Outlet, useLocation } from "react-router";
 import { useAuthConfig } from "../hooks/useAuthConfig";
 import { HomePage } from "../pages/HomePage";
+import { FullPageSpinner } from "./FullPageSpinner";
 
 /**
  * Layout route that shows the landing page for unauthenticated users at "/",
@@ -13,11 +14,7 @@ export function HomeRoute() {
 	const location = useLocation();
 
 	if (isLoading || !config) {
-		return (
-			<div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-				<div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-blue-500" />
-			</div>
-		);
+		return <FullPageSpinner />;
 	}
 
 	if (config.mode === "descope") {
@@ -41,11 +38,7 @@ function DescopeHomeRoute() {
 	const location = useLocation();
 
 	if (isSessionLoading) {
-		return (
-			<div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-				<div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-blue-500" />
-			</div>
-		);
+		return <FullPageSpinner />;
 	}
 
 	if (!isAuthenticated) {
@@ -56,11 +49,7 @@ function DescopeHomeRoute() {
 	}
 
 	if (!sessionToken) {
-		return (
-			<div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-				<div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-blue-500" />
-			</div>
-		);
+		return <FullPageSpinner />;
 	}
 
 	return <Outlet />;
