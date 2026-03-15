@@ -103,19 +103,23 @@ export function StackDetail() {
 	const enabled = Boolean(org && project && stack);
 	const params = { org: org ?? "", project: project ?? "", stack: stack ?? "" };
 
-	const { data: detail, isLoading: detailLoading } = trpc.stacks.detail.useQuery(params, {
-		enabled,
-	});
-	const { data: resources, isLoading: resourcesLoading } = trpc.stacks.resources.useQuery(params, {
-		enabled,
-	});
+	const {
+		data: detail,
+		isLoading: detailLoading,
+		error: detailError,
+	} = trpc.stacks.detail.useQuery(params, { enabled });
+	const {
+		data: resources,
+		isLoading: resourcesLoading,
+		error: resourcesError,
+	} = trpc.stacks.resources.useQuery(params, { enabled });
 	const {
 		data: updates,
 		isLoading: updatesLoading,
 		error: updatesError,
 	} = trpc.updates.list.useQuery(params, { enabled });
 
-	const isLoading = detailLoading && updatesLoading;
+	const isLoading = detailLoading || updatesLoading;
 
 	// ── Loading State ──────────────────────────────────────────────────
 	if (isLoading) {
@@ -140,8 +144,9 @@ export function StackDetail() {
 		);
 	}
 
-	// ── Error State ────────────────────────────────────────────────────
-	if (updatesError) {
+	// ── Error State ────────────────────────────────────────────────────────────────────
+	const queryError = detailError ?? updatesError ?? resourcesError;
+	if (queryError) {
 		return (
 			<div className="space-y-6">
 				<div className="flex items-center gap-4">
@@ -153,7 +158,7 @@ export function StackDetail() {
 					</h1>
 				</div>
 				<div className="bg-red-900/20 border border-red-900/50 text-red-400 p-4 rounded-lg">
-					{updatesError.message}
+					{queryError.message}
 				</div>
 			</div>
 		);
@@ -205,10 +210,10 @@ export function StackDetail() {
 						Resources
 					</div>
 					<div className="text-2xl font-bold text-zinc-100">
-						{detailLoading ? (
+						{resourcesLoading ? (
 							<span className="inline-block h-7 w-12 bg-zinc-800 rounded animate-pulse" />
 						) : (
-							(detail?.resourceCount ?? 0)
+							resourceItems.length
 						)}
 					</div>
 				</div>

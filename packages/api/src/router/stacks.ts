@@ -131,17 +131,15 @@ export const stacksRouter = router({
 
 		const version = Number(versionRow?.maxVersion ?? 0);
 
-		// Get resource count from latest checkpoint
-		let resourceCount = 0;
-		if (version > 0) {
-			try {
-				const deployment = await ctx.updates.exportStack(stackInfo.id);
-				const resources = extractResources(deployment.deployment);
-				// Exclude the root stack resource from the count
-				resourceCount = resources.filter((r) => r.type !== "pulumi:pulumi:Stack").length;
-			} catch {
-				// Checkpoint may not be available — that's fine
-			}
+		// Get active update operation kind (if running)
+		let currentOperation: string | null = null;
+		if (stackInfo.activeUpdateId) {
+			const [activeRow] = await ctx.db
+				.select({ kind: updates.kind })
+				.from(updates)
+				.where(eq(updates.id, stackInfo.activeUpdateId))
+				.limit(1);
+			currentOperation = activeRow?.kind ?? null;
 		}
 
 		// Get latest update info
@@ -174,10 +172,10 @@ export const stacksRouter = router({
 			projectName: stackInfo.projectName,
 			stackName: stackInfo.stackName,
 			version,
-			resourceCount,
+
 			tags: stackInfo.tags,
 			activeUpdate: stackInfo.activeUpdateId !== null,
-			currentOperation: null as string | null,
+			currentOperation,
 			lastUpdate: latestUpdate
 				? {
 						updateID: latestUpdate.id,
