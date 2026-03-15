@@ -68,10 +68,11 @@ describe("DevAuthService", () => {
 		);
 	});
 
-	test("returned Caller has correct tenantId, userId, login, roles", async () => {
+	test("returned Caller has correct tenantId, orgSlug, userId, login, roles", async () => {
 		const caller = await svc.authenticate(reqWithAuth("token devtoken123"));
 
 		expect(caller.tenantId).toBe("dev-org");
+		expect(caller.orgSlug).toBe("dev-org");
 		expect(caller.userId).toBe("dev-user");
 		expect(caller.login).toBe("dev-user");
 		expect(caller.roles).toEqual(["admin"]);
@@ -109,13 +110,25 @@ describe("DevAuthService", () => {
 
 describe("requireRole", () => {
 	test("allows caller with matching role", () => {
-		const caller = { tenantId: "t1", userId: "u1", login: "user", roles: ["member"] as const };
+		const caller = {
+			tenantId: "t1",
+			orgSlug: "t1",
+			userId: "u1",
+			login: "user",
+			roles: ["member"] as const,
+		};
 
 		expect(() => requireRole(caller, "member")).not.toThrow();
 	});
 
 	test("admin caller passes any role check", () => {
-		const caller = { tenantId: "t1", userId: "u1", login: "admin", roles: ["admin"] as const };
+		const caller = {
+			tenantId: "t1",
+			orgSlug: "t1",
+			userId: "u1",
+			login: "admin",
+			roles: ["admin"] as const,
+		};
 
 		expect(() => requireRole(caller, "viewer")).not.toThrow();
 		expect(() => requireRole(caller, "member")).not.toThrow();
@@ -125,6 +138,7 @@ describe("requireRole", () => {
 	test("member caller passes member and viewer checks", () => {
 		const caller = {
 			tenantId: "t1",
+			orgSlug: "t1",
 			userId: "u1",
 			login: "member",
 			roles: ["member"] as const,
@@ -137,6 +151,7 @@ describe("requireRole", () => {
 	test("throws ForbiddenError for caller without matching role", () => {
 		const caller = {
 			tenantId: "t1",
+			orgSlug: "t1",
 			userId: "u1",
 			login: "viewer",
 			roles: ["viewer"] as const,
@@ -148,6 +163,7 @@ describe("requireRole", () => {
 	test("viewer cannot perform member actions", () => {
 		const caller = {
 			tenantId: "t1",
+			orgSlug: "t1",
 			userId: "u1",
 			login: "viewer",
 			roles: ["viewer"] as const,
