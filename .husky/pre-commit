@@ -20,16 +20,16 @@ UI_CHANGED=false
 INFRA_CHANGED=false
 DOCS_CHANGED=false
 
-if echo "$STAGED" | grep -qE '^(packages/|apps/server/).*\.ts$'; then
+if printf '%s\n' "$STAGED" | grep -qE '^(packages/|apps/server/).*\.ts$'; then
   TS_CHANGED=true
 fi
-if echo "$STAGED" | grep -qE '^apps/ui/.*\.(ts|tsx)$'; then
+if printf '%s\n' "$STAGED" | grep -qE '^apps/ui/.*\.(ts|tsx)$'; then
   UI_CHANGED=true
 fi
-if echo "$STAGED" | grep -qE '^(Dockerfile|docker-compose\.yml|Caddyfile|\.github/)'; then
+if printf '%s\n' "$STAGED" | grep -qE '^(Dockerfile|docker-compose\.yml|Caddyfile|\.github/)'; then
   INFRA_CHANGED=true
 fi
-if echo "$STAGED" | grep -qE '^(AGENTS\.md|README\.md|docs/)'; then
+if printf '%s\n' "$STAGED" | grep -qE '^(AGENTS\.md|README\.md|apps/docs/)'; then
   DOCS_CHANGED=true
 fi
 
@@ -55,7 +55,7 @@ if [ "$TS_CHANGED" = true ] || [ "$UI_CHANGED" = true ] || [ "$INFRA_CHANGED" = 
     echo "⚠  Code/infra changed without docs update. Verify these are current:"
     echo "   - AGENTS.md (directory structure, tech stack, quality gates)"
     echo "   - README.md (project structure, tech stack table)"
-    echo "   - docs/ (architecture, testing, contributing)"
+    echo "   - apps/docs/ (architecture, testing, contributing)"
     echo ""
   fi
 fi
