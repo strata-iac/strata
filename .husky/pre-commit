@@ -1,10 +1,11 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 
 # Procella pre-commit hook — runs quality gates via bun scripts.
 # Checks are scoped to what actually changed to keep commits fast.
 # All commands live in package.json — this hook only decides WHICH scripts to run.
+# NOTE: husky v9 runs hooks with `sh`, so this must be POSIX-compatible.
 
-set -euo pipefail
+set -eu
 
 STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
 
@@ -12,17 +13,25 @@ if [ -z "$STAGED" ]; then
   exit 0
 fi
 
+# Detect which areas changed using grep on the staged file list.
+# This avoids while-read-in-pipe subshell issues in POSIX sh.
 TS_CHANGED=false
 UI_CHANGED=false
 INFRA_CHANGED=false
+DOCS_CHANGED=false
 
-while IFS= read -r file; do
-  case "$file" in
-    packages/*.ts|apps/server/*.ts)  TS_CHANGED=true ;;
-    apps/ui/*.ts|apps/ui/*.tsx)       UI_CHANGED=true ;;
-    Dockerfile|docker-compose.yml|Caddyfile*|.github/*) INFRA_CHANGED=true ;;
-  esac
-done <<< "$STAGED"
+if printf '%s\n' "$STAGED" | grep -qE '^(packages/|apps/server/).*\.ts$'; then
+  TS_CHANGED=true
+fi
+if printf '%s\n' "$STAGED" | grep -qE '^apps/ui/.*\.(ts|tsx)$'; then
+  UI_CHANGED=true
+fi
+if printf '%s\n' "$STAGED" | grep -qE '^(Dockerfile|docker-compose\.yml|Caddyfile|\.github/)'; then
+  INFRA_CHANGED=true
+fi
+if printf '%s\n' "$STAGED" | grep -qE '^(AGENTS\.md|README\.md|apps/docs/)'; then
+  DOCS_CHANGED=true
+fi
 
 FAIL=0
 
@@ -41,19 +50,12 @@ if [ "$UI_CHANGED" = true ]; then
 fi
 
 if [ "$TS_CHANGED" = true ] || [ "$UI_CHANGED" = true ] || [ "$INFRA_CHANGED" = true ]; then
-  DOCS_CHANGED=false
-  while IFS= read -r file; do
-    case "$file" in
-      AGENTS.md|README.md|docs/*) DOCS_CHANGED=true; break ;;
-    esac
-  done <<< "$STAGED"
-
   if [ "$DOCS_CHANGED" = false ]; then
     echo ""
     echo "⚠  Code/infra changed without docs update. Verify these are current:"
     echo "   - AGENTS.md (directory structure, tech stack, quality gates)"
     echo "   - README.md (project structure, tech stack table)"
-    echo "   - docs/ (architecture, testing, contributing)"
+    echo "   - apps/docs/ (architecture, testing, contributing)"
     echo ""
   fi
 fi
