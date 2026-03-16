@@ -5,6 +5,9 @@ on:
     types: [opened, reopened, synchronize]
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: preview-${{ github.event.number }}
   cancel-in-progress: true
@@ -12,6 +15,7 @@ concurrency:
 env:
   NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
   PULUMI_BACKEND_URL: s3://procella-pulumi-state?endpoint=${{ secrets.R2_ENDPOINT }}&region=auto
   AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -90,7 +94,7 @@ jobs:
     if: needs.changes.outputs.app == 'true' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
     outputs:
-      descope_project_id: ${{ steps.pulumi.outputs.descope_project_id }}
+      descope_project_id: ${{ steps.export.outputs.descope_project_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v2
@@ -155,9 +159,9 @@ jobs:
           PROCELLA_ENCRYPTION_KEY: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
           PROCELLA_DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
         run: |
-          vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
-          vercel build --token=${{ secrets.VERCEL_TOKEN }}
-          URL=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+          vercel build --token="$VERCEL_TOKEN"
+          URL=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN")
           echo "url=$URL" >> $GITHUB_OUTPUT
 
   # ── Deploy Docs to Vercel (preview) ────────────────────────────────────
@@ -185,9 +189,9 @@ jobs:
         env:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_DOCS_PROJECT_ID }}
         run: |
-          vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
-          vercel build --token=${{ secrets.VERCEL_TOKEN }}
-          URL=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+          vercel build --token="$VERCEL_TOKEN"
+          URL=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN")
           echo "url=$URL" >> $GITHUB_OUTPUT
 
   # ── Comment on PR with preview URLs ────────────────────────────────────
@@ -202,7 +206,7 @@ jobs:
       - uses: actions/github-script@v7
         with:
           script: |
-            const lines = ['## 🚀 Preview Environment\n'];
+            const lines = ['## 🚀 Preview Environment\n', '| Resource | URL |', '|---|---|'];
 
             const appUrl = '${{ needs.deploy-app.outputs.url }}';
             const docsUrl = '${{ needs.deploy-docs.outputs.url }}';

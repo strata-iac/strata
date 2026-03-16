@@ -5,12 +5,16 @@ on:
     types: [closed]
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: preview-${{ github.event.number }}
 
 env:
   NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
   PULUMI_BACKEND_URL: s3://procella-pulumi-state?endpoint=${{ secrets.R2_ENDPOINT }}&region=auto
   AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -57,25 +61,34 @@ jobs:
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
 
   # ── Remove Vercel preview deployments ────────────────────────────────────
-  vercel:
-    name: Remove Vercel Previews
+  vercel-app:
+    name: Remove App Preview
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        project:
-          - id: VERCEL_PROJECT_ID
-            name: app
-          - id: VERCEL_DOCS_PROJECT_ID
-            name: docs
+    env:
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
       - run: npm install --global vercel@latest
-      - name: Remove deployment
-        env:
-          VERCEL_PROJECT_ID: ${{ secrets[matrix.project.id] }}
+      - name: Remove deployments
         run: |
-          # List deployments with meta filter, remove if found
-          DEPLOYMENTS=$(vercel ls --token=${{ secrets.VERCEL_TOKEN }} --meta githubPrNumber=${{ github.event.number }} 2>/dev/null || true)
-          if [ -n "$DEPLOYMENTS" ]; then
-            echo "Cleaning up ${{ matrix.project.name }} preview deployments"
-            vercel remove --token=${{ secrets.VERCEL_TOKEN }} --yes --safe 2>/dev/null || true
-          fi
+          # List deployments and extract URLs for this project
+          URLS=$(vercel ls --token="$VERCEL_TOKEN" 2>/dev/null | grep -oP 'https://\S+' || true)
+          for url in $URLS; do
+            echo "Removing $url"
+            vercel remove "$url" --token="$VERCEL_TOKEN" --yes 2>/dev/null || true
+          done
+
+  vercel-docs:
+    name: Remove Docs Preview
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_DOCS_PROJECT_ID }}
+    steps:
+      - run: npm install --global vercel@latest
+      - name: Remove deployments
+        run: |
+          # List deployments and extract URLs for this project
+          URLS=$(vercel ls --token="$VERCEL_TOKEN" 2>/dev/null | grep -oP 'https://\S+' || true)
+          for url in $URLS; do
+            echo "Removing $url"
+            vercel remove "$url" --token="$VERCEL_TOKEN" --yes 2>/dev/null || true
+          done
