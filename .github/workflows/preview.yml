@@ -46,16 +46,14 @@ jobs:
             infra:
               - 'infra/**'
 
-  # ── Create Neon database branch ─────────────────────────────────────────
+  # ── Create Neon database branch & run migrations ────────────────────────
   neon:
-    name: Neon Branch
+    name: Neon Branch & Migrate
     needs: [changes]
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     environment: preview
     outputs:
-      db_url: ${{ steps.branch.outputs.db_url }}
-      db_url_pooled: ${{ steps.branch.outputs.db_url_pooled }}
       branch_id: ${{ steps.branch.outputs.branch_id }}
     steps:
       - uses: neondatabase/create-branch-action@v6
@@ -66,13 +64,6 @@ jobs:
           parent_branch: main
           api_key: ${{ secrets.NEON_API_KEY }}
           database: neondb
-
-  # ── Run database migrations on preview branch ──────────────────────────
-  migrate:
-    name: Migrate Preview DB
-    needs: [neon]
-    runs-on: ubuntu-latest
-    steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
       - uses: actions/cache@v5
@@ -85,7 +76,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Run migrations
         env:
-          PROCELLA_DATABASE_URL: ${{ needs.neon.outputs.db_url }}
+          PROCELLA_DATABASE_URL: ${{ steps.branch.outputs.db_url }}
         run: bunx drizzle-kit migrate --config packages/db/drizzle.config.ts
 
   # ── Deploy Descope infra (Pulumi preview stack) ────────────────────────
@@ -137,7 +128,7 @@ jobs:
   # ── Deploy Procella to Vercel (preview) ─────────────────────────────────
   deploy-app:
     name: Deploy App Preview
-    needs: [changes, neon, migrate, infra]
+    needs: [changes, neon, infra]
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     environment: preview
@@ -155,11 +146,23 @@ jobs:
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - run: npm install --global vercel@latest
+      - name: Get Neon connection string
+        id: neon-url
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          BRANCH_ID="${{ needs.neon.outputs.branch_id }}"
+          # Get connection URI from Neon API
+          CS=$(curl -s -H "Authorization: Bearer $NEON_API_KEY" \
+            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/connection_uri?branch_id=$BRANCH_ID&database_name=neondb&role_name=neondb_owner&pooled=true"  \
+            | jq -r '.uri')
+          echo "::add-mask::$CS"
+          echo "db_url=$CS" >> $GITHUB_OUTPUT
       - name: Build & Deploy
         id: deploy
         env:
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
-          PROCELLA_DATABASE_URL: ${{ needs.neon.outputs.db_url_pooled }}
+          PROCELLA_DATABASE_URL: ${{ steps.neon-url.outputs.db_url }}
           PROCELLA_DESCOPE_PROJECT_ID: ${{ needs.infra.outputs.descope_project_id }}
           PROCELLA_AUTH_MODE: descope
           PROCELLA_BLOB_BACKEND: s3
