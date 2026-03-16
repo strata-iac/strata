@@ -24,6 +24,7 @@ jobs:
   neon:
     name: Delete Neon Branch
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: neondatabase/delete-branch-action@v3
         with:
@@ -35,6 +36,7 @@ jobs:
   infra:
     name: Destroy Pulumi Stack
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
@@ -64,6 +66,7 @@ jobs:
   vercel-app:
     name: Remove App Preview
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Remove PR deployments
         env:
@@ -83,6 +86,7 @@ jobs:
   vercel-docs:
     name: Remove Docs Preview
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Remove PR deployments
         env:

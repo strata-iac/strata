@@ -169,7 +169,17 @@ jobs:
         run: |
           vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
           vercel build --token="$VERCEL_TOKEN"
-          URL=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --meta githubCommitRef=${{ github.head_ref }})
+          URL=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" \
+            --meta githubCommitRef=${{ github.head_ref }} \
+            --env PROCELLA_DATABASE_URL="$PROCELLA_DATABASE_URL" \
+            --env PROCELLA_DESCOPE_PROJECT_ID="$PROCELLA_DESCOPE_PROJECT_ID" \
+            --env PROCELLA_AUTH_MODE="$PROCELLA_AUTH_MODE" \
+            --env PROCELLA_BLOB_BACKEND="$PROCELLA_BLOB_BACKEND" \
+            --env PROCELLA_BLOB_S3_BUCKET="$PROCELLA_BLOB_S3_BUCKET" \
+            --env PROCELLA_BLOB_S3_ENDPOINT="$PROCELLA_BLOB_S3_ENDPOINT" \
+            --env PROCELLA_BLOB_S3_REGION="$PROCELLA_BLOB_S3_REGION" \
+            --env PROCELLA_ENCRYPTION_KEY="$PROCELLA_ENCRYPTION_KEY" \
+            --env PROCELLA_DESCOPE_MANAGEMENT_KEY="$PROCELLA_DESCOPE_MANAGEMENT_KEY")
           echo "url=$URL" >> $GITHUB_OUTPUT
 
   # ── Deploy Docs to Vercel (preview) ────────────────────────────────────
