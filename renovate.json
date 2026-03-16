@@ -3,10 +3,12 @@
   "extends": [
     "config:recommended"
   ],
+  "schedule": ["at any time"],
+  "prConcurrentLimit": 5,
   "packageRules": [
     {
       "matchPackageNames": ["astro", "@astrojs/starlight"],
       "groupName": "astro + starlight"
     }
-  ]
+  ]  
 }
