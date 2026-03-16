@@ -30,7 +30,7 @@ jobs:
   types-freshness:
     name: Verify Pulumi Types Freshness
     runs-on: ubuntu-latest
-    # Only run when the Pulumi SDK Go dependency changes
+    # Runs on all PRs as a safety net to catch stale generated types
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -51,11 +51,11 @@ jobs:
         run: bun run types:generate
       - name: Check for uncommitted type changes
         run: |
-          if ! git diff --exit-code packages/types/src/pulumi.gen.ts; then
+          if ! git diff --exit-code packages/types/; then
             echo ""
             echo "::error::Generated Pulumi types are stale. Run 'bun run types:generate' and commit the result."
             echo ""
-            echo "The Pulumi SDK version in go.mod was updated but pulumi.gen.ts was not regenerated."
+            echo "The Pulumi SDK version in go.mod was updated but the generated types were not regenerated."
             echo "This can cause type mismatches between the Go SDK and TypeScript interfaces."
             exit 1
           fi
