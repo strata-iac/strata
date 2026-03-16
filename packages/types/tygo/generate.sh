@@ -3,6 +3,15 @@
 # Usage: sh packages/types/tygo/generate.sh (or: bun run types:generate)
 set -eu
 
+# Ensure GOPATH/bin is on PATH so `go install`'d tools (tygo) are found
+export PATH="${PATH}:$(go env GOPATH)/bin"
+
+# Install tygo if not already available
+if ! command -v tygo >/dev/null 2>&1; then
+  echo "Installing tygo..."
+  go install github.com/gzuidhof/tygo@latest
+fi
+
 TYGO_DIR="$(cd "$(dirname "$0")" && pwd)"
 GEN_FILE="$TYGO_DIR/../src/pulumi.gen.ts"
 
@@ -12,7 +21,7 @@ go mod tidy
 tygo generate
 
 # Extract SDK version from go.mod for the header comment
-SDK_VERSION=$(grep 'github.com/pulumi/pulumi/sdk/v3' "$TYGO_DIR/go.mod" | head -1 | awk '{print $2}')
+SDK_VERSION=$(grep 'github.com/pulumi/pulumi/sdk/v3' "$TYGO_DIR/go.mod" | awk '{print $NF}')
 
 # Inject SDK version into the generated header
 sed -i.bak "s|// Pulumi SDK version is read from packages/types/tygo/go.mod|// Pulumi SDK ${SDK_VERSION}|" "$GEN_FILE"

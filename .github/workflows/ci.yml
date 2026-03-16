@@ -39,8 +39,6 @@ jobs:
         with:
           go-version-file: packages/types/tygo/go.mod
           cache-dependency-path: packages/types/tygo/go.sum
-      - name: Install tygo
-        run: go install github.com/gzuidhof/tygo@latest
       - uses: actions/cache@v4
         with:
           path: |
