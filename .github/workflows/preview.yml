@@ -169,11 +169,12 @@ jobs:
           PROCELLA_ENCRYPTION_KEY: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
           PROCELLA_DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
           SKIP_MIGRATIONS: "1"
+          GIT_BRANCH: ${{ github.head_ref }}
         run: |
           vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
           vercel build --token="$VERCEL_TOKEN"
           URL=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" \
-            --meta githubCommitRef=${{ github.head_ref }} \
+            --meta githubCommitRef="$GIT_BRANCH" \
             --env PROCELLA_DATABASE_URL="$PROCELLA_DATABASE_URL" \
             --env PROCELLA_DESCOPE_PROJECT_ID="$PROCELLA_DESCOPE_PROJECT_ID" \
             --env PROCELLA_AUTH_MODE="$PROCELLA_AUTH_MODE" \
@@ -210,10 +211,11 @@ jobs:
         id: deploy
         env:
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_DOCS_PROJECT_ID }}
+          GIT_BRANCH: ${{ github.head_ref }}
         run: |
           vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
           vercel build --token="$VERCEL_TOKEN"
-          URL=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --meta githubCommitRef=${{ github.head_ref }})
+          URL=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --meta githubCommitRef="$GIT_BRANCH")
           echo "url=$URL" >> $GITHUB_OUTPUT
 
   # ── Comment on PR with preview URLs ────────────────────────────────────
