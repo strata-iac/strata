@@ -237,15 +237,21 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/github-script@v8
+        env:
+          APP_URL: ${{ needs.deploy-app.outputs.url }}
+          DOCS_URL: ${{ needs.deploy-docs.outputs.url }}
+          NEON_BRANCH_ID: ${{ needs.neon.outputs.branch_id }}
+          DESCOPE_ID: ${{ needs.infra.outputs.descope_project_id }}
+          PR_NUMBER: ${{ github.event.number }}
         with:
           script: |
             const lines = ['## 🚀 Preview Environment\n', '| Resource | URL |', '|---|---|'];
 
-            const appUrl = '${{ needs.deploy-app.outputs.url }}';
-            const docsUrl = '${{ needs.deploy-docs.outputs.url }}';
-            const neonBranch = '${{ needs.neon.outputs.branch_id }}';
-            const descopeId = '${{ needs.infra.outputs.descope_project_id }}';
-
+            const appUrl = process.env.APP_URL;
+            const docsUrl = process.env.DOCS_URL;
+            const neonBranch = process.env.NEON_BRANCH_ID;
+            const descopeId = process.env.DESCOPE_ID;
+            const prNumber = process.env.PR_NUMBER;
             if (appUrl) {
               lines.push(`| App | [${appUrl}](${appUrl}) |`);
             }
@@ -253,7 +259,7 @@ jobs:
               lines.push(`| Docs | [${docsUrl}](${docsUrl}) |`);
             }
             if (neonBranch) {
-              lines.push(`| Neon Branch | \`preview/pr-${{ github.event.number }}\` (\`${neonBranch}\`) |`);
+              lines.push(`| Neon Branch | \`preview/pr-${prNumber}\` (\`${neonBranch}\`) |`);
             }
             if (descopeId) {
               lines.push(`| Descope Project | \`${descopeId}\` |`);
