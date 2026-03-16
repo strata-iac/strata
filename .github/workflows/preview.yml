@@ -112,6 +112,8 @@ jobs:
       - name: Init preview stack config
         working-directory: infra
         env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
         run: |
@@ -124,6 +126,8 @@ jobs:
           stack-name: preview-pr-${{ github.event.number }}
           work-dir: infra
         env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
       - name: Export Descope project ID
         id: export
@@ -131,6 +135,8 @@ jobs:
           DESCOPE_ID=$(cd infra && pulumi stack output projectId --stack preview-pr-${{ github.event.number }})
           echo "descope_project_id=$DESCOPE_ID" >> $GITHUB_OUTPUT
         env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
 
   # ── Deploy Procella to Vercel (preview) ─────────────────────────────────
