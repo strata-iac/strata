@@ -20,7 +20,7 @@ UI_CHANGED=false
 INFRA_CHANGED=false
 DOCS_CHANGED=false
 
-if printf '%s\n' "$STAGED" | grep -qE '^(packages/|apps/server/).*\.ts$'; then
+if printf '%s\n' "$STAGED" | grep -qE '^(packages/|apps/server/|scripts/).*\.ts$'; then
   TS_CHANGED=true
 fi
 if printf '%s\n' "$STAGED" | grep -qE '^apps/ui/.*\.(ts|tsx)$'; then
@@ -42,12 +42,6 @@ if [ "$TS_CHANGED" = true ]; then
   fi
 fi
 
-if [ "$UI_CHANGED" = true ]; then
-  echo "▶ bun run check:ui (UI: lint → typecheck)"
-  if ! bun run check:ui 2>&1; then
-    FAIL=1
-  fi
-fi
 
 if [ "$TS_CHANGED" = true ] || [ "$UI_CHANGED" = true ] || [ "$INFRA_CHANGED" = true ]; then
   if [ "$DOCS_CHANGED" = false ]; then

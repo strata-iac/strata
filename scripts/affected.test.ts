@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { walkAffected, computeTargets } from "./affected.ts";
+import { computeTargets, walkAffected } from "./affected.ts";
 
 // ---------------------------------------------------------------------------
 // Test graph matching the real Procella dependency structure
@@ -10,20 +10,35 @@ function buildTestReverseGraph(): Map<string, Set<string>> {
 	const reverse = new Map<string, Set<string>>();
 
 	// types is depended on by: config, crypto, auth, stacks, updates, api, server, ui
-	reverse.set("@procella/types", new Set([
-		"@procella/config", "@procella/crypto", "@procella/auth",
-		"@procella/stacks", "@procella/updates", "@procella/api",
-		"@procella/server", "@procella/ui",
-	]));
+	reverse.set(
+		"@procella/types",
+		new Set([
+			"@procella/config",
+			"@procella/crypto",
+			"@procella/auth",
+			"@procella/stacks",
+			"@procella/updates",
+			"@procella/api",
+			"@procella/server",
+			"@procella/ui",
+		]),
+	);
 	// config is depended on by: db, crypto, storage, auth, server
-	reverse.set("@procella/config", new Set([
-		"@procella/db", "@procella/crypto", "@procella/storage",
-		"@procella/auth", "@procella/server",
-	]));
+	reverse.set(
+		"@procella/config",
+		new Set([
+			"@procella/db",
+			"@procella/crypto",
+			"@procella/storage",
+			"@procella/auth",
+			"@procella/server",
+		]),
+	);
 	// db is depended on by: stacks, updates, api, server
-	reverse.set("@procella/db", new Set([
-		"@procella/stacks", "@procella/updates", "@procella/api", "@procella/server",
-	]));
+	reverse.set(
+		"@procella/db",
+		new Set(["@procella/stacks", "@procella/updates", "@procella/api", "@procella/server"]),
+	);
 	// crypto is depended on by: updates, server
 	reverse.set("@procella/crypto", new Set(["@procella/updates", "@procella/server"]));
 	// storage is depended on by: updates, server
@@ -86,38 +101,44 @@ describe("walkAffected", () => {
 
 	test("api change affects api + server + ui", () => {
 		const affected = walkAffected(new Set(["@procella/api"]), reverse);
-		expect(affected).toEqual(new Set([
-			"@procella/api", "@procella/server", "@procella/ui",
-		]));
+		expect(affected).toEqual(new Set(["@procella/api", "@procella/server", "@procella/ui"]));
 	});
 
 	test("db change cascades through stacks, updates, api to server + ui", () => {
 		const affected = walkAffected(new Set(["@procella/db"]), reverse);
-		expect(affected).toEqual(new Set([
-			"@procella/db", "@procella/stacks", "@procella/updates",
-			"@procella/api", "@procella/server", "@procella/ui",
-		]));
+		expect(affected).toEqual(
+			new Set([
+				"@procella/db",
+				"@procella/stacks",
+				"@procella/updates",
+				"@procella/api",
+				"@procella/server",
+				"@procella/ui",
+			]),
+		);
 	});
 
 	test("types change affects everything except docs", () => {
 		const affected = walkAffected(new Set(["@procella/types"]), reverse);
 		const allExceptDocs = new Set([
-			"@procella/types", "@procella/config", "@procella/db",
-			"@procella/crypto", "@procella/storage", "@procella/auth",
-			"@procella/stacks", "@procella/updates", "@procella/api",
-			"@procella/server", "@procella/ui",
+			"@procella/types",
+			"@procella/config",
+			"@procella/db",
+			"@procella/crypto",
+			"@procella/storage",
+			"@procella/auth",
+			"@procella/stacks",
+			"@procella/updates",
+			"@procella/api",
+			"@procella/server",
+			"@procella/ui",
 		]);
 		expect(affected).toEqual(allExceptDocs);
 	});
 
 	test("multiple direct changes merge correctly", () => {
-		const affected = walkAffected(
-			new Set(["@procella/auth", "@procella/docs"]),
-			reverse,
-		);
-		expect(affected).toEqual(new Set([
-			"@procella/auth", "@procella/server", "@procella/docs",
-		]));
+		const affected = walkAffected(new Set(["@procella/auth", "@procella/docs"]), reverse);
+		expect(affected).toEqual(new Set(["@procella/auth", "@procella/server", "@procella/docs"]));
 	});
 
 	test("empty input returns empty set", () => {
@@ -164,10 +185,17 @@ describe("computeTargets", () => {
 
 	test("types change affects server + ui", () => {
 		const allExceptDocs = new Set([
-			"@procella/types", "@procella/config", "@procella/db",
-			"@procella/crypto", "@procella/storage", "@procella/auth",
-			"@procella/stacks", "@procella/updates", "@procella/api",
-			"@procella/server", "@procella/ui",
+			"@procella/types",
+			"@procella/config",
+			"@procella/db",
+			"@procella/crypto",
+			"@procella/storage",
+			"@procella/auth",
+			"@procella/stacks",
+			"@procella/updates",
+			"@procella/api",
+			"@procella/server",
+			"@procella/ui",
 		]);
 		const result = computeTargets(allExceptDocs, ["packages/types/src/domain.ts"], packages);
 
@@ -215,8 +243,14 @@ describe("computeTargets", () => {
 	});
 
 	test("db change sets migrate flag", () => {
-		const affected = new Set(["@procella/db", "@procella/stacks", "@procella/updates",
-			"@procella/api", "@procella/server", "@procella/ui"]);
+		const affected = new Set([
+			"@procella/db",
+			"@procella/stacks",
+			"@procella/updates",
+			"@procella/api",
+			"@procella/server",
+			"@procella/ui",
+		]);
 		const result = computeTargets(affected, ["packages/db/src/schema.ts"], packages);
 
 		expect(result.migrate).toBe(true);
@@ -238,8 +272,6 @@ describe("computeTargets", () => {
 		const affected = new Set(["@procella/ui", "@procella/api", "@procella/server"]);
 		const result = computeTargets(affected, ["packages/api/src/index.ts"], packages);
 
-		expect(result.affected).toEqual([
-			"@procella/api", "@procella/server", "@procella/ui",
-		]);
+		expect(result.affected).toEqual(["@procella/api", "@procella/server", "@procella/ui"]);
 	});
 });

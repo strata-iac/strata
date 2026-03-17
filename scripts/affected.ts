@@ -9,8 +9,6 @@
 //   bun run scripts/affected.ts --base=main      # explicit base ref
 //   bun run scripts/affected.ts --files=a.ts,b.ts # skip git, use these files
 
-export {};
-
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -61,9 +59,7 @@ async function buildGraph(): Promise<{ packages: PackageMap; deps: DepGraph }> {
 			packages.set(name, dir);
 			const workspaceDeps = new Set<string>();
 			for (const section of ["dependencies", "devDependencies"] as const) {
-				for (const [dep, ver] of Object.entries(
-					(pkg[section] as Record<string, string>) ?? {},
-				)) {
+				for (const [dep, ver] of Object.entries((pkg[section] as Record<string, string>) ?? {})) {
 					if (typeof ver === "string" && ver.startsWith("workspace:")) {
 						workspaceDeps.add(dep);
 					}
@@ -89,8 +85,9 @@ function buildReverseGraph(deps: DepGraph): Map<string, Set<string>> {
 	}
 	for (const [name, pkgDeps] of deps) {
 		for (const dep of pkgDeps) {
-			if (!reverse.has(dep)) reverse.set(dep, new Set());
-			reverse.get(dep)!.add(name);
+			const dependents = reverse.get(dep) ?? new Set<string>();
+			dependents.add(name);
+			reverse.set(dep, dependents);
 		}
 	}
 	return reverse;
@@ -107,7 +104,8 @@ export function walkAffected(
 	const affected = new Set<string>();
 	const queue = [...changed];
 	while (queue.length > 0) {
-		const pkg = queue.pop()!;
+		const pkg = queue.pop();
+		if (pkg === undefined) break;
 		if (affected.has(pkg)) continue;
 		affected.add(pkg);
 		for (const dependent of reverseGraph.get(pkg) ?? []) {
@@ -153,10 +151,7 @@ async function getChangedFiles(baseRef?: string): Promise<string[]> {
 // File → package mapping
 // ---------------------------------------------------------------------------
 
-function fileToPackage(
-	filePath: string,
-	packages: PackageMap,
-): string | null {
+function fileToPackage(filePath: string, packages: PackageMap): string | null {
 	for (const [name, dir] of packages) {
 		if (filePath.startsWith(`${dir}/`)) return name;
 	}
@@ -250,9 +245,7 @@ async function main(): Promise<void> {
 	const reverseGraph = buildReverseGraph(deps);
 
 	// Get changed files
-	const changedFiles = filesFlag
-		? filesFlag.split(",")
-		: await getChangedFiles(baseFlag);
+	const changedFiles = filesFlag ? filesFlag.split(",") : await getChangedFiles(baseFlag);
 
 	// Map files to directly-changed packages
 	const directlyChanged = new Set<string>();

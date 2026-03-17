@@ -47,10 +47,21 @@
 			"**/apps/**/*.ts",
 			"**/apps/**/*.tsx",
 			"**/e2e/**/*.ts",
+			"**/scripts/**/*.ts",
 			"!**/node_modules",
 			"!**/dist",
 			"!**/*.gen.*",
 			"!**/.astro"
 		]
-	}
+	},
+	"overrides": [
+		{
+			"includes": ["scripts/**"],
+			"linter": {
+				"rules": {
+					"suspicious": { "noConsole": "off" }
+				}
+			}
+		}
+	]
 }
