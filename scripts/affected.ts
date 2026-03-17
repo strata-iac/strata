@@ -120,20 +120,34 @@ export function walkAffected(
 // ---------------------------------------------------------------------------
 
 async function getChangedFiles(baseRef?: string): Promise<string[]> {
-	// Determine base ref: explicit flag > CI env > merge-base with main
-	const base =
+	// Determine base ref: explicit flag > CI env > fallback
+	const rawBase =
 		baseRef ??
 		process.env.GITHUB_BASE_REF ?? // PR target branch in GitHub Actions
 		undefined;
 
 	let cmd: string[];
-	if (base) {
-		// Use merge-base for accurate diff (handles diverged branches)
-		const mergeBase = Bun.spawnSync(["git", "merge-base", base, "HEAD"], {
-			stdout: "pipe",
-		});
-		const mb = mergeBase.stdout.toString().trim();
-		cmd = ["git", "diff", "--name-only", mb || base, "HEAD"];
+	if (rawBase) {
+		// Try the ref as-is first (works locally where branch exists),
+		// then fall back to origin/<branch> (CI where only remote refs exist).
+		const candidates = rawBase.startsWith("origin/") ? [rawBase] : [rawBase, `origin/${rawBase}`];
+
+		let mb = "";
+		for (const ref of candidates) {
+			const mergeBase = Bun.spawnSync(["git", "merge-base", ref, "HEAD"], {
+				stdout: "pipe",
+				stderr: "pipe",
+			});
+			mb = mergeBase.stdout.toString().trim();
+			if (mb) break;
+		}
+
+		if (!mb) {
+			console.error(`warning: could not find merge-base for ${rawBase}, falling back to HEAD~1`);
+			cmd = ["git", "diff", "--name-only", "HEAD~1", "HEAD"];
+		} else {
+			cmd = ["git", "diff", "--name-only", mb, "HEAD"];
+		}
 	} else {
 		// Fallback: diff against HEAD~1 (push to main)
 		cmd = ["git", "diff", "--name-only", "HEAD~1", "HEAD"];
