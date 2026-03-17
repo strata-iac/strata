@@ -27,6 +27,43 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run check
 
+  types-freshness:
+    name: Verify Pulumi Types Freshness
+    runs-on: ubuntu-latest
+    # Runs on all PRs as a safety net to catch stale generated types
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: packages/types/tygo/go.mod
+          cache-dependency-path: packages/types/tygo/go.sum
+      - uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - name: Regenerate types from Pulumi SDK
+        run: bun run types:generate
+      - name: Check for uncommitted type changes
+        run: |
+          if ! git diff --exit-code packages/types/; then
+            echo ""
+            echo "::error::Generated Pulumi types are stale. Run 'bun run types:generate' and commit the result."
+            echo ""
+            echo "The Pulumi SDK version in go.mod was updated but the generated types were not regenerated."
+            echo "This can cause type mismatches between the Go SDK and TypeScript interfaces."
+            exit 1
+          fi
+      - name: Typecheck with regenerated types
+        run: bun run typecheck
+      - name: Run unit tests
+        run: bun test packages/
+
   e2e:
     name: E2E Acceptance Tests
     runs-on: ubuntu-latest

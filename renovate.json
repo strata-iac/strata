@@ -10,5 +10,5 @@
       "matchPackageNames": ["astro", "@astrojs/starlight"],
       "groupName": "astro + starlight"
     }
-  ]  
+  ]
 }
