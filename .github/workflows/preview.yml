@@ -91,7 +91,8 @@ jobs:
             echo "::error::Failed to get Neon connection URI. Response: $RESPONSE"
             exit 1
           fi
-          echo "DB_URL host: $(echo $DB_URL | sed 's|.*@||;s|/.*||')"
+          echo "::add-mask::$DB_URL"
+          echo "DB_URL host: $(echo "$DB_URL" | sed 's|.*@||;s|/.*||')"
           # Ensure sslmode=require for Neon
           DB_URL="${DB_URL}?sslmode=require"
           echo "::add-mask::$DB_URL"
@@ -100,6 +101,11 @@ jobs:
           DB_URL_POOLED=$(curl -s -H "Authorization: Bearer $NEON_API_KEY" \
             "https://console.neon.tech/api/v2/projects/${{ vars.NEON_PROJECT_ID }}/connection_uri?branch_id=$BRANCH_ID&database_name=neondb&role_name=neondb_owner&pooled=true" \
             | jq -r '.uri')
+          if [ -z "$DB_URL_POOLED" ] || [ "$DB_URL_POOLED" = "null" ]; then
+            echo "::error::Failed to get Neon pooled connection URI"
+            exit 1
+          fi
+          echo "::add-mask::$DB_URL_POOLED"
           DB_URL_POOLED="${DB_URL_POOLED}?sslmode=require"
           echo "::add-mask::$DB_URL_POOLED"
           echo "db_url_pooled=$DB_URL_POOLED" >> $GITHUB_OUTPUT
@@ -205,6 +211,8 @@ jobs:
           PROCELLA_BLOB_S3_REGION: ${{ vars.PROCELLA_BLOB_S3_REGION }}
           PROCELLA_ENCRYPTION_KEY: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
           PROCELLA_DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           SKIP_MIGRATIONS: "1"
           GIT_BRANCH: ${{ github.head_ref }}
         run: |
@@ -220,7 +228,9 @@ jobs:
             --env PROCELLA_BLOB_S3_ENDPOINT="$PROCELLA_BLOB_S3_ENDPOINT" \
             --env PROCELLA_BLOB_S3_REGION="$PROCELLA_BLOB_S3_REGION" \
             --env PROCELLA_ENCRYPTION_KEY="$PROCELLA_ENCRYPTION_KEY" \
-            --env PROCELLA_DESCOPE_MANAGEMENT_KEY="$PROCELLA_DESCOPE_MANAGEMENT_KEY")
+            --env PROCELLA_DESCOPE_MANAGEMENT_KEY="$PROCELLA_DESCOPE_MANAGEMENT_KEY" \
+            --env AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+            --env AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY")
           echo "url=$URL" >> $GITHUB_OUTPUT
 
   # ── Deploy Docs to Vercel (preview) ────────────────────────────────────

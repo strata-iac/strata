@@ -16,6 +16,7 @@ jobs:
   neon:
     name: Delete Neon Branch
     runs-on: ubuntu-latest
+    environment: preview
     continue-on-error: true
     steps:
       - uses: neondatabase/delete-branch-action@v3
@@ -28,6 +29,7 @@ jobs:
   infra:
     name: Destroy Pulumi Stack
     runs-on: ubuntu-latest
+    environment: preview
     continue-on-error: true
     env:
       PULUMI_BACKEND_URL: s3://${{ vars.PROCELLA_BLOB_S3_BUCKET }}?endpoint=${{ vars.R2_ENDPOINT }}&region=auto
@@ -55,6 +57,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
       - name: Remove stack
+        continue-on-error: true
         run: cd infra && pulumi stack rm preview-pr-${{ github.event.number }} --yes
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -65,6 +68,7 @@ jobs:
   vercel-app:
     name: Remove App Preview
     runs-on: ubuntu-latest
+    environment: preview
     continue-on-error: true
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -75,9 +79,13 @@ jobs:
           GIT_BRANCH: ${{ github.head_ref }}
         run: |
           # Find deployments for this PR's branch via Vercel API
-          DEPLOYS=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
-            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&meta-githubCommitRef=$GIT_BRANCH&limit=100" \
-            | jq -r '.deployments[].uid // empty')
+          RESPONSE=$(curl -sf -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&meta-githubCommitRef=$GIT_BRANCH&limit=100")
+          if [ $? -ne 0 ]; then
+            echo "::warning::Failed to list Vercel deployments for cleanup"
+            exit 0
+          fi
+          DEPLOYS=$(echo "$RESPONSE" | jq -r '.deployments[].uid // empty')
           for uid in $DEPLOYS; do
             echo "Removing deployment $uid"
             curl -s -X DELETE -H "Authorization: Bearer $VERCEL_TOKEN" \
@@ -87,6 +95,7 @@ jobs:
   vercel-docs:
     name: Remove Docs Preview
     runs-on: ubuntu-latest
+    environment: preview
     continue-on-error: true
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -97,9 +106,13 @@ jobs:
           GIT_BRANCH: ${{ github.head_ref }}
         run: |
           # Find deployments for this PR's branch via Vercel API
-          DEPLOYS=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
-            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&meta-githubCommitRef=$GIT_BRANCH&limit=100" \
-            | jq -r '.deployments[].uid // empty')
+          RESPONSE=$(curl -sf -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&meta-githubCommitRef=$GIT_BRANCH&limit=100")
+          if [ $? -ne 0 ]; then
+            echo "::warning::Failed to list Vercel deployments for cleanup"
+            exit 0
+          fi
+          DEPLOYS=$(echo "$RESPONSE" | jq -r '.deployments[].uid // empty')
           for uid in $DEPLOYS; do
             echo "Removing deployment $uid"
             curl -s -X DELETE -H "Authorization: Bearer $VERCEL_TOKEN" \
