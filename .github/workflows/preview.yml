@@ -55,6 +55,7 @@ jobs:
     environment: preview
     outputs:
       branch_id: ${{ steps.branch.outputs.branch_id }}
+      db_url_pooled: ${{ steps.neon-url.outputs.db_url_pooled }}
     steps:
       - uses: neondatabase/create-branch-action@v6
         id: branch
@@ -74,17 +75,28 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
+      - name: Get Neon connection string
+        id: neon-url
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          BRANCH_ID="${{ steps.branch.outputs.branch_id }}"
+          # Get direct (non-pooled) connection URI for migrations
+          DB_URL=$(curl -s -H "Authorization: Bearer $NEON_API_KEY" \
+            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/connection_uri?branch_id=$BRANCH_ID&database_name=neondb&role_name=neondb_owner" \
+            | jq -r '.uri')
+          echo "::add-mask::$DB_URL"
+          echo "db_url=$DB_URL" >> $GITHUB_OUTPUT
+          # Get pooled connection URI for runtime
+          DB_URL_POOLED=$(curl -s -H "Authorization: Bearer $NEON_API_KEY" \
+            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/connection_uri?branch_id=$BRANCH_ID&database_name=neondb&role_name=neondb_owner&pooled=true" \
+            | jq -r '.uri')
+          echo "::add-mask::$DB_URL_POOLED"
+          echo "db_url_pooled=$DB_URL_POOLED" >> $GITHUB_OUTPUT
       - name: Run migrations
         env:
-          PROCELLA_DATABASE_URL: ${{ steps.branch.outputs.db_url }}
-        run: |
-          # Neon computes may be suspended; first connection wakes them (~5-10s)
-          for i in 1 2 3 4 5; do
-            bunx drizzle-kit migrate --config packages/db/drizzle.config.ts && exit 0
-            echo "Attempt $i failed, retrying in 10s..."
-            sleep 10
-          done
-          echo "All migration attempts failed" && exit 1
+          PROCELLA_DATABASE_URL: ${{ steps.neon-url.outputs.db_url }}
+        run: bunx drizzle-kit migrate --config packages/db/drizzle.config.ts
 
   # ── Deploy Descope infra (Pulumi preview stack) ────────────────────────
   infra:
@@ -160,23 +172,11 @@ jobs:
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - run: npm install --global vercel@latest
-      - name: Get Neon connection string
-        id: neon-url
-        env:
-          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-        run: |
-          BRANCH_ID="${{ needs.neon.outputs.branch_id }}"
-          # Get connection URI from Neon API
-          CS=$(curl -s -H "Authorization: Bearer $NEON_API_KEY" \
-            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/connection_uri?branch_id=$BRANCH_ID&database_name=neondb&role_name=neondb_owner&pooled=true"  \
-            | jq -r '.uri')
-          echo "::add-mask::$CS"
-          echo "db_url=$CS" >> $GITHUB_OUTPUT
       - name: Build & Deploy
         id: deploy
         env:
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
-          PROCELLA_DATABASE_URL: ${{ steps.neon-url.outputs.db_url }}
+          PROCELLA_DATABASE_URL: ${{ needs.neon.outputs.db_url_pooled }}
           PROCELLA_DESCOPE_PROJECT_ID: ${{ needs.infra.outputs.descope_project_id }}
           PROCELLA_AUTH_MODE: descope
           PROCELLA_BLOB_BACKEND: s3
