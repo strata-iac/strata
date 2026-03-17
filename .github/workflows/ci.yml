@@ -39,7 +39,7 @@ jobs:
         with:
           go-version-file: packages/types/tygo/go.mod
           cache-dependency-path: packages/types/tygo/go.sum
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             node_modules
