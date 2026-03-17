@@ -85,7 +85,7 @@ jobs:
           echo "Branch ID: $BRANCH_ID"
           # Get direct (non-pooled) connection URI for migrations
           RESPONSE=$(curl -s -H "Authorization: Bearer $NEON_API_KEY" \
-            "https://console.neon.tech/api/v2/projects/${{ vars.NEON_PROJECT_ID }}/connection_uri?branch_id=$BRANCH_ID&database_name=neondb&role_name=neondb_owner")
+            "https://console.neon.tech/api/v2/projects/${{ vars.NEON_PROJECT_ID }}/connection_uri?branch_id=$BRANCH_ID&database_name=neondb&role_name=neondb_owner&pooled=false")
           DB_URL=$(echo "$RESPONSE" | jq -r '.uri')
           if [ -z "$DB_URL" ] || [ "$DB_URL" = "null" ]; then
             echo "::error::Failed to get Neon connection URI. Response: $RESPONSE"
@@ -106,7 +106,12 @@ jobs:
       - name: Run migrations
         env:
           PROCELLA_DATABASE_URL: ${{ steps.neon-url.outputs.db_url }}
-        run: bun run scripts/migrate.ts
+        run: |
+          # mise re-applies env from mise.toml via shims, overriding step env.
+          # Override mise.toml env inline so Bun sees the Neon URL.
+          mise set PROCELLA_DATABASE_URL="$PROCELLA_DATABASE_URL"
+          bun run scripts/migrate.ts
+          mise unset PROCELLA_DATABASE_URL
 
   # ── Deploy Descope infra (Pulumi preview stack) ────────────────────────
   infra:
