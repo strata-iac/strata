@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'docs/**'
+      - 'apps/docs/**'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 
@@ -22,19 +22,21 @@ jobs:
     name: Build Docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v2
+      - uses: actions/cache@v5
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: docs/package-lock.json
-      - run: npm ci
-        working-directory: docs
-      - run: npm run build
-        working-directory: docs
-      - uses: actions/upload-pages-artifact@v3
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+        working-directory: apps/docs
+      - uses: actions/upload-pages-artifact@v4
         with:
-          path: docs/dist
+          path: apps/docs/dist
 
   deploy:
     name: Deploy to GitHub Pages
