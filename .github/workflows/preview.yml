@@ -112,7 +112,7 @@ jobs:
       - name: Run migrations
         env:
           PROCELLA_DATABASE_URL: ${{ steps.neon-url.outputs.db_url }}
-        run: bunx drizzle-kit migrate --config packages/db/drizzle.config.ts
+        run: bun run scripts/migrate.ts
 
   # ── Deploy Descope infra (Pulumi preview stack) ────────────────────────
   infra:

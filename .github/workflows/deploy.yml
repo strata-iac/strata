@@ -67,7 +67,7 @@ jobs:
       - name: Run migrations
         env:
           PROCELLA_DATABASE_URL: ${{ secrets.PROCELLA_DATABASE_URL }}
-        run: bunx drizzle-kit migrate --config packages/db/drizzle.config.ts
+        run: bun run scripts/migrate.ts
 
   # ── Deploy Descope infra (production stack) ──────────────────────────────
   infra:
