@@ -34,7 +34,7 @@ jobs:
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
+      - uses: jdx/mise-action@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: packages/types/tygo/go.mod
