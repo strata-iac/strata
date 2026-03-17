@@ -21,7 +21,7 @@ go mod tidy
 tygo generate
 
 # Extract SDK version from go.mod for the header comment
-SDK_VERSION=$(grep 'github.com/pulumi/pulumi/sdk/v3' "$TYGO_DIR/go.mod" | awk '{print $NF}')
+SDK_VERSION=$(cd "$TYGO_DIR" && go list -m -f '{{.Version}}' github.com/pulumi/pulumi/sdk/v3)
 
 # Inject SDK version into the generated header
 sed -i.bak "s|// Pulumi SDK version is read from packages/types/tygo/go.mod|// Pulumi SDK ${SDK_VERSION}|" "$GEN_FILE"
