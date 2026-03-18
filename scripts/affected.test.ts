@@ -229,7 +229,7 @@ describe("computeTargets", () => {
 		expect(result.server).toBe(true);
 		expect(result.ui).toBe(true);
 		expect(result.migrate).toBe(true);
-		expect(result.docs).toBe(false);
+		expect(result.docs).toBe(true);
 		expect(result.infra).toBe(false);
 	});
 
@@ -240,6 +240,7 @@ describe("computeTargets", () => {
 		expect(result.server).toBe(true);
 		expect(result.ui).toBe(true);
 		expect(result.migrate).toBe(true);
+		expect(result.docs).toBe(true);
 	});
 
 	test("db change sets migrate flag", () => {

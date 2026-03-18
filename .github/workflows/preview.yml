@@ -29,14 +29,6 @@ jobs:
         with:
           fetch-depth: 0
       - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
-        with:
-          path: |
-            node_modules
-            ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-      - run: bun install --frozen-lockfile
       - name: Detect affected packages
         id: affected
         run: |
@@ -55,7 +47,7 @@ jobs:
   neon:
     name: Neon Branch & Migrate
     needs: [changes]
-    if: needs.changes.outputs.migrate == 'true'
+    if: needs.changes.outputs.server == 'true' || needs.changes.outputs.ui == 'true'
     runs-on: ubuntu-latest
     environment: preview
     env:
@@ -123,6 +115,7 @@ jobs:
           echo "::add-mask::$DB_URL_POOLED"
           echo "db_url_pooled=$DB_URL_POOLED" >> $GITHUB_OUTPUT
       - name: Run migrations
+        if: needs.changes.outputs.migrate == 'true'
         env:
           PROCELLA_DATABASE_URL: ${{ steps.neon-url.outputs.db_url }}
         run: |
@@ -136,7 +129,7 @@ jobs:
   infra:
     name: Pulumi Preview Stack
     needs: [changes]
-    if: needs.changes.outputs.infra == 'true'
+    if: needs.changes.outputs.infra == 'true' || needs.changes.outputs.server == 'true' || needs.changes.outputs.ui == 'true'
     runs-on: ubuntu-latest
     environment: preview
     env:

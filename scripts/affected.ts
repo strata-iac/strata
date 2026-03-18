@@ -122,7 +122,9 @@ export function walkAffected(
 async function getChangedFiles(baseRef?: string): Promise<string[]> {
 	// GitHub Actions: GITHUB_BASE_REF is the PR target branch name (e.g. "main").
 	// actions/checkout only creates remote refs, so we always use origin/<branch>.
-	const rawBase = baseRef ?? process.env.GITHUB_BASE_REF ?? undefined;
+	// For pushes to main, use github.event.before if available, else HEAD~1.
+	const rawBase =
+		baseRef ?? process.env.GITHUB_BASE_REF ?? process.env.GITHUB_EVENT_BEFORE ?? undefined;
 
 	let cmd: string[];
 	if (rawBase) {
@@ -131,14 +133,24 @@ async function getChangedFiles(baseRef?: string): Promise<string[]> {
 			stdout: "pipe",
 			stderr: "pipe",
 		});
+		if (mergeBase.exitCode !== 0) {
+			const stderr = mergeBase.stderr.toString().trim();
+			console.error(`::error::git merge-base failed (exit ${mergeBase.exitCode}): ${stderr}`);
+			process.exit(1);
+		}
 		const mb = mergeBase.stdout.toString().trim();
-		cmd = ["git", "diff", "--name-only", mb || base, "HEAD"];
+		cmd = ["git", "diff", "--name-only", mb, "HEAD"];
 	} else {
-		// Push to main: diff against previous commit
+		// Last resort: diff against previous commit
 		cmd = ["git", "diff", "--name-only", "HEAD~1", "HEAD"];
 	}
 
-	const result = Bun.spawnSync(cmd, { stdout: "pipe" });
+	const result = Bun.spawnSync(cmd, { stdout: "pipe", stderr: "pipe" });
+	if (result.exitCode !== 0) {
+		const stderr = result.stderr.toString().trim();
+		console.error(`::error::git diff failed (exit ${result.exitCode}): ${stderr}`);
+		process.exit(1);
+	}
 	return result.stdout
 		.toString()
 		.trim()
@@ -184,11 +196,13 @@ export function computeTargets(
 		affected: [...affected].sort(),
 	};
 
-	// Check for global files that affect all app targets
+	// Check for global files that affect all app targets (including docs,
+	// since docs also runs bun install and depends on the lockfile).
 	for (const file of changedFiles) {
 		if (GLOBAL_APP_PATTERNS.includes(file)) {
 			result.server = true;
 			result.ui = true;
+			result.docs = true;
 			result.migrate = true;
 			break;
 		}
