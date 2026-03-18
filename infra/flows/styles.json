@@ -35,27 +35,27 @@
           },
           "subtitle1": {
             "font": "var(--descope-fonts-font1-family)",
-            "size": "18px",
+            "size": "16px",
             "weight": "500"
           },
           "subtitle2": {
             "font": "var(--descope-fonts-font1-family)",
-            "size": "16px",
+            "size": "14px",
             "weight": "500"
           },
           "h1": {
             "font": "var(--descope-fonts-font1-family)",
-            "size": "48px",
+            "size": "36px",
             "weight": "600"
           },
           "h2": {
             "font": "var(--descope-fonts-font1-family)",
-            "size": "36px",
+            "size": "28px",
             "weight": "600"
           },
           "h3": {
             "font": "var(--descope-fonts-font1-family)",
-            "size": "24px",
+            "size": "20px",
             "weight": "600"
           }
         }
@@ -67,18 +67,22 @@
         "button": {
           "--descope-button-border-radius": "8px",
           "--descope-button-font-family": "var(--descope-fonts-font1-family)",
+          "--descope-button-border-width": "1px",
+          "--descope-button-border-style": "solid",
           "mode": {
             "primary": {
               "--descope-button-main": "#2563eb",
               "--descope-button-light": "#60a5fa",
               "--descope-button-dark": "#1d4ed8",
-              "--descope-button-contrast": "#eff6ff"
+              "--descope-button-contrast": "#eff6ff",
+              "--descope-button-border-color": "#2563eb"
             },
             "secondary": {
               "--descope-button-main": "#27272a",
               "--descope-button-light": "#3f3f46",
               "--descope-button-dark": "#18181b",
-              "--descope-button-contrast": "#f4f4f5"
+              "--descope-button-contrast": "#f4f4f5",
+              "--descope-button-border-color": "#3f3f46"
             }
           }
         },
@@ -89,6 +93,7 @@
           "--descope-input-wrapper-label-text-color": "#a1a1aaFF",
           "--descope-input-wrapper-placeholder-text-color": "#71717aFF",
           "--descope-input-wrapper-value-text-color": "#f4f4f5FF",
+          "--descope-input-wrapper-border-color": "#3f3f46FF",
           "_bordered": {}
         },
         "text": {
@@ -149,27 +154,27 @@
           },
           "subtitle1": {
             "font": "var(--descope-fonts-font1-family)",
-            "size": "18px",
+            "size": "16px",
             "weight": "500"
           },
           "subtitle2": {
             "font": "var(--descope-fonts-font1-family)",
-            "size": "16px",
+            "size": "14px",
             "weight": "500"
           },
           "h1": {
             "font": "var(--descope-fonts-font1-family)",
-            "size": "48px",
+            "size": "36px",
             "weight": "600"
           },
           "h2": {
             "font": "var(--descope-fonts-font1-family)",
-            "size": "36px",
+            "size": "28px",
             "weight": "600"
           },
           "h3": {
             "font": "var(--descope-fonts-font1-family)",
-            "size": "24px",
+            "size": "20px",
             "weight": "600"
           }
         }
@@ -181,18 +186,22 @@
         "button": {
           "--descope-button-border-radius": "8px",
           "--descope-button-font-family": "var(--descope-fonts-font1-family)",
+          "--descope-button-border-width": "1px",
+          "--descope-button-border-style": "solid",
           "mode": {
             "primary": {
               "--descope-button-main": "#2563eb",
               "--descope-button-light": "#60a5fa",
               "--descope-button-dark": "#1d4ed8",
-              "--descope-button-contrast": "#eff6ff"
+              "--descope-button-contrast": "#eff6ff",
+              "--descope-button-border-color": "#2563eb"
             },
             "secondary": {
               "--descope-button-main": "#e4e4e7",
               "--descope-button-light": "#f4f4f5",
               "--descope-button-dark": "#d4d4d8",
-              "--descope-button-contrast": "#18181b"
+              "--descope-button-contrast": "#18181b",
+              "--descope-button-border-color": "#d4d4d8"
             }
           }
         },
@@ -203,6 +212,7 @@
           "--descope-input-wrapper-label-text-color": "#71717aFF",
           "--descope-input-wrapper-placeholder-text-color": "#a1a1aaFF",
           "--descope-input-wrapper-value-text-color": "#09090bFF",
+          "--descope-input-wrapper-border-color": "#d4d4d8FF",
           "_bordered": {}
         },
         "text": {
