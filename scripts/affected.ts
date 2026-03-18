@@ -120,36 +120,21 @@ export function walkAffected(
 // ---------------------------------------------------------------------------
 
 async function getChangedFiles(baseRef?: string): Promise<string[]> {
-	// Determine base ref: explicit flag > CI env > fallback
-	const rawBase =
-		baseRef ??
-		process.env.GITHUB_BASE_REF ?? // PR target branch in GitHub Actions
-		undefined;
+	// GitHub Actions: GITHUB_BASE_REF is the PR target branch name (e.g. "main").
+	// actions/checkout only creates remote refs, so we always use origin/<branch>.
+	const rawBase = baseRef ?? process.env.GITHUB_BASE_REF ?? undefined;
 
 	let cmd: string[];
 	if (rawBase) {
-		// Try the ref as-is first (works locally where branch exists),
-		// then fall back to origin/<branch> (CI where only remote refs exist).
-		const candidates = rawBase.startsWith("origin/") ? [rawBase] : [rawBase, `origin/${rawBase}`];
-
-		let mb = "";
-		for (const ref of candidates) {
-			const mergeBase = Bun.spawnSync(["git", "merge-base", ref, "HEAD"], {
-				stdout: "pipe",
-				stderr: "pipe",
-			});
-			mb = mergeBase.stdout.toString().trim();
-			if (mb) break;
-		}
-
-		if (!mb) {
-			console.error(`warning: could not find merge-base for ${rawBase}, falling back to HEAD~1`);
-			cmd = ["git", "diff", "--name-only", "HEAD~1", "HEAD"];
-		} else {
-			cmd = ["git", "diff", "--name-only", mb, "HEAD"];
-		}
+		const base = rawBase.includes("/") ? rawBase : `origin/${rawBase}`;
+		const mergeBase = Bun.spawnSync(["git", "merge-base", base, "HEAD"], {
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		const mb = mergeBase.stdout.toString().trim();
+		cmd = ["git", "diff", "--name-only", mb || base, "HEAD"];
 	} else {
-		// Fallback: diff against HEAD~1 (push to main)
+		// Push to main: diff against previous commit
 		cmd = ["git", "diff", "--name-only", "HEAD~1", "HEAD"];
 	}
 
