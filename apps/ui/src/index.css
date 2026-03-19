@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 @theme {
+	--font-sans:
+		"Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+		"Segoe UI Symbol", "Noto Color Emoji";
 	--color-zinc-900: #18181b;
 	--color-zinc-800: #27272a;
 	--color-zinc-100: #f4f4f5;

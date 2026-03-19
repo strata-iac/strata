@@ -26,9 +26,18 @@ function DescopeLogin({ returnTo }: { returnTo: string }) {
 
 	return (
 		<div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-4">
-			<ProcellaLogo linkTo="/" className="mb-8" />
+			<ProcellaLogo linkTo="/" className="mb-3" />
 			<p className="text-sm text-zinc-400 mb-8">Sign in to your Pulumi backend</p>
-			<div className="w-full max-w-md">
+			<div
+				className="w-full max-w-md"
+				style={
+					{
+						fontFamily: "var(--font-sans)",
+						"--descope-font-family": "var(--font-sans)",
+						"--descope-background-color": "transparent",
+					} as React.CSSProperties
+				}
+			>
 				<Descope
 					flowId="sign-up-or-in"
 					theme="dark"
