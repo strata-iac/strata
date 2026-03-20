@@ -104,7 +104,7 @@ export class PostgresUpdatesService implements UpdatesService {
 		return { updateID: row.id, version } as UpdateProgramResponse;
 	}
 
-	async startUpdate(updateId: string, request: StartUpdateRequest): Promise<StartUpdateResponse> {
+	async startUpdate(updateId: string, _request: StartUpdateRequest): Promise<StartUpdateResponse> {
 		return this.db.transaction(async (tx) => {
 			const [row] = await tx.select().from(updates).where(eq(updates.id, updateId));
 
@@ -137,14 +137,10 @@ export class PostgresUpdatesService implements UpdatesService {
 				.set({ activeUpdateId: updateId, updatedAt: sql`now()` })
 				.where(eq(stacks.id, row.stackId));
 
-			const clientJournalVersion = request.journalVersion ?? 0;
-			const journalVersion = clientJournalVersion >= 1 ? 1 : 0;
-
 			return {
 				token,
 				version: row.version,
 				tokenExpiration: Math.floor(expiry.getTime() / 1000),
-				...(journalVersion > 0 ? { journalVersion } : {}),
 			} as StartUpdateResponse;
 		});
 	}
@@ -642,10 +638,6 @@ export class PostgresUpdatesService implements UpdatesService {
 		const baseDeployment = await this.loadBaseDeploymentForUpdate(stackId, updateId);
 		const reconstructed = applyJournalEntries(baseDeployment, allEntries);
 
-		if (!reconstructed.manifest) {
-			reconstructed.manifest = { time: new Date().toISOString(), magic: "", version: "" };
-		}
-
 		const serialized = JSON.stringify(reconstructed);
 		const maxAttempts = 5;
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -705,7 +697,12 @@ export class PostgresUpdatesService implements UpdatesService {
 				.then((rows) => rows[0]));
 
 		if (!row) {
-			return {};
+			return {
+				manifest: { time: new Date().toISOString(), magic: "", version: "" },
+				secrets_providers: { type: "passphrase", state: {} },
+				resources: [],
+				pending_operations: [],
+			};
 		}
 
 		if (row.blobKey) {

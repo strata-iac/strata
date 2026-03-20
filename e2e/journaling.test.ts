@@ -1,8 +1,9 @@
-// E2E — Journaling protocol: pulumi up/destroy with PULUMI_DISABLE_JOURNALING unset (journaling on).
+// E2E — Journaling protocol: route exists, capability advertised, backward compat.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import path from "node:path";
 import {
+	apiRequest,
 	BACKEND_URL,
 	cleanupDir,
 	createPulumiHome,
@@ -37,7 +38,14 @@ describe("journaling protocol", () => {
 		await truncateTables();
 	});
 
-	test("pulumi up succeeds with journaling enabled (default)", async () => {
+	test("capabilities include journaling-v1", async () => {
+		const res = await fetch(`${BACKEND_URL}/api/capabilities`);
+		const body = await res.json();
+		const names = body.capabilities.map((c: { capability: string }) => c.capability);
+		expect(names).toContain("journaling-v1");
+	});
+
+	test("startUpdate does not echo journalVersion (server-side journaling not yet active)", async () => {
 		projectDir = await newProjectDir("journaling-test");
 		await Bun.write(path.join(projectDir, "Pulumi.yaml"), RANDOM_PET_PROGRAM);
 
@@ -47,43 +55,43 @@ describe("journaling protocol", () => {
 		});
 		expect(initRes.exitCode).toBe(0);
 
-		const upRes = await pulumi(["up", "--yes"], {
-			cwd: projectDir,
-			pulumiHome,
+		const createRes = await apiRequest("/stacks/dev-org/journaling-test/dev/update", {
+			method: "POST",
+			body: {},
 		});
-		expect(upRes.exitCode).toBe(0);
-		const combined = upRes.stdout + upRes.stderr;
-		expect(combined).toContain("pet");
+		expect(createRes.status).toBe(200);
+		const { updateID } = await createRes.json();
+
+		const startRes = await apiRequest(`/stacks/dev-org/journaling-test/dev/update/${updateID}`, {
+			method: "POST",
+			body: { journalVersion: 1 },
+		});
+		expect(startRes.status).toBe(200);
+		const startBody = await startRes.json();
+		expect(startBody.journalVersion).toBeUndefined();
+
+		await apiRequest(`/stacks/dev-org/journaling-test/dev/update/${updateID}/cancel`, {
+			method: "POST",
+		});
 	});
 
-	test("pulumi destroy succeeds with journaling enabled", async () => {
-		const destroyRes = await pulumi(["destroy", "--yes"], {
-			cwd: projectDir,
-			pulumiHome,
-		});
-		if (destroyRes.exitCode !== 0) {
-			console.error("destroy stderr:", destroyRes.stderr);
-			console.error("destroy stdout:", destroyRes.stdout);
-		}
-		expect(destroyRes.exitCode).toBe(0);
-	});
+	test("pulumi up + destroy work with journaling inactive (backward compat)", async () => {
+		const upDir = await newProjectDir("journal-compat");
+		await Bun.write(path.join(upDir, "Pulumi.yaml"), RANDOM_PET_PROGRAM);
+		try {
+			const initRes = await pulumi(["stack", "init", "dev-org/journaling-test/compat"], {
+				cwd: upDir,
+				pulumiHome,
+			});
+			expect(initRes.exitCode).toBe(0);
 
-	test("pulumi up succeeds with journaling explicitly disabled (fallback to checkpoint)", async () => {
-		const upRes = await pulumi(["up", "--yes"], {
-			cwd: projectDir,
-			pulumiHome,
-			env: { PULUMI_DISABLE_JOURNALING: "true" },
-		});
-		if (upRes.exitCode !== 0) {
-			console.error("up(disabled) stderr:", upRes.stderr);
-			console.error("up(disabled) stdout:", upRes.stdout);
-		}
-		expect(upRes.exitCode).toBe(0);
+			const upRes = await pulumi(["up", "--yes"], { cwd: upDir, pulumiHome });
+			expect(upRes.exitCode).toBe(0);
 
-		await pulumi(["destroy", "--yes"], {
-			cwd: projectDir,
-			pulumiHome,
-			env: { PULUMI_DISABLE_JOURNALING: "true" },
-		});
+			const destroyRes = await pulumi(["destroy", "--yes"], { cwd: upDir, pulumiHome });
+			expect(destroyRes.exitCode).toBe(0);
+		} finally {
+			await cleanupDir(upDir);
+		}
 	});
 });
