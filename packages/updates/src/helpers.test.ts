@@ -278,62 +278,78 @@ describe("@procella/updates helpers", () => {
 			elideWrite = false,
 		) => ({ kind, operationId, sequenceId, state, operationType, elideWrite });
 
-		test("empty entries returns base state", () => {
-			const base = { resources: [makeResource("urn:a")], pendingOperations: [] };
+		const makeBase = (resources: unknown[] = [], pendingOps: unknown[] = []) => ({
+			manifest: { time: "2026-01-01T00:00:00Z", magic: "abc", version: "3.225.0" },
+			secrets_providers: { type: "passphrase", state: {} },
+			resources,
+			pending_operations: pendingOps,
+		});
+
+		test("empty entries returns base state unchanged", () => {
+			const base = makeBase([makeResource("urn:a")]);
 			const result = applyJournalEntries(base, []);
-			expect(result.resources).toHaveLength(1);
-			expect(result.pending_operations).toHaveLength(0);
+			expect((result.resources as unknown[]).length).toBe(1);
+			expect((result.pending_operations as unknown[]).length).toBe(0);
+		});
+
+		test("preserves manifest and other deployment fields", () => {
+			const base = makeBase([makeResource("urn:a")]);
+			const result = applyJournalEntries(base, []);
+			expect(result.manifest).toEqual(base.manifest);
+			expect(result.secrets_providers).toEqual(base.secrets_providers);
 		});
 
 		test("begin entry adds pending operation", () => {
-			const base = { resources: [], pendingOperations: [] };
+			const base = makeBase();
 			const resource = makeResource("urn:a");
 			const entries = [makeEntry(JournalEntryBegin, 1, 1, resource, "creating")];
 			const result = applyJournalEntries(base, entries);
-			expect(result.resources).toHaveLength(0);
-			expect(result.pending_operations).toHaveLength(1);
-			expect(result.pending_operations[0].type).toBe("creating");
+			expect((result.resources as unknown[]).length).toBe(0);
+			const ops = result.pending_operations as unknown as Array<{ type: string }>;
+			expect(ops.length).toBe(1);
+			expect(ops[0].type).toBe("creating");
 		});
 
 		test("success entry adds resource and removes pending op", () => {
-			const base = { resources: [], pendingOperations: [] };
+			const base = makeBase();
 			const resource = makeResource("urn:a");
 			const entries = [
 				makeEntry(JournalEntryBegin, 1, 1, resource, "creating"),
 				makeEntry(JournalEntrySuccess, 1, 2, resource),
 			];
 			const result = applyJournalEntries(base, entries);
-			expect(result.resources).toHaveLength(1);
-			expect(result.resources[0].urn).toBe("urn:a");
-			expect(result.pending_operations).toHaveLength(0);
+			const resources = result.resources as unknown as Array<{ urn: string }>;
+			expect(resources.length).toBe(1);
+			expect(resources[0].urn).toBe("urn:a");
+			expect((result.pending_operations as unknown[]).length).toBe(0);
 		});
 
 		test("failure entry removes pending op without adding resource", () => {
-			const base = { resources: [], pendingOperations: [] };
+			const base = makeBase();
 			const resource = makeResource("urn:a");
 			const entries = [
 				makeEntry(JournalEntryBegin, 1, 1, resource, "creating"),
 				makeEntry(JournalEntryFailure, 1, 2),
 			];
 			const result = applyJournalEntries(base, entries);
-			expect(result.resources).toHaveLength(0);
-			expect(result.pending_operations).toHaveLength(0);
+			expect((result.resources as unknown[]).length).toBe(0);
+			expect((result.pending_operations as unknown[]).length).toBe(0);
 		});
 
 		test("success with delete=true removes resource", () => {
 			const existing = makeResource("urn:a");
-			const base = { resources: [existing], pendingOperations: [] };
+			const base = makeBase([existing]);
 			const deleteState = { ...makeResource("urn:a"), delete: true };
 			const entries = [
 				makeEntry(JournalEntryBegin, 1, 1, existing, "deleting"),
 				makeEntry(JournalEntrySuccess, 1, 2, deleteState),
 			];
 			const result = applyJournalEntries(base, entries);
-			expect(result.resources).toHaveLength(0);
+			expect((result.resources as unknown[]).length).toBe(0);
 		});
 
 		test("multiple parallel operations reconstruct correctly", () => {
-			const base = { resources: [], pendingOperations: [] };
+			const base = makeBase();
 			const resA = makeResource("urn:a", "id-a");
 			const resB = makeResource("urn:b", "id-b");
 			const entries = [
@@ -343,21 +359,22 @@ describe("@procella/updates helpers", () => {
 				makeEntry(JournalEntrySuccess, 2, 4, resB),
 			];
 			const result = applyJournalEntries(base, entries);
-			expect(result.resources).toHaveLength(2);
-			expect(result.pending_operations).toHaveLength(0);
+			expect((result.resources as unknown[]).length).toBe(2);
+			expect((result.pending_operations as unknown[]).length).toBe(0);
 		});
 
 		test("update replaces existing resource", () => {
 			const original = makeResource("urn:a", "id-orig");
 			const updated = makeResource("urn:a", "id-updated");
-			const base = { resources: [original], pendingOperations: [] };
+			const base = makeBase([original]);
 			const entries = [
 				makeEntry(JournalEntryBegin, 1, 1, original, "updating"),
 				makeEntry(JournalEntrySuccess, 1, 2, updated),
 			];
 			const result = applyJournalEntries(base, entries);
-			expect(result.resources).toHaveLength(1);
-			expect(result.resources[0].id).toBe("id-updated");
+			const resources = result.resources as unknown as Array<{ id: string }>;
+			expect(resources.length).toBe(1);
+			expect(resources[0].id).toBe("id-updated");
 		});
 	});
 });

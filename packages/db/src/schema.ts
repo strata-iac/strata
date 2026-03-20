@@ -136,8 +136,8 @@ export const journalEntries = pgTable(
 			.notNull()
 			.references(() => updates.id, { onDelete: "cascade" }),
 		stackId: uuid("stack_id").notNull(),
-		sequenceId: bigint("sequence_id", { mode: "number" }).notNull(),
-		operationId: bigint("operation_id", { mode: "number" }).notNull(),
+		sequenceId: bigint("sequence_id", { mode: "bigint" }).notNull(),
+		operationId: bigint("operation_id", { mode: "bigint" }).notNull(),
 		kind: integer().notNull(),
 		state: jsonb(),
 		operationType: text("operation_type"),

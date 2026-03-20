@@ -405,8 +405,8 @@ export class PostgresUpdatesService implements UpdatesService {
 		const rows = entries.map((entry: JournalEntry) => ({
 			updateId,
 			stackId: row.stackId,
-			sequenceId: entry.sequenceID,
-			operationId: entry.operationID,
+			sequenceId: BigInt(entry.sequenceID),
+			operationId: BigInt(entry.operationID),
 			kind: entry.kind,
 			state: entry.state ?? null,
 			operationType: entry.operationType ?? null,
@@ -639,64 +639,73 @@ export class PostgresUpdatesService implements UpdatesService {
 			return;
 		}
 
-		const baseState = await this.loadBaseDeploymentState(stackId);
-		const reconstructed = applyJournalEntries(baseState, allEntries);
+		const baseDeployment = await this.loadBaseDeploymentForUpdate(stackId, updateId);
+		const reconstructed = applyJournalEntries(baseDeployment, allEntries);
 
 		const serialized = JSON.stringify(reconstructed);
-		const version = await this.nextCheckpointVersion(updateId);
-
-		if (serialized.length > BLOB_THRESHOLD) {
-			const blobKey = formatBlobKey(stackId, updateId, version);
-			await this.storage.put(blobKey, new TextEncoder().encode(serialized));
-			await this.db.insert(checkpoints).values({
-				updateId,
-				stackId,
-				version,
-				data: null,
-				blobKey,
-				isDelta: false,
-			});
-		} else {
-			await this.db.insert(checkpoints).values({
-				updateId,
-				stackId,
-				version,
-				data: reconstructed,
-				blobKey: null,
-				isDelta: false,
-			});
+		const maxAttempts = 5;
+		for (let attempt = 0; attempt < maxAttempts; attempt++) {
+			const version = await this.nextCheckpointVersion(updateId);
+			try {
+				if (serialized.length > BLOB_THRESHOLD) {
+					const blobKey = formatBlobKey(stackId, updateId, version);
+					await this.storage.put(blobKey, new TextEncoder().encode(serialized));
+					await this.db.insert(checkpoints).values({
+						updateId,
+						stackId,
+						version,
+						data: null,
+						blobKey,
+						isDelta: false,
+					});
+				} else {
+					await this.db.insert(checkpoints).values({
+						updateId,
+						stackId,
+						version,
+						data: reconstructed,
+						blobKey: null,
+						isDelta: false,
+					});
+				}
+				return;
+			} catch (error: unknown) {
+				const err = error as { code?: string };
+				if (err.code === "23505" && attempt < maxAttempts - 1) {
+					continue;
+				}
+				throw error;
+			}
 		}
 	}
 
-	private async loadBaseDeploymentState(stackId: string): Promise<DeploymentState> {
+	private async loadBaseDeploymentForUpdate(
+		stackId: string,
+		updateId: string,
+	): Promise<Record<string, unknown>> {
 		const [latest] = await this.db
 			.select()
 			.from(checkpoints)
-			.where(and(eq(checkpoints.stackId, stackId), eq(checkpoints.isDelta, false)))
+			.where(
+				and(
+					eq(checkpoints.stackId, stackId),
+					eq(checkpoints.isDelta, false),
+					sql`${checkpoints.updateId} != ${updateId}`,
+				),
+			)
 			.orderBy(desc(checkpoints.version))
 			.limit(1);
 
 		if (!latest) {
-			return { resources: [], pendingOperations: [] };
+			return {};
 		}
 
-		let data: unknown;
 		if (latest.blobKey) {
 			const raw = await this.storage.get(latest.blobKey);
-			data = raw ? JSON.parse(new TextDecoder().decode(raw)) : null;
-		} else {
-			data = latest.data;
+			return raw ? (JSON.parse(new TextDecoder().decode(raw)) as Record<string, unknown>) : {};
 		}
 
-		const d = data as {
-			resources?: ResourceV3[];
-			pending_operations?: Array<{ resource: ResourceV3; type: string }>;
-		} | null;
-
-		return {
-			resources: d?.resources ? [...d.resources] : [],
-			pendingOperations: d?.pending_operations ? [...d.pending_operations] : [],
-		};
+		return (latest.data as Record<string, unknown>) ?? {};
 	}
 }
 
@@ -724,35 +733,35 @@ export function mapStatusToApiStatus(dbStatus: string): string {
 	}
 }
 
-export interface DeploymentState {
-	resources: ResourceV3[];
-	pendingOperations: Array<{ resource: ResourceV3; type: string }>;
-}
-
 export function applyJournalEntries(
-	base: DeploymentState,
+	baseDeployment: Record<string, unknown>,
 	entries: Array<{
 		kind: number;
-		operationId: number;
+		operationId: number | bigint;
 		state: unknown;
 		operationType: string | null;
 		elideWrite: boolean;
 	}>,
-): { resources: ResourceV3[]; pending_operations: Array<{ resource: ResourceV3; type: string }> } {
+): Record<string, unknown> {
+	const baseResources = (baseDeployment.resources ?? []) as ResourceV3[];
+	const basePendingOps = (baseDeployment.pending_operations ?? []) as Array<{
+		resource: ResourceV3;
+		type: string;
+	}>;
+
 	const resources = new Map<string, ResourceV3>();
-	for (const r of base.resources) {
+	for (const r of baseResources) {
 		resources.set(r.urn, r);
 	}
 
-	const pendingOps = new Map<number, { resource: ResourceV3; type: string }>();
-	for (const op of base.pendingOperations) {
-		const key =
-			entries.find(
-				(e) =>
-					e.kind === JournalEntryBegin && (e.state as ResourceV3 | null)?.urn === op.resource.urn,
-			)?.operationId ?? -1;
-		if (key >= 0) {
-			pendingOps.set(key, op);
+	const pendingOps = new Map<string, { resource: ResourceV3; type: string }>();
+	for (const op of basePendingOps) {
+		const matchingBegin = entries.find(
+			(e) =>
+				e.kind === JournalEntryBegin && (e.state as ResourceV3 | null)?.urn === op.resource.urn,
+		);
+		if (matchingBegin) {
+			pendingOps.set(String(matchingBegin.operationId), op);
 		}
 	}
 
@@ -761,14 +770,15 @@ export function applyJournalEntries(
 			continue;
 		}
 
+		const opKey = String(entry.operationId);
 		const state = entry.state as ResourceV3 | null | undefined;
 
 		if (entry.kind === JournalEntryBegin) {
 			if (state && entry.operationType) {
-				pendingOps.set(entry.operationId, { resource: state, type: entry.operationType });
+				pendingOps.set(opKey, { resource: state, type: entry.operationType });
 			}
 		} else if (entry.kind === JournalEntrySuccess) {
-			pendingOps.delete(entry.operationId);
+			pendingOps.delete(opKey);
 			if (state) {
 				if ((state as { delete?: boolean }).delete) {
 					resources.delete(state.urn);
@@ -777,11 +787,12 @@ export function applyJournalEntries(
 				}
 			}
 		} else if (entry.kind === JournalEntryFailure) {
-			pendingOps.delete(entry.operationId);
+			pendingOps.delete(opKey);
 		}
 	}
 
 	return {
+		...baseDeployment,
 		resources: Array.from(resources.values()),
 		pending_operations: Array.from(pendingOps.values()),
 	};
