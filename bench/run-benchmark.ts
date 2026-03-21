@@ -128,6 +128,23 @@ async function createPulumiHome(): Promise<string> {
   return home;
 }
 
+async function findPulumi(): Promise<string> {
+  const fromEnv = process.env.PULUMI_PATH;
+  if (fromEnv) return fromEnv;
+
+  const which = Bun.spawn(["mise", "which", "pulumi"], { stdout: "pipe", stderr: "pipe", cwd: PROJECT_ROOT });
+  const [exitCode, stdout] = await Promise.all([which.exited, new Response(which.stdout).text()]);
+  if (exitCode === 0 && stdout.trim()) return stdout.trim();
+
+  const fallback = Bun.spawn(["which", "pulumi"], { stdout: "pipe", stderr: "pipe" });
+  const [fbExit, fbOut] = await Promise.all([fallback.exited, new Response(fallback.stdout).text()]);
+  if (fbExit === 0 && fbOut.trim()) return fbOut.trim();
+
+  throw new Error("pulumi not found. Install via mise or set PULUMI_PATH.");
+}
+
+let PULUMI_BIN = "";
+
 interface CommandResult {
   exitCode: number;
   stdout: string;
@@ -135,7 +152,7 @@ interface CommandResult {
 }
 
 async function runPulumi(args: string[], cwd: string, pulumiHome: string): Promise<CommandResult> {
-  const proc = Bun.spawn(["pulumi", ...args, "--non-interactive"], {
+  const proc = Bun.spawn([PULUMI_BIN, ...args, "--non-interactive"], {
     cwd,
     env: {
       ...cleanEnv(),
@@ -196,8 +213,8 @@ function uniqueId(): string {
 
 async function runTrial(n: number, mode: Mode, trial: number, pulumiHome: string): Promise<TrialResult> {
   const org = "dev-org";
-  const project = `bench-${n}`;
-  const stack = IS_REMOTE ? `t${trial}-${uniqueId()}` : "dev";
+  const project = "bench";
+  const stack = IS_REMOTE ? `t${trial}-${uniqueId()}` : `n${n}`;
   const stackRef = `${org}/${project}/${stack}`;
 
   if (!IS_REMOTE) {
@@ -354,7 +371,9 @@ function renderMarkdownTable(results: BenchmarkResults): string {
 }
 
 async function main(): Promise<void> {
+  PULUMI_BIN = await findPulumi();
   console.log(`Procella journaling benchmark: sizes=${BENCH_SIZES.join(",")}, trials=${BENCH_TRIALS}`);
+  console.log(`Using pulumi: ${PULUMI_BIN}`);
   if (IS_REMOTE) {
     console.log(`Remote mode: ${BACKEND_URL} (DB metrics ${TEST_DB_URL !== "postgres://procella:procella@localhost:5432/procella?sslmode=disable" ? "enabled" : "disabled"})`);
   }
