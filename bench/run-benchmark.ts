@@ -8,12 +8,15 @@ import { generateProgram } from "./generate-programs";
 import type { BenchmarkResults, Mode, TrialResult } from "./types";
 
 const BENCH_PORT = 18_081;
-const BACKEND_URL = `http://127.0.0.1:${BENCH_PORT}`;
-const TEST_TOKEN = "benchtoken";
+const BENCH_URL = process.env.BENCH_URL;
+const BACKEND_URL = BENCH_URL ?? `http://127.0.0.1:${BENCH_PORT}`;
+const TEST_TOKEN = process.env.BENCH_TOKEN ?? "benchtoken";
 const TEST_DB_URL =
-  process.env.PROCELLA_DATABASE_URL ||
+  process.env.BENCH_DATABASE_URL ??
+  process.env.PROCELLA_DATABASE_URL ??
   "postgres://procella:procella@localhost:5432/procella?sslmode=disable";
 const PROJECT_ROOT = path.resolve(import.meta.dir, "..");
+const IS_REMOTE = !!BENCH_URL;
 
 const BENCH_SIZES = (() => {
   const raw = process.env.BENCH_SIZES;
@@ -187,13 +190,19 @@ async function timed(fn: () => Promise<CommandResult>): Promise<TimedResult> {
   };
 }
 
-async function runTrial(n: number, mode: Mode, trial: number, pulumiHome: string): Promise<TrialResult> {
-  await truncate();
+function uniqueId(): string {
+  return Math.random().toString(36).slice(2, 8);
+}
 
+async function runTrial(n: number, mode: Mode, trial: number, pulumiHome: string): Promise<TrialResult> {
   const org = "dev-org";
   const project = `bench-${n}`;
-  const stack = "dev";
+  const stack = IS_REMOTE ? `t${trial}-${uniqueId()}` : "dev";
   const stackRef = `${org}/${project}/${stack}`;
+
+  if (!IS_REMOTE) {
+    await truncate();
+  }
 
   const projectDir = await mkdtemp(path.join(tmpdir(), `procella-bench-${mode}-${n}-`));
 
@@ -203,20 +212,13 @@ async function runTrial(n: number, mode: Mode, trial: number, pulumiHome: string
     const initResult = await runPulumi(["stack", "init", stackRef], projectDir, pulumiHome);
     if (initResult.exitCode !== 0) {
       return {
-        n,
-        mode,
-        trial,
-        upMs: null,
-        previewMs: null,
-        destroyMs: null,
-        checkpointBytes: null,
-        journalEntryCount: null,
+        n, mode, trial,
+        upMs: null, previewMs: null, destroyMs: null,
+        checkpointBytes: null, journalEntryCount: null,
         upExitCode: initResult.exitCode,
-        previewExitCode: null,
-        destroyExitCode: null,
+        previewExitCode: null, destroyExitCode: null,
         upStderr: `stack init failed: ${initResult.stderr}`,
-        previewStderr: "",
-        destroyStderr: "",
+        previewStderr: "", destroyStderr: "",
       };
     }
 
@@ -225,47 +227,40 @@ async function runTrial(n: number, mode: Mode, trial: number, pulumiHome: string
     if (up.exitCode !== 0) {
       console.error(`[${mode}] N=${n} trial=${trial} up failed:\n${up.stderr}`);
       return {
-        n,
-        mode,
-        trial,
-        upMs: null,
-        previewMs: null,
-        destroyMs: null,
-        checkpointBytes: null,
-        journalEntryCount: null,
+        n, mode, trial,
+        upMs: null, previewMs: null, destroyMs: null,
+        checkpointBytes: null, journalEntryCount: null,
         upExitCode: up.exitCode,
-        previewExitCode: null,
-        destroyExitCode: null,
-        upStderr: up.stderr,
-        previewStderr: "",
-        destroyStderr: "",
+        previewExitCode: null, destroyExitCode: null,
+        upStderr: up.stderr, previewStderr: "", destroyStderr: "",
       };
     }
 
     const preview = await timed(() => runPulumi(["preview"], projectDir, pulumiHome));
-    const updateId = await getLatestUpdateId(org, project, stack);
-    const stackId = await getStackId(org, project, stack);
-    const checkpointBytes = stackId ? await getCheckpointBytes(stackId) : null;
-    const journalEntryCount = updateId ? await getJournalEntryCount(updateId) : null;
+
+    let checkpointBytes: number | null = null;
+    let journalEntryCount: number | null = null;
+    if (!IS_REMOTE) {
+      const updateId = await getLatestUpdateId(org, project, stack);
+      const stackId = await getStackId(org, project, stack);
+      checkpointBytes = stackId ? await getCheckpointBytes(stackId) : null;
+      journalEntryCount = updateId ? await getJournalEntryCount(updateId) : null;
+    }
+
     const destroy = await timed(() => runPulumi(["destroy", "--yes"], projectDir, pulumiHome));
 
     return {
-      n,
-      mode,
-      trial,
-      upMs: up.ms,
-      previewMs: preview.ms,
-      destroyMs: destroy.ms,
-      checkpointBytes,
-      journalEntryCount,
+      n, mode, trial,
+      upMs: up.ms, previewMs: preview.ms, destroyMs: destroy.ms,
+      checkpointBytes, journalEntryCount,
       upExitCode: up.exitCode,
-      previewExitCode: preview.exitCode,
-      destroyExitCode: destroy.exitCode,
-      upStderr: up.stderr,
-      previewStderr: preview.stderr,
-      destroyStderr: destroy.stderr,
+      previewExitCode: preview.exitCode, destroyExitCode: destroy.exitCode,
+      upStderr: up.stderr, previewStderr: preview.stderr, destroyStderr: destroy.stderr,
     };
   } finally {
+    if (IS_REMOTE) {
+      await runPulumi(["stack", "rm", "--yes"], projectDir, pulumiHome).catch(() => {});
+    }
     await rm(projectDir, { recursive: true, force: true });
   }
 }
@@ -360,14 +355,27 @@ function renderMarkdownTable(results: BenchmarkResults): string {
 
 async function main(): Promise<void> {
   console.log(`Procella journaling benchmark: sizes=${BENCH_SIZES.join(",")}, trials=${BENCH_TRIALS}`);
+  if (IS_REMOTE) {
+    console.log(`Remote mode: ${BACKEND_URL} (DB metrics ${TEST_DB_URL !== "postgres://procella:procella@localhost:5432/procella?sslmode=disable" ? "enabled" : "disabled"})`);
+  }
 
-  await resetDb();
+  if (!IS_REMOTE) {
+    await resetDb();
+  }
   const pulumiHome = await createPulumiHome();
   const allResults: TrialResult[] = [];
 
   try {
-    for (const mode of ["checkpoint", "journal"] as const) {
-      const server = await startBenchServer(mode === "journal");
+    const modes: Mode[] = IS_REMOTE ? ["checkpoint"] : ["checkpoint", "journal"];
+    if (IS_REMOTE) {
+      console.log("Remote mode: running single mode (server controls journaling config)");
+    }
+
+    for (const mode of modes) {
+      let server: Subprocess | null = null;
+      if (!IS_REMOTE) {
+        server = await startBenchServer(mode === "journal");
+      }
       try {
         for (const n of BENCH_SIZES) {
           for (let trial = 1; trial <= BENCH_TRIALS; trial += 1) {
@@ -376,7 +384,9 @@ async function main(): Promise<void> {
           }
         }
       } finally {
-        await stopBenchServer(server);
+        if (server) {
+          await stopBenchServer(server);
+        }
       }
     }
 
