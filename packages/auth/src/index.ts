@@ -84,6 +84,15 @@ export class DescopeAuthService implements AuthService {
 	async authenticate(request: Request): Promise<Caller> {
 		const token = extractToken(request);
 
+		// Block raw JWTs on the Pulumi CLI path — CLI should use access keys.
+		// "token <value>" = CLI; "Bearer <value>" = UI dashboard (session JWTs OK there).
+		const authHeader = request.headers.get("Authorization") ?? "";
+		if (authHeader.startsWith("token ") && token.startsWith("eyJ")) {
+			throw new UnauthorizedError(
+				"Session JWTs cannot be used as CLI tokens (they expire). Use `pulumi login` to create a long-lived access key.",
+			);
+		}
+
 		const authInfo = token.startsWith("eyJ")
 			? await this.sdk.validateJwt(token)
 			: await this.sdk.exchangeAccessKey(token);
