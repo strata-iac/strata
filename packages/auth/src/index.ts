@@ -88,6 +88,7 @@ export class DescopeAuthService implements AuthService {
 	private readonly cache = new Map<string, CachedAuth>();
 	private readonly pending = new Map<string, Promise<Caller>>();
 	private readonly EXPIRY_MARGIN_S = 60;
+	private readonly MAX_CACHE_TTL_S = 300;
 	private sweepTimer: ReturnType<typeof setInterval> | null = null;
 
 	constructor(config: DescopeAuthConfig) {
@@ -186,13 +187,19 @@ export class DescopeAuthService implements AuthService {
 		const claims = authInfo.token;
 		const caller = this.extractCaller(claims);
 
-		// Cache if exp claim exists
+		// Cache if exp claim exists, capping TTL so revocations/role changes propagate in bounded time.
 		const exp = typeof claims.exp === "number" ? claims.exp : undefined;
 		if (exp) {
-			this.cache.set(accessKey, {
-				caller,
-				expiresAt: exp - this.EXPIRY_MARGIN_S,
-			});
+			const nowSec = Math.floor(Date.now() / 1000);
+			const desiredExpiry = exp - this.EXPIRY_MARGIN_S;
+			const cappedExpiry = Math.min(desiredExpiry, nowSec + this.MAX_CACHE_TTL_S);
+
+			if (cappedExpiry > nowSec) {
+				this.cache.set(accessKey, {
+					caller,
+					expiresAt: cappedExpiry,
+				});
+			}
 		}
 
 		return caller;
