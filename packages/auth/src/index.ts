@@ -192,7 +192,10 @@ export class DescopeAuthService implements AuthService {
 				const claims = authInfo.token;
 				const elapsed = (performance.now() - started).toFixed(0);
 				const exp = typeof claims.exp === "number" ? claims.exp : undefined;
-				console.log(`[auth] exchangeAccessKey OK ${elapsed}ms exp=${exp ? new Date(exp * 1000).toISOString() : "none"} sub=${claims.sub ?? "?"}`);
+				// biome-ignore lint/suspicious/noConsole: auth diagnostics
+				console.log(
+					`[auth] exchangeAccessKey OK ${elapsed}ms exp=${exp ? new Date(exp * 1000).toISOString() : "none"} sub=${claims.sub ?? "?"}`,
+				);
 
 				const caller = this.extractCaller(claims);
 
@@ -211,10 +214,16 @@ export class DescopeAuthService implements AuthService {
 				lastErr = err;
 				if (attempt < maxAttempts) {
 					const delay = attempt * 500;
-					console.warn(`[auth] exchangeAccessKey attempt ${attempt}/${maxAttempts} failed after ${elapsed}ms, retrying in ${delay}ms: ${err}`);
+					// biome-ignore lint/suspicious/noConsole: auth retry diagnostics
+					console.warn(
+						`[auth] exchangeAccessKey attempt ${attempt}/${maxAttempts} failed after ${elapsed}ms, retrying in ${delay}ms: ${err}`,
+					);
 					await new Promise((r) => setTimeout(r, delay));
 				} else {
-					console.error(`[auth] exchangeAccessKey FAILED after ${attempt} attempt(s) ${elapsed}ms: ${err}`);
+					// biome-ignore lint/suspicious/noConsole: auth failure logging
+					console.error(
+						`[auth] exchangeAccessKey FAILED after ${attempt} attempt(s) ${elapsed}ms: ${err}`,
+					);
 				}
 			}
 		}

@@ -70,8 +70,8 @@ async function startBenchServer(): Promise<Subprocess> {
       PROCELLA_BLOB_BACKEND: "local",
       PROCELLA_BLOB_LOCAL_PATH: "./data/bench-blobs",
     },
-    stdout: "pipe",
-    stderr: "pipe",
+    stdout: "ignore",
+    stderr: "ignore",
   });
 
   await waitForHealth(`${BACKEND_URL}/healthz`, 30_000);

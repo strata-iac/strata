@@ -29,7 +29,6 @@ import type {
 } from "@procella/types";
 import {
 	BadRequestError,
-	CheckpointNotFoundError,
 	JournalEntryBegin,
 	JournalEntryFailure,
 	JournalEntryOutputs,
@@ -351,7 +350,7 @@ export class PostgresUpdatesService implements UpdatesService {
 			if (baseCheckpoint.blobKey) {
 				const data = await this.storage.get(baseCheckpoint.blobKey);
 				if (!data) {
-					throw new CheckpointNotFoundError("", "", "");
+					throw new Error("Checkpoint blob data missing from storage");
 				}
 				baseDeployment = JSON.parse(new TextDecoder().decode(data));
 			} else {
@@ -537,7 +536,7 @@ export class PostgresUpdatesService implements UpdatesService {
 				.limit(1);
 			checkpoint = rows[0];
 			if (!checkpoint) {
-				throw new CheckpointNotFoundError("", "", "");
+				throw new Error("Checkpoint blob data missing from storage");
 			}
 		} else {
 			const rows = await this.db
@@ -556,17 +555,12 @@ export class PostgresUpdatesService implements UpdatesService {
 		if (checkpoint.blobKey) {
 			const data = await this.storage.get(checkpoint.blobKey);
 			if (!data) {
-				throw new CheckpointNotFoundError("", "", "");
+				throw new Error("Checkpoint blob data missing from storage");
 			}
 			deploymentData = JSON.parse(new TextDecoder().decode(data));
 		} else {
 			deploymentData = checkpoint.data;
 		}
-		const d = deploymentData as Record<string, unknown> | null;
-		const resourceCount = Array.isArray(d?.resources) ? d.resources.length : "none";
-		console.log(
-			`[export] stackId=${stackId} checkpoint.version=${checkpoint.version} resources=${resourceCount}`,
-		);
 
 		return {
 			version: 3,
@@ -662,12 +656,6 @@ export class PostgresUpdatesService implements UpdatesService {
 
 		const baseDeployment = await this.loadBaseDeploymentForUpdate(stackId, updateId);
 		const reconstructed = applyJournalEntries(baseDeployment, allEntries);
-		const r = reconstructed as Record<string, unknown>;
-		const rCount = Array.isArray(r.resources) ? r.resources.length : 0;
-		console.log(
-			`[journal-flush] updateId=${updateId} entries=${allEntries.length} resources=${rCount} hasSP=${!!r.secrets_providers}`,
-		);
-
 		const serialized = JSON.stringify(reconstructed);
 		const maxAttempts = 5;
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -738,7 +726,7 @@ export class PostgresUpdatesService implements UpdatesService {
 		if (row.blobKey) {
 			const raw = await this.storage.get(row.blobKey);
 			if (!raw) {
-				throw new CheckpointNotFoundError("", "", "");
+				throw new Error("Checkpoint blob data missing from storage");
 			}
 			return JSON.parse(new TextDecoder().decode(raw)) as Record<string, unknown>;
 		}
@@ -794,7 +782,6 @@ export function applyJournalEntries(
 	const opIdToNewIdx = new Map<string, number>();
 	const toDeleteInSnapshot = new Set<number>();
 	const toReplaceInSnapshot = new Map<number, ResourceV3>();
-	const incompleteOps = new Map<string, boolean>();
 
 	for (const entry of entries) {
 		const opKey = String(entry.operationId);
@@ -818,7 +805,6 @@ export function applyJournalEntries(
 			}
 
 			case JournalEntryBegin: {
-				incompleteOps.set(opKey, entry.elideWrite);
 				if (state) {
 					const idx = newResources.length;
 					newResources.push(null);
@@ -828,7 +814,6 @@ export function applyJournalEntries(
 			}
 
 			case JournalEntrySuccess: {
-				incompleteOps.delete(opKey);
 				if (entry.removeOld != null && state) {
 					toReplaceInSnapshot.set(Number(entry.removeOld), state);
 				} else if (entry.removeOld != null && !state) {
@@ -845,12 +830,10 @@ export function applyJournalEntries(
 			}
 
 			case JournalEntryFailure: {
-				incompleteOps.delete(opKey);
 				break;
 			}
 
 			case JournalEntryRefreshSuccess: {
-				incompleteOps.delete(opKey);
 				if (entry.removeOld != null) {
 					if (state) {
 						toReplaceInSnapshot.set(Number(entry.removeOld), state);
@@ -890,7 +873,6 @@ export function applyJournalEntries(
 				opIdToNewIdx.clear();
 				toDeleteInSnapshot.clear();
 				toReplaceInSnapshot.clear();
-				incompleteOps.clear();
 				break;
 			}
 
