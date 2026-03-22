@@ -6,7 +6,6 @@ import { SQL } from "bun";
 import { getCheckpointBytes, getJournalEntryCount, getLatestUpdateId, getStackId } from "./db-metrics";
 import { generateProgram, generateSecretsProgram } from "./generate-programs";
 import type { BenchmarkResults, Mode, TrialResult, Variant } from "./types";
-import type { BenchmarkResults, Mode, TrialResult } from "./types";
 
 const BENCH_PORT = 18_081;
 const BENCH_URL = process.env.BENCH_URL;
@@ -18,6 +17,7 @@ const TEST_DB_URL =
   "postgres://procella:procella@localhost:5432/procella?sslmode=disable";
 const PROJECT_ROOT = path.resolve(import.meta.dir, "..");
 const IS_REMOTE = !!BENCH_URL;
+let REMOTE_ORG = "";
 
 const BENCH_SIZES = (() => {
   const raw = process.env.BENCH_SIZES;
@@ -193,6 +193,19 @@ async function runPulumi(
   const stdout = stdoutChunks.map((c) => decoder.decode(c, { stream: true })).join("");
   const stderr = stderrChunks.map((c) => decoder.decode(c, { stream: true })).join("");
 
+  if (exitCode !== 0 && IS_REMOTE && (stderr.includes("logging in") || stderr.includes("401") || stderr.includes("Unauthorized"))) {
+    console.error(`[AUTH FAILURE] pulumi ${args.join(" ")} → exit=${exitCode}`);
+    console.error(`  stderr: ${stderr.slice(0, 300)}`);
+    // Verify token is still valid
+    try {
+      const check = await fetch(`${BACKEND_URL}/api/user`, {
+        headers: { Authorization: `token ${TEST_TOKEN}`, Accept: "application/vnd.pulumi+8" },
+      });
+      console.error(`  Auth re-check: ${check.status} ${(await check.text()).slice(0, 100)}`);
+    } catch (e) {
+      console.error(`  Auth re-check failed: ${e}`);
+    }
+  }
   return { exitCode, stdout, stderr };
 }
 
@@ -220,7 +233,7 @@ function uniqueId(): string {
 async function runTrial(
   n: number, mode: Mode, variant: Variant, trial: number, pulumiHome: string,
 ): Promise<TrialResult> {
-  const org = "dev-org";
+  const org = IS_REMOTE ? REMOTE_ORG : "dev-org";
   const project = variant === "secrets" ? "bench-secrets" : "bench";
   const stack = IS_REMOTE ? `t${trial}-${uniqueId()}` : `${variant[0]}${n}`;
   const stackRef = `${org}/${project}/${stack}`;
@@ -391,7 +404,22 @@ async function main(): Promise<void> {
   console.log(`Procella journaling benchmark: sizes=${BENCH_SIZES.join(",")}, trials=${BENCH_TRIALS}`);
   console.log(`Using pulumi: ${PULUMI_BIN}`);
   if (IS_REMOTE) {
-    console.log(`Remote mode: ${BACKEND_URL} (DB metrics ${TEST_DB_URL !== "postgres://procella:procella@localhost:5432/procella?sslmode=disable" ? "enabled" : "disabled"})`);
+    console.log(`Remote mode: ${BACKEND_URL}`);
+    // Detect org from authenticated user
+    const userRes = await fetch(`${BACKEND_URL}/api/user`, {
+      headers: { Authorization: `token ${TEST_TOKEN}`, Accept: "application/vnd.pulumi+8" },
+    });
+    if (!userRes.ok) {
+      const body = await userRes.text();
+      throw new Error(`Auth check failed (${userRes.status}): ${body}`);
+    }
+    const userInfo = (await userRes.json()) as { organizations?: Array<{ githubLogin: string }> };
+    REMOTE_ORG = userInfo.organizations?.[0]?.githubLogin ?? "";
+    if (!REMOTE_ORG) {
+      throw new Error(`No org found in user info: ${JSON.stringify(userInfo)}`);
+    }
+    console.log(`  Authenticated as org: ${REMOTE_ORG}`);
+    console.log(`  DB metrics: ${TEST_DB_URL !== "postgres://procella:procella@localhost:5432/procella?sslmode=disable" ? "enabled" : "disabled"}`);
   }
 
   if (!IS_REMOTE) {

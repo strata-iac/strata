@@ -54,3 +54,4 @@ node-compile-cache/
 # Vercel
 .vercel
 bench/*.log
+bench/auth-debug/
