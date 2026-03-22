@@ -562,6 +562,11 @@ export class PostgresUpdatesService implements UpdatesService {
 		} else {
 			deploymentData = checkpoint.data;
 		}
+		const d = deploymentData as Record<string, unknown> | null;
+		const resourceCount = Array.isArray(d?.resources) ? d.resources.length : "none";
+		console.log(
+			`[export] stackId=${stackId} checkpoint.version=${checkpoint.version} resources=${resourceCount}`,
+		);
 
 		return {
 			version: 3,
@@ -657,6 +662,11 @@ export class PostgresUpdatesService implements UpdatesService {
 
 		const baseDeployment = await this.loadBaseDeploymentForUpdate(stackId, updateId);
 		const reconstructed = applyJournalEntries(baseDeployment, allEntries);
+		const r = reconstructed as Record<string, unknown>;
+		const rCount = Array.isArray(r.resources) ? r.resources.length : 0;
+		console.log(
+			`[journal-flush] updateId=${updateId} entries=${allEntries.length} resources=${rCount} hasSP=${!!r.secrets_providers}`,
+		);
 
 		const serialized = JSON.stringify(reconstructed);
 		const maxAttempts = 5;
