@@ -1,20 +1,20 @@
 /* ── Procella Docs — Custom Theme ──────────────────────────────────────────
  * Overrides Starlight CSS variables to match the main Procella app:
- *   Background:   zinc-950  #09090b
- *   Nav/Sidebar:  zinc-900  #18181b
- *   Borders:      zinc-800  #27272a
- *   Text primary: zinc-100  #f4f4f5
- *   Text muted:   zinc-400  #a1a1aa  /  zinc-500  #71717a
- *   Accent:       blue-500  #3b82f6  (hsl 217 91% 60%)
+ *   Background:   Deep Sky   #0D1B2A
+ *   Nav/Sidebar:  Slate Brand #1B2838
+ *   Borders:      #1B2838 / #2D3748
+ *   Text primary: Mist       #E2E8F0
+ *   Text muted:   Cloud      #4A5568
+ *   Accent:       Lightning  #00D4FF  (hsl 191 100% 50%)
  *   Font:         Inter — loaded via <link> in Head.astro (non-blocking)
  * ─────────────────────────────────────────────────────────────────────── */
 
-/* ── Accent hue: blue-500 ─────────────────────────────────────────────── */
+/* ── Accent hue: Lightning ────────────────────────────────────────────── */
 :root {
-	--sl-hue-accent: 217;
-	--sl-color-accent-low: hsl(217, 54%, 20%); /* blue tinted dark bg */
-	--sl-color-accent: hsl(217, 91%, 60%); /* blue-500 #3b82f6    */
-	--sl-color-accent-high: hsl(217, 100%, 87%); /* blue-200            */
+	--sl-hue-accent: 191;
+	--sl-color-accent-low: hsl(210, 60%, 12%); /* Deep Sky tinted */
+	--sl-color-accent: hsl(191, 100%, 50%); /* Lightning #00D4FF */
+	--sl-color-accent-high: hsl(191, 100%, 87%); /* Lightning light */
 
 	/* Font */
 	--sl-font-system: "Inter", ui-sans-serif, system-ui, sans-serif;
@@ -26,33 +26,33 @@
 :root,
 :root[data-theme="dark"],
 [data-theme="dark"] ::backdrop {
-	/* Map Starlight's gray scale to zinc */
-	--sl-color-white: #f4f4f5; /* zinc-100 */
-	--sl-color-gray-1: #f4f4f5; /* zinc-100 — primary text */
-	--sl-color-gray-2: #e4e4e7; /* zinc-200 */
-	--sl-color-gray-3: #a1a1aa; /* zinc-400 — secondary text */
-	--sl-color-gray-4: #71717a; /* zinc-500 — muted text */
-	--sl-color-gray-5: #3f3f46; /* zinc-700 — subtle borders */
-	--sl-color-gray-6: #27272a; /* zinc-800 — nav/sidebar bg */
-	--sl-color-gray-7: #18181b; /* zinc-900 */
-	--sl-color-black: #09090b; /* zinc-950 — page bg */
+	/* Map Starlight's gray scale to Storm Sky */
+	--sl-color-white: #e2e8f0; /* Mist */
+	--sl-color-gray-1: #e2e8f0; /* Mist — primary text */
+	--sl-color-gray-2: #cbd5e1; /* Mist lighter variant */
+	--sl-color-gray-3: #4a5568; /* Cloud — secondary text */
+	--sl-color-gray-4: #4a5568; /* Cloud — muted text */
+	--sl-color-gray-5: #2d3748; /* Storm border — subtle borders */
+	--sl-color-gray-6: #1b2838; /* Slate Brand — nav/sidebar bg */
+	--sl-color-gray-7: #152030; /* Deep Sky variant */
+	--sl-color-black: #0d1b2a; /* Deep Sky — page bg */
 
 	/* Semantic surface colors */
-	--sl-color-bg: #09090b; /* zinc-950 */
-	--sl-color-bg-nav: #18181b; /* zinc-900 */
-	--sl-color-bg-sidebar: #18181b; /* zinc-900 */
-	--sl-color-bg-inline-code: #27272a; /* zinc-800 */
-	--sl-color-bg-accent: hsl(217, 54%, 20%);
+	--sl-color-bg: #0d1b2a; /* Deep Sky */
+	--sl-color-bg-nav: #1b2838; /* Slate Brand */
+	--sl-color-bg-sidebar: #1b2838; /* Slate Brand */
+	--sl-color-bg-inline-code: #1b2838; /* Slate Brand */
+	--sl-color-bg-accent: hsl(210, 60%, 12%);
 
 	/* Text */
-	--sl-color-text: #e4e4e7; /* zinc-200 */
-	--sl-color-text-accent: hsl(217, 91%, 60%); /* blue-500 */
-	--sl-color-text-invert: #09090b;
+	--sl-color-text: #e2e8f0; /* Mist */
+	--sl-color-text-accent: #00d4ff; /* Lightning */
+	--sl-color-text-invert: #0d1b2a; /* Deep Sky */
 
 	/* Borders / hairlines */
-	--sl-color-hairline-light: #27272a; /* zinc-800 */
-	--sl-color-hairline: #27272a; /* zinc-800 */
-	--sl-color-hairline-shade: #18181b; /* zinc-900 */
+	--sl-color-hairline-light: #1b2838; /* Slate Brand */
+	--sl-color-hairline: #1b2838; /* Slate Brand */
+	--sl-color-hairline-shade: #152030; /* Deep Sky variant */
 
 	/* Shadows */
 	--sl-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -64,52 +64,52 @@
 /* Prevents flash of Starlight's default light theme if JS is slow */
 :root[data-theme="light"],
 [data-theme="light"] ::backdrop {
-	--sl-color-white: #f4f4f5;
-	--sl-color-gray-1: #f4f4f5;
-	--sl-color-gray-2: #e4e4e7;
-	--sl-color-gray-3: #a1a1aa;
-	--sl-color-gray-4: #71717a;
-	--sl-color-gray-5: #3f3f46;
-	--sl-color-gray-6: #27272a;
-	--sl-color-gray-7: #18181b;
-	--sl-color-black: #09090b;
+	--sl-color-white: #e2e8f0;
+	--sl-color-gray-1: #e2e8f0;
+	--sl-color-gray-2: #cbd5e1;
+	--sl-color-gray-3: #4a5568;
+	--sl-color-gray-4: #4a5568;
+	--sl-color-gray-5: #2d3748;
+	--sl-color-gray-6: #1b2838;
+	--sl-color-gray-7: #152030;
+	--sl-color-black: #0d1b2a;
 
-	--sl-color-bg: #09090b;
-	--sl-color-bg-nav: #18181b;
-	--sl-color-bg-sidebar: #18181b;
-	--sl-color-bg-inline-code: #27272a;
-	--sl-color-bg-accent: hsl(217, 54%, 20%);
+	--sl-color-bg: #0d1b2a;
+	--sl-color-bg-nav: #1b2838;
+	--sl-color-bg-sidebar: #1b2838;
+	--sl-color-bg-inline-code: #1b2838;
+	--sl-color-bg-accent: hsl(210, 60%, 12%);
 
-	--sl-color-text: #e4e4e7;
-	--sl-color-text-accent: hsl(217, 91%, 60%);
-	--sl-color-text-invert: #09090b;
+	--sl-color-text: #e2e8f0;
+	--sl-color-text-accent: #00d4ff;
+	--sl-color-text-invert: #0d1b2a;
 
-	--sl-color-hairline-light: #27272a;
-	--sl-color-hairline: #27272a;
-	--sl-color-hairline-shade: #18181b;
+	--sl-color-hairline-light: #1b2838;
+	--sl-color-hairline: #1b2838;
+	--sl-color-hairline-shade: #152030;
 }
 
-/* ── Header: tighten border to match zinc-800 ─────────────────────────── */
+/* ── Header: tighten border to match Slate Brand ─────────────────────── */
 header.header {
-	border-bottom-color: #27272a;
-	background-color: #18181b;
+	border-bottom-color: #1b2838;
+	background-color: #1b2838;
 }
 
-/* ── Sidebar: match zinc-900 bg exactly ──────────────────────────────── */
+/* ── Sidebar: match Slate Brand bg exactly ────────────────────────────── */
 .sidebar-pane {
-	background-color: #18181b;
-	border-inline-end-color: #27272a;
+	background-color: #1b2838;
+	border-inline-end-color: #1b2838;
 }
 
-/* ── Code blocks: zinc-900 bg ────────────────────────────────────────── */
+/* ── Code blocks: Slate Brand bg ──────────────────────────────────────── */
 .expressive-code .frame {
-	--ec-frm-edBrdCol: #27272a;
+	--ec-frm-edBrdCol: #1b2838;
 }
 
-/* ── Active sidebar item: blue accent ────────────────────────────────── */
+/* ── Active sidebar item: Lightning accent ──────────────────────────── */
 .sidebar-content a[aria-current="page"],
 .sidebar-content a[aria-current="page"]:hover,
 .sidebar-content a[aria-current="page"]:focus {
-	background-color: hsl(217, 54%, 20%);
-	color: hsl(217, 100%, 87%);
+	background-color: hsl(210, 60%, 12%);
+	color: hsl(191, 100%, 87%);
 }

@@ -1,7 +1,7 @@
 ---
 /**
  * SiteTitle override — matches ProcellaLogo from apps/ui:
- *   stacked-layers SVG icon in blue-500 + "Procella" wordmark in zinc-100
+ *   Storm Petrel SVG icon in Lightning + "Procella" wordmark in Mist
  */
 import type { Props } from '@astrojs/starlight/props';
 
@@ -9,22 +9,23 @@ const { siteTitle } = Astro.props as Props;
 ---
 
 <a href="/" class="site-title">
-  <!-- Stacked layers icon — same SVG path as ProcellaLogo.tsx -->
+  <!-- Storm Petrel icon — same SVG geometry as ProcellaLogo.tsx -->
   <svg
     viewBox="0 0 24 24"
     fill="none"
     width="20"
     height="20"
     aria-hidden="true"
-    style="color: #3b82f6; flex-shrink: 0;"
+    style="color: #00D4FF; flex-shrink: 0;"
   >
-    <path
-      d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
+    <path d="M13 11.5 Q8 7.5 3 4.5 Q7 8 13 11.5Z" fill="currentColor"/>
+    <path d="M13 12.5 Q8 16.5 3 19.5 Q7 16 13 12.5Z" fill="currentColor"/>
+    <ellipse cx="15" cy="12" rx="4.5" ry="1.8" fill="currentColor"/>
+    <circle cx="19.5" cy="11.2" r="1.5" fill="currentColor"/>
+    <path d="M10.5 11.5 L7 9.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="M10.5 12.5 L7 14.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+    <circle cx="20.2" cy="10.8" r="0.45" fill="#FFB800"/>
+    <ellipse cx="11.5" cy="12.3" rx="1" ry="0.55" fill="white" opacity="0.85"/>
   </svg>
   <span>{siteTitle}</span>
 </a>
@@ -39,7 +40,7 @@ const { siteTitle } = Astro.props as Props;
     font-size: 0.9375rem; /* 15px — matches ProcellaLogo size="sm" */
     font-weight: 700;
     letter-spacing: -0.01em;
-    color: #f4f4f5;       /* zinc-100 */
+    color: #E2E8F0;       /* Mist */
   }
 
   .site-title:hover {
