@@ -13,11 +13,11 @@ export function StackList() {
 		return (
 			<div className="space-y-6">
 				<div className="flex items-center justify-between">
-					<h1 className="text-xl font-semibold text-zinc-100">Stacks</h1>
+					<h1 className="text-xl font-semibold text-mist">Stacks</h1>
 				</div>
 				<div className="animate-pulse space-y-3">
 					{[1, 2, 3].map((i) => (
-						<div key={i} className="h-[72px] bg-zinc-900 rounded-xl border border-zinc-800" />
+						<div key={i} className="h-[72px] bg-slate-brand rounded-xl border border-slate-brand" />
 					))}
 				</div>
 			</div>
@@ -27,7 +27,7 @@ export function StackList() {
 	if (error) {
 		return (
 			<div className="space-y-6">
-				<h1 className="text-xl font-semibold text-zinc-100">Stacks</h1>
+				<h1 className="text-xl font-semibold text-mist">Stacks</h1>
 				<div className="bg-red-950/30 border border-red-900/40 text-red-400 p-4 rounded-xl text-sm">
 					{error}
 				</div>
@@ -40,9 +40,9 @@ export function StackList() {
 	return (
 		<div className="space-y-6">
 			<div className="flex items-center justify-between">
-				<h1 className="text-xl font-semibold text-zinc-100">Stacks</h1>
+				<h1 className="text-xl font-semibold text-mist">Stacks</h1>
 				{items.length > 0 && (
-					<span className="text-xs text-zinc-500 tabular-nums">
+					<span className="text-xs text-cloud tabular-nums">
 						{items.length} stack{items.length !== 1 ? "s" : ""}
 					</span>
 				)}
@@ -57,15 +57,15 @@ function EmptyState() {
 	return (
 		<div className="space-y-6">
 			{/* Getting started card */}
-			<div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
+			<div className="bg-slate-brand/50 border border-slate-brand rounded-xl p-8">
 				<div className="flex items-start gap-4">
-					<div className="w-10 h-10 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+					<div className="w-10 h-10 rounded-lg bg-lightning/10 border border-lightning/20 flex items-center justify-center shrink-0">
 						<svg
 							viewBox="0 0 24 24"
 							fill="none"
 							stroke="currentColor"
 							strokeWidth="1.5"
-							className="w-5 h-5 text-blue-400"
+							className="w-5 h-5 text-lightning"
 							aria-hidden="true"
 						>
 							<path
@@ -76,10 +76,8 @@ function EmptyState() {
 						</svg>
 					</div>
 					<div>
-						<h3 className="text-sm font-semibold text-zinc-100 mb-1.5">
-							Get started with Procella
-						</h3>
-						<p className="text-sm text-zinc-400 leading-relaxed mb-5">
+						<h3 className="text-sm font-semibold text-mist mb-1.5">Get started with Procella</h3>
+						<p className="text-sm text-cloud leading-relaxed mb-5">
 							Connect the Pulumi CLI to this backend and create your first stack.
 						</p>
 
@@ -120,12 +118,12 @@ function EmptyState() {
 function CommandStep({ step, label, command }: { step: string; label: string; command: string }) {
 	return (
 		<div className="flex items-start gap-3">
-			<span className="w-5 h-5 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[10px] font-semibold text-zinc-400 shrink-0 mt-0.5">
+			<span className="w-5 h-5 rounded-full bg-slate-brand border border-cloud/30 flex items-center justify-center text-[10px] font-semibold text-cloud shrink-0 mt-0.5">
 				{step}
 			</span>
 			<div className="min-w-0 flex-1">
-				<p className="text-xs text-zinc-500 mb-1">{label}</p>
-				<div className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 font-mono text-xs text-zinc-300 overflow-x-auto">
+				<p className="text-xs text-cloud mb-1">{label}</p>
+				<div className="bg-deep-sky border border-slate-brand rounded-lg px-3 py-2 font-mono text-xs text-mist/80 overflow-x-auto">
 					<span className="text-emerald-400 mr-1.5 select-none">$</span>
 					{command}
 				</div>
@@ -144,10 +142,10 @@ function QuickRefCard({
 	code: string;
 }) {
 	return (
-		<div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
-			<h4 className="text-sm font-medium text-zinc-200 mb-1">{title}</h4>
-			<p className="text-xs text-zinc-500 mb-3">{description}</p>
-			<pre className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 font-mono text-xs text-zinc-400 overflow-x-auto whitespace-pre leading-relaxed">
+		<div className="bg-slate-brand/50 border border-slate-brand rounded-xl p-5">
+			<h4 className="text-sm font-medium text-mist mb-1">{title}</h4>
+			<p className="text-xs text-cloud mb-3">{description}</p>
+			<pre className="bg-deep-sky border border-slate-brand rounded-lg px-3 py-2.5 font-mono text-xs text-cloud overflow-x-auto whitespace-pre leading-relaxed">
 				{code}
 			</pre>
 		</div>
@@ -166,51 +164,51 @@ interface StackItem {
 
 function StackTable({ items }: { items: StackItem[] }) {
 	return (
-		<div className="bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden">
-			<table className="min-w-full divide-y divide-zinc-800">
+		<div className="bg-slate-brand/50 border border-slate-brand rounded-xl overflow-hidden">
+			<table className="min-w-full divide-y divide-slate-brand">
 				<thead>
-					<tr className="bg-zinc-900">
+					<tr className="bg-slate-brand">
 						<th
 							scope="col"
-							className="px-5 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider"
+							className="px-5 py-3 text-left text-xs font-medium text-cloud uppercase tracking-wider"
 						>
 							Stack
 						</th>
 						<th
 							scope="col"
-							className="px-5 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider"
+							className="px-5 py-3 text-left text-xs font-medium text-cloud uppercase tracking-wider"
 						>
 							Version
 						</th>
 						<th
 							scope="col"
-							className="px-5 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider"
+							className="px-5 py-3 text-left text-xs font-medium text-cloud uppercase tracking-wider"
 						>
 							Status
 						</th>
 						<th
 							scope="col"
-							className="px-5 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider"
+							className="px-5 py-3 text-left text-xs font-medium text-cloud uppercase tracking-wider"
 						>
 							Tags
 						</th>
 					</tr>
 				</thead>
-				<tbody className="divide-y divide-zinc-800/60">
+				<tbody className="divide-y divide-slate-brand/60">
 					{items.map((stack) => (
 						<tr
 							key={`${stack.orgName}/${stack.projectName}/${stack.stackName}`}
-							className="hover:bg-zinc-800/30 transition-colors"
+							className="hover:bg-slate-brand/30 transition-colors"
 						>
 							<td className="px-5 py-4 whitespace-nowrap">
 								<Link
 									to={`/stacks/${stack.orgName}/${stack.projectName}/${stack.stackName}`}
-									className="text-blue-400 hover:text-blue-300 font-medium text-sm transition-colors"
+									className="text-lightning hover:text-lightning/80 font-medium text-sm transition-colors"
 								>
 									{stack.orgName}/{stack.projectName}/{stack.stackName}
 								</Link>
 							</td>
-							<td className="px-5 py-4 whitespace-nowrap text-sm text-zinc-400 tabular-nums">
+							<td className="px-5 py-4 whitespace-nowrap text-sm text-cloud tabular-nums">
 								v{stack.version}
 							</td>
 							<td className="px-5 py-4 whitespace-nowrap">
@@ -220,25 +218,25 @@ function StackTable({ items }: { items: StackItem[] }) {
 										{stack.currentOperation || "In Progress"}
 									</span>
 								) : (
-									<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-zinc-800/60 text-zinc-500 border border-zinc-700/50">
+									<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-brand/60 text-cloud border border-cloud/20">
 										Idle
 									</span>
 								)}
 							</td>
-							<td className="px-5 py-4 whitespace-nowrap text-sm text-zinc-500">
+							<td className="px-5 py-4 whitespace-nowrap text-sm text-cloud">
 								<div className="flex gap-1.5">
 									{Object.entries(stack.tags)
 										.slice(0, 2)
 										.map(([k, v]) => (
 											<span
 												key={k}
-												className="px-2 py-0.5 bg-zinc-800/60 rounded text-xs border border-zinc-700/50 text-zinc-400"
+												className="px-2 py-0.5 bg-slate-brand/60 rounded text-xs border border-cloud/20 text-cloud"
 											>
 												{k}: {v}
 											</span>
 										))}
 									{Object.keys(stack.tags).length > 2 && (
-										<span className="px-2 py-0.5 bg-zinc-800/60 rounded text-xs border border-zinc-700/50 text-zinc-400">
+										<span className="px-2 py-0.5 bg-slate-brand/60 rounded text-xs border border-cloud/20 text-cloud">
 											+{Object.keys(stack.tags).length - 2} more
 										</span>
 									)}

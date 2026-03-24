@@ -1,7 +1,8 @@
 ---
 /**
- * SiteTitle override — matches ProcellaLogo from apps/ui:
- *   stacked-layers SVG icon in blue-500 + "Procella" wordmark in zinc-100
+ * SiteTitle override — matches ProcellaLogo from apps/ui.
+ * Uses the same Storm Petrel bird geometry as apps/ui/src/assets/storm-petrel.svg.
+ * Inline SVG is used here because Astro Starlight overrides require self-contained components.
  */
 import type { Props } from '@astrojs/starlight/props';
 
@@ -9,22 +10,25 @@ const { siteTitle } = Astro.props as Props;
 ---
 
 <a href="/" class="site-title">
-  <!-- Stacked layers icon — same SVG path as ProcellaLogo.tsx -->
+  <!-- Storm Petrel icon — inline SVG matching apps/ui/src/assets/storm-petrel.svg geometry -->
   <svg
     viewBox="0 0 24 24"
     fill="none"
-    width="20"
-    height="20"
+    width="22"
+    height="22"
     aria-hidden="true"
-    style="color: #3b82f6; flex-shrink: 0;"
+    style="color: #00D4FF; flex-shrink: 0;"
   >
-    <path
-      d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
+    <path d="M3 13.5 Q1.5 15 1 17" stroke="#1B2838" stroke-width="0.6" stroke-linecap="round" fill="none"/>
+    <path d="M3.5 14.5 Q2 16 1.5 18.5" stroke="#1B2838" stroke-width="0.6" stroke-linecap="round" fill="none"/>
+    <path d="M4 15.5 Q2.5 17 2.5 19.5" stroke="#1B2838" stroke-width="0.6" stroke-linecap="round" fill="none"/>
+    <path d="M22 10.5 L20 8.5 L17.5 7.5 L14 6.5 L10 6 L7.5 6.5 L5 4 L3 2 L4 5.5 L5.5 7.5 L4 10 L3 13 L2 15.5 L4 14.5 L6 14 L7 15.5 L8 18 L9.5 20.5 L11 18.5 L13.5 16 L16 13.5 L19 12 L21 11 Z" fill="white" stroke="white" stroke-width="0.7" stroke-linejoin="round"/>
+    <path d="M21.5 10.7 L20 9 L17.5 8 L14 7 L10.5 6.5 L8 7 L5.5 4.5 L3.5 2.5 L4.5 5.5 L6 8 L4.5 10.5 L3.5 13 L2.5 15 L4.5 14 L6.5 13.5 L7.5 15.5 L8.5 18 L9.5 19.5 L10.5 18 L12.5 16 L15 14 L18 12 L20.5 11 Z" fill="currentColor"/>
+    <path d="M8 7 L5.5 4.5 L3.5 2.5 L4.5 5.5 L6 8 L8 8.5 L11 7.5 L14 7 L10.5 6.5 Z" fill="#1B2838"/>
+    <path d="M14 7 L10.5 6.5 L8.5 7.5 L10 9 L14 8.5 L17 8 Z" fill="#2D3748" opacity="0.7"/>
+    <path d="M6.5 13.5 L4.5 10.5 L3.5 13 L2.5 15 L4.5 14 Z" fill="#1B2838" opacity="0.6"/>
+    <circle cx="18.8" cy="9.2" r="0.55" fill="#FFB800"/>
+    <path d="M20 9 L22 10.5 L20.5 11 L19.5 10 Z" fill="#F59E0B"/>
   </svg>
   <span>{siteTitle}</span>
 </a>
@@ -39,7 +43,7 @@ const { siteTitle } = Astro.props as Props;
     font-size: 0.9375rem; /* 15px — matches ProcellaLogo size="sm" */
     font-weight: 700;
     letter-spacing: -0.01em;
-    color: #f4f4f5;       /* zinc-100 */
+    color: #E2E8F0;       /* Mist */
   }
 
   .site-title:hover {

@@ -1,8 +1,9 @@
 import { Link } from "react-router";
+import stormPetrelSvg from "../assets/storm-petrel.svg";
 
 /**
  * Shared brand logo used across Layout, Login, and HomePage.
- * Renders the stacked-layers SVG icon + "Procella" text, optionally wrapped in a Link.
+ * Renders the Storm Petrel mascot SVG icon + "Procella" text, optionally wrapped in a Link.
  */
 export function ProcellaLogo({
 	size = "md",
@@ -22,23 +23,8 @@ export function ProcellaLogo({
 
 	const content = (
 		<>
-			<svg
-				viewBox="0 0 24 24"
-				fill="none"
-				className={`${s.icon} text-blue-500`}
-				role="img"
-				aria-label="Procella logo"
-			>
-				<title>Procella logo</title>
-				<path
-					d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-					stroke="currentColor"
-					strokeWidth="2"
-					strokeLinecap="round"
-					strokeLinejoin="round"
-				/>
-			</svg>
-			<span className={`${s.text} font-bold tracking-tight text-zinc-100`}>Procella</span>
+			<img src={stormPetrelSvg} className={s.icon} alt="" aria-hidden="true" />
+			<span className={`${s.text} font-bold tracking-tight text-mist`}>Procella</span>
 		</>
 	);
 

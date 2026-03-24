@@ -14,16 +14,16 @@ function getResultColor(result: string) {
 		case "in-progress":
 			return "bg-yellow-900/30 text-yellow-400 border-yellow-900/50";
 		case "cancelled":
-			return "bg-zinc-800 text-zinc-400 border-zinc-700";
+			return "bg-slate-brand text-cloud border-cloud/30";
 		default:
-			return "bg-zinc-800 text-zinc-400 border-zinc-700";
+			return "bg-slate-brand text-cloud border-cloud/30";
 	}
 }
 
 function getKindColor(kind: string) {
 	switch (kind) {
 		case "update":
-			return "bg-blue-900/30 text-blue-400 border-blue-900/50";
+			return "bg-lightning/10 text-lightning border-lightning/20";
 		case "preview":
 			return "bg-purple-900/30 text-purple-400 border-purple-900/50";
 		case "destroy":
@@ -33,7 +33,7 @@ function getKindColor(kind: string) {
 		case "import":
 			return "bg-cyan-900/30 text-cyan-400 border-cyan-900/50";
 		default:
-			return "bg-zinc-800 text-zinc-400 border-zinc-700";
+			return "bg-slate-brand text-cloud border-cloud/30";
 	}
 }
 
@@ -46,11 +46,11 @@ function getOpColor(op: string) {
 		case "delete":
 			return "text-red-400";
 		case "same":
-			return "text-zinc-500";
+			return "text-cloud";
 		case "replace":
 			return "text-orange-400";
 		default:
-			return "text-blue-400";
+			return "text-lightning";
 	}
 }
 
@@ -126,20 +126,20 @@ export function StackDetail() {
 		return (
 			<div className="space-y-6">
 				<div className="flex items-center gap-4">
-					<Link to="/" className="text-zinc-400 hover:text-zinc-200 transition-colors">
+					<Link to="/" className="text-cloud hover:text-mist transition-colors">
 						&larr; Back
 					</Link>
-					<div className="h-8 w-48 bg-zinc-800 rounded animate-pulse" />
+					<div className="h-8 w-48 bg-slate-brand rounded animate-pulse" />
 				</div>
 				<div className="grid grid-cols-3 gap-4">
 					{[1, 2, 3].map((i) => (
 						<div
 							key={i}
-							className="h-24 bg-zinc-800/50 rounded-lg border border-zinc-700 animate-pulse"
+							className="h-24 bg-slate-brand/50 rounded-lg border border-cloud/30 animate-pulse"
 						/>
 					))}
 				</div>
-				<div className="h-64 bg-zinc-800/50 rounded-lg border border-zinc-700 animate-pulse" />
+				<div className="h-64 bg-slate-brand/50 rounded-lg border border-cloud/30 animate-pulse" />
 			</div>
 		);
 	}
@@ -150,10 +150,10 @@ export function StackDetail() {
 		return (
 			<div className="space-y-6">
 				<div className="flex items-center gap-4">
-					<Link to="/" className="text-zinc-400 hover:text-zinc-200">
+					<Link to="/" className="text-cloud hover:text-mist">
 						&larr; Back
 					</Link>
-					<h1 className="text-2xl font-bold text-zinc-100">
+					<h1 className="text-2xl font-bold text-mist">
 						{org}/{project}/{stack}
 					</h1>
 				</div>
@@ -173,11 +173,11 @@ export function StackDetail() {
 			{/* ── Header ──────────────────────────────────────────────── */}
 			<div className="flex items-center justify-between">
 				<div className="flex items-center gap-4">
-					<Link to="/" className="text-zinc-400 hover:text-zinc-200 transition-colors">
+					<Link to="/" className="text-cloud hover:text-mist transition-colors">
 						&larr; Back
 					</Link>
-					<h1 className="text-2xl font-bold text-zinc-100">
-						<span className="text-zinc-500 font-normal">
+					<h1 className="text-2xl font-bold text-mist">
+						<span className="text-cloud font-normal">
 							{org} / {project} /{" "}
 						</span>
 						{stack}
@@ -197,21 +197,21 @@ export function StackDetail() {
 			{/* ── Overview Cards ───────────────────────────────────────── */}
 			<div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
 				{/* Version */}
-				<div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5">
-					<div className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">
+				<div className="bg-slate-brand border border-slate-brand rounded-lg p-5">
+					<div className="text-xs font-medium text-cloud uppercase tracking-wider mb-2">
 						Version
 					</div>
-					<div className="text-2xl font-bold text-zinc-100">v{detail?.version ?? 0}</div>
+					<div className="text-2xl font-bold text-mist">v{detail?.version ?? 0}</div>
 				</div>
 
 				{/* Resources */}
-				<div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5">
-					<div className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">
+				<div className="bg-slate-brand border border-slate-brand rounded-lg p-5">
+					<div className="text-xs font-medium text-cloud uppercase tracking-wider mb-2">
 						Resources
 					</div>
-					<div className="text-2xl font-bold text-zinc-100">
+					<div className="text-2xl font-bold text-mist">
 						{resourcesLoading ? (
-							<span className="inline-block h-7 w-12 bg-zinc-800 rounded animate-pulse" />
+							<span className="inline-block h-7 w-12 bg-slate-brand rounded animate-pulse" />
 						) : (
 							resourceItems.length
 						)}
@@ -219,8 +219,8 @@ export function StackDetail() {
 				</div>
 
 				{/* Last Update */}
-				<div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5">
-					<div className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">
+				<div className="bg-slate-brand border border-slate-brand rounded-lg p-5">
+					<div className="text-xs font-medium text-cloud uppercase tracking-wider mb-2">
 						Last Update
 					</div>
 					{lastUpdate ? (
@@ -230,12 +230,12 @@ export function StackDetail() {
 							>
 								{lastUpdate.result || "unknown"}
 							</span>
-							<span className="text-sm text-zinc-400">
+							<span className="text-sm text-cloud">
 								{formatRelativeTime(lastUpdate.endTime || lastUpdate.startTime)}
 							</span>
 						</div>
 					) : (
-						<div className="text-sm text-zinc-500">No updates yet</div>
+						<div className="text-sm text-cloud">No updates yet</div>
 					)}
 				</div>
 			</div>
@@ -246,9 +246,9 @@ export function StackDetail() {
 					{Object.entries(detail.tags).map(([k, v]) => (
 						<span
 							key={k}
-							className="px-2.5 py-1 bg-zinc-800/80 rounded-md text-xs border border-zinc-700 text-zinc-400"
+							className="px-2.5 py-1 bg-slate-brand/80 rounded-md text-xs border border-cloud/30 text-cloud"
 						>
-							<span className="text-zinc-500">{k}:</span> {v}
+							<span className="text-cloud">{k}:</span> {v}
 						</span>
 					))}
 				</div>
@@ -257,97 +257,97 @@ export function StackDetail() {
 			{/* ── Resources Table ──────────────────────────────────────── */}
 			<section>
 				<div className="flex items-center justify-between mb-4">
-					<h2 className="text-lg font-semibold text-zinc-100">Resources</h2>
+					<h2 className="text-lg font-semibold text-mist">Resources</h2>
 					{resourceItems.length > 0 && (
-						<span className="text-xs text-zinc-500">{resourceItems.length} resources</span>
+						<span className="text-xs text-cloud">{resourceItems.length} resources</span>
 					)}
 				</div>
 
 				{resourcesLoading ? (
-					<div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+					<div className="bg-slate-brand border border-slate-brand rounded-lg overflow-hidden">
 						<div className="animate-pulse space-y-0">
 							{[1, 2, 3, 4].map((i) => (
-								<div key={i} className="h-12 border-b border-zinc-800 last:border-0" />
+								<div key={i} className="h-12 border-b border-slate-brand last:border-0" />
 							))}
 						</div>
 					</div>
 				) : resourceItems.length === 0 ? (
-					<div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-8 text-center">
-						<p className="text-zinc-500">
+					<div className="bg-slate-brand/50 border border-cloud/20 rounded-lg p-8 text-center">
+						<p className="text-cloud">
 							No resources.{" "}
-							<code className="bg-zinc-900 px-1.5 py-0.5 rounded text-sm">pulumi up</code> to
+							<code className="bg-slate-brand px-1.5 py-0.5 rounded text-sm">pulumi up</code> to
 							deploy.
 						</p>
 					</div>
 				) : (
-					<div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
-						<table className="min-w-full divide-y divide-zinc-800">
-							<thead className="bg-zinc-950">
+					<div className="bg-slate-brand border border-slate-brand rounded-lg overflow-hidden">
+						<table className="min-w-full divide-y divide-slate-brand">
+							<thead className="bg-deep-sky">
 								<tr>
 									<th
 										scope="col"
-										className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider"
+										className="px-4 py-3 text-left text-xs font-medium text-cloud uppercase tracking-wider"
 									>
 										Type
 									</th>
 									<th
 										scope="col"
-										className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider"
+										className="px-4 py-3 text-left text-xs font-medium text-cloud uppercase tracking-wider"
 									>
 										Name
 									</th>
 									<th
 										scope="col"
-										className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider hidden md:table-cell"
+										className="px-4 py-3 text-left text-xs font-medium text-cloud uppercase tracking-wider hidden md:table-cell"
 									>
 										Provider
 									</th>
 									<th
 										scope="col"
-										className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider hidden lg:table-cell"
+										className="px-4 py-3 text-left text-xs font-medium text-cloud uppercase tracking-wider hidden lg:table-cell"
 									>
 										ID
 									</th>
 									<th
 										scope="col"
-										className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider hidden lg:table-cell"
+										className="px-4 py-3 text-left text-xs font-medium text-cloud uppercase tracking-wider hidden lg:table-cell"
 									>
 										Flags
 									</th>
 								</tr>
 							</thead>
-							<tbody className="divide-y divide-zinc-800 bg-zinc-900">
+							<tbody className="divide-y divide-slate-brand bg-slate-brand">
 								{resourceItems.map((r) => (
 									<tr
 										key={r.urn}
-										className="hover:bg-zinc-800/50 transition-colors cursor-pointer group"
+										className="hover:bg-slate-brand/50 transition-colors cursor-pointer group"
 									>
 										<td className="px-4 py-3 whitespace-nowrap">
-											<span className="font-mono text-sm text-zinc-300" title={r.type}>
+											<span className="font-mono text-sm text-mist/80" title={r.type}>
 												{shortType(r.type)}
 											</span>
 										</td>
 										<td className="px-4 py-3 whitespace-nowrap">
 											<Link
 												to={`/stacks/${org}/${project}/${stack}/resources?urn=${encodeURIComponent(r.urn)}`}
-												className="text-sm text-blue-400 hover:text-blue-300 font-medium group-hover:underline"
+												className="text-sm text-lightning hover:text-lightning/80 font-medium group-hover:underline"
 											>
 												{r.name}
 											</Link>
-											{r.parent && <span className="ml-2 text-xs text-zinc-600">← {r.parent}</span>}
+											{r.parent && <span className="ml-2 text-xs text-cloud/60">← {r.parent}</span>}
 										</td>
 										<td className="px-4 py-3 whitespace-nowrap hidden md:table-cell">
-											<span className="px-2 py-0.5 rounded bg-zinc-800 text-xs text-zinc-400 border border-zinc-700">
+											<span className="px-2 py-0.5 rounded bg-slate-brand text-xs text-cloud border border-cloud/30">
 												{r.provider}
 											</span>
 										</td>
 										<td className="px-4 py-3 whitespace-nowrap hidden lg:table-cell">
 											{r.id ? (
-												<span className="font-mono text-xs text-zinc-500" title={r.id}>
+												<span className="font-mono text-xs text-cloud" title={r.id}>
 													{truncateMiddle(r.id, 24)}
 												</span>
 											) : (
-												<span className="text-xs text-zinc-600">-</span>
+												<span className="text-xs text-cloud/60">-</span>
 											)}
 										</td>
 										<td className="px-4 py-3 whitespace-nowrap hidden lg:table-cell">
@@ -363,7 +363,7 @@ export function StackDetail() {
 													</span>
 												)}
 												{!r.protect && !r.external && (
-													<span className="text-xs text-zinc-600">-</span>
+													<span className="text-xs text-cloud/60">-</span>
 												)}
 											</div>
 										</td>
@@ -378,18 +378,18 @@ export function StackDetail() {
 			{/* ── Update History ────────────────────────────────────────── */}
 			<section>
 				<div className="flex items-center justify-between mb-4">
-					<h2 className="text-lg font-semibold text-zinc-100">Update History</h2>
+					<h2 className="text-lg font-semibold text-mist">Update History</h2>
 					{updateItems.length > 0 && (
-						<span className="text-xs text-zinc-500">{updateItems.length} updates</span>
+						<span className="text-xs text-cloud">{updateItems.length} updates</span>
 					)}
 				</div>
 
 				{updateItems.length === 0 ? (
-					<div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-8 text-center">
-						<p className="text-zinc-500">
+					<div className="bg-slate-brand/50 border border-cloud/20 rounded-lg p-8 text-center">
+						<p className="text-cloud">
 							No updates yet. Run{" "}
-							<code className="bg-zinc-900 px-1.5 py-0.5 rounded text-sm">pulumi up</code> to create
-							one.
+							<code className="bg-slate-brand px-1.5 py-0.5 rounded text-sm">pulumi up</code> to
+							create one.
 						</p>
 					</div>
 				) : (
@@ -402,7 +402,7 @@ export function StackDetail() {
 								<Link
 									key={update.updateID}
 									to={`/stacks/${org}/${project}/${stack}/updates/${update.updateID}`}
-									className="block bg-zinc-900 border border-zinc-800 rounded-lg p-5 hover:border-zinc-600 transition-colors group"
+									className="block bg-slate-brand border border-slate-brand rounded-lg p-5 hover:border-cloud/30 transition-colors group"
 								>
 									<div className="flex items-start justify-between mb-2">
 										<div className="flex items-center gap-2.5">
@@ -416,24 +416,24 @@ export function StackDetail() {
 											>
 												{update.result || "pending"}
 											</span>
-											<span className="text-sm text-zinc-500">v{update.version}</span>
+											<span className="text-sm text-cloud">v{update.version}</span>
 										</div>
 										<div className="text-right text-sm">
-											<div className="text-zinc-400">{formatDate(update.startTime)}</div>
-											{duration && <div className="text-zinc-600 text-xs">{duration}</div>}
+											<div className="text-cloud">{formatDate(update.startTime)}</div>
+											{duration && <div className="text-cloud/60 text-xs">{duration}</div>}
 										</div>
 									</div>
 
 									{update.message && (
-										<div className="text-zinc-400 text-sm mb-2 truncate">{update.message}</div>
+										<div className="text-cloud text-sm mb-2 truncate">{update.message}</div>
 									)}
 
 									{changes.length > 0 && (
-										<div className="flex gap-3 text-xs mt-2 pt-2 border-t border-zinc-800/50">
+										<div className="flex gap-3 text-xs mt-2 pt-2 border-t border-slate-brand/50">
 											{changes.map(([op, count]) => (
 												<span key={op} className="flex items-center gap-1">
 													<span className={`font-bold ${getOpColor(op)}`}>{count}</span>
-													<span className="text-zinc-500">{op}</span>
+													<span className="text-cloud">{op}</span>
 												</span>
 											))}
 										</div>
