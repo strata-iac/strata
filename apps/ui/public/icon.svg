@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+	<title>Procella</title>
+	<style>
+		:root { --bg: #0D1B2A; --bird: #00D4FF; --eye: #FFB800; }
+		@media (prefers-color-scheme: light) { :root { --bg: #E2E8F0; --bird: #0D1B2A; } }
+	</style>
+	<rect width="512" height="512" rx="64" fill="var(--bg)"/>
+	<g transform="translate(64 64) scale(16)">
+		<!-- Upper wing -->
+		<path d="M13 11.5 Q8 7.5 3 4.5 Q7 8 13 11.5Z" fill="var(--bird)"/>
+		<!-- Lower wing -->
+		<path d="M13 12.5 Q8 16.5 3 19.5 Q7 16 13 12.5Z" fill="var(--bird)"/>
+		<!-- Body -->
+		<ellipse cx="15" cy="12" rx="4.5" ry="1.8" fill="var(--bird)"/>
+		<!-- Head -->
+		<circle cx="19.5" cy="11.2" r="1.5" fill="var(--bird)"/>
+		<!-- Tail -->
+		<path d="M10.5 11.5 L7 9.5" stroke="var(--bird)" stroke-width="1.2" stroke-linecap="round"/>
+		<path d="M10.5 12.5 L7 14.5" stroke="var(--bird)" stroke-width="1.2" stroke-linecap="round"/>
+		<!-- Eye -->
+		<circle cx="20.2" cy="10.8" r="0.45" fill="var(--eye)"/>
+		<!-- Rump -->
+		<ellipse cx="11.5" cy="12.3" rx="1" ry="0.55" fill="white" opacity="0.85"/>
+	</g>
+</svg>

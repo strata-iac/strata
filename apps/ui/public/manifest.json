@@ -1,0 +1,26 @@
+{
+	"name": "Procella",
+	"short_name": "Procella",
+	"description": "Self-hosted Pulumi backend",
+	"start_url": "/",
+	"display": "standalone",
+	"background_color": "#0D1B2A",
+	"theme_color": "#0D1B2A",
+	"icons": [
+		{
+			"src": "/icon.svg",
+			"type": "image/svg+xml",
+			"sizes": "any"
+		},
+		{
+			"src": "/icon-192.png",
+			"type": "image/png",
+			"sizes": "192x192"
+		},
+		{
+			"src": "/icon-512.png",
+			"type": "image/png",
+			"sizes": "512x512"
+		}
+	]
+}
