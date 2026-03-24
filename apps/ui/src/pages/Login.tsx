@@ -34,7 +34,12 @@ function DescopeLogin({ returnTo }: { returnTo: string }) {
 						boxShadow: "0 0 40px rgba(0,212,255,0.2), 0 4px 16px rgba(0,0,0,0.3)",
 					}}
 				>
-					<img src={stormPetrelSvg} alt="Procella" className="w-full h-full object-cover" />
+					<img
+						src={stormPetrelSvg}
+						alt=""
+						aria-hidden="true"
+						className="w-full h-full object-cover"
+					/>
 				</div>
 			</div>
 			<ProcellaLogo linkTo="/" className="mb-3" />
@@ -80,7 +85,12 @@ function DevLogin({ returnTo }: { returnTo: string }) {
 						boxShadow: "0 0 40px rgba(0,212,255,0.2), 0 4px 16px rgba(0,0,0,0.3)",
 					}}
 				>
-					<img src={stormPetrelSvg} alt="Procella" className="w-full h-full object-cover" />
+					<img
+						src={stormPetrelSvg}
+						alt=""
+						aria-hidden="true"
+						className="w-full h-full object-cover"
+					/>
 				</div>
 			</div>
 			<ProcellaLogo linkTo="/" className="mb-3" />
