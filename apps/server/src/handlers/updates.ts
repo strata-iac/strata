@@ -50,15 +50,23 @@ export function updateHandlers(
 		},
 
 		completeUpdate: async (c: Context<Env>) => {
-			const caller = c.get("caller");
-			const org = param(c, "org");
-			const project = param(c, "project");
-			const stack = param(c, "stack");
 			const updateId = param(c, "updateId");
 			const body = await c.req.json<CompleteUpdateRequest>();
 			await updates.completeUpdate(updateId, body);
 
-			if (github && (body.status === "succeeded" || body.status === "failed")) {
+			const caller = c.get("caller");
+			const org = c.req.param("org");
+			const project = c.req.param("project");
+			const stack = c.req.param("stack");
+
+			if (
+				caller &&
+				org &&
+				project &&
+				stack &&
+				github &&
+				(body.status === "succeeded" || body.status === "failed")
+			) {
 				const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
 				const installation = await github.getInstallation(caller.tenantId);
 				if (installation) {
@@ -110,7 +118,10 @@ export function updateHandlers(
 				}
 			}
 
-			if (body.status === "succeeded" || body.status === "failed" || body.status === "cancelled") {
+			if (
+				caller &&
+				(body.status === "succeeded" || body.status === "failed" || body.status === "cancelled")
+			) {
 				void webhooks?.emit({
 					tenantId: caller.tenantId,
 					event:
