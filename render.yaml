@@ -1,0 +1,62 @@
+# render.yaml — Procella Blueprint
+#
+# Deploy:
+#   1. Push to GitHub/GitLab
+#   2. Render Dashboard → New → Blueprint → connect repo
+#   3. Fill in sync:false secret values
+#
+# Docs: https://render.com/docs/blueprint-spec
+
+databases:
+  - name: procella-db
+    plan: basic-1gb
+    region: oregon
+    databaseName: procella
+    user: procella
+    postgresMajorVersion: "17"
+
+envVarGroups:
+  - name: procella-secrets
+    envVars:
+      - key: PROCELLA_DEV_AUTH_TOKEN
+        sync: false
+      - key: PROCELLA_ENCRYPTION_KEY
+        sync: false
+      - key: PROCELLA_DESCOPE_PROJECT_ID
+        sync: false
+      - key: PROCELLA_DESCOPE_MANAGEMENT_KEY
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+
+services:
+  - name: procella
+    type: web
+    runtime: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: ./Dockerfile
+
+    envVars:
+      - key: PROCELLA_LISTEN_ADDR
+        value: ":10000"
+      - key: PROCELLA_AUTH_MODE
+        value: dev
+      - key: PROCELLA_BLOB_BACKEND
+        value: s3
+      - key: PROCELLA_BLOB_S3_REGION
+        value: us-east-1
+      - key: PROCELLA_BLOB_S3_BUCKET
+        value: your-bucket-name
+      - key: PROCELLA_BLOB_S3_ENDPOINT
+        value: https://s3.amazonaws.com   # change for R2, MinIO, etc.
+      - key: PROCELLA_DATABASE_URL
+        fromDatabase:
+          name: procella-db
+          property: connectionString
+      - fromGroup: procella-secrets
+
+    healthCheckPath: /healthz
+    autoDeploy: true

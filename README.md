@@ -59,15 +59,22 @@ pulumi new typescript
 pulumi up
 ```
 
-## Running in Production
+## Deploy
 
-Deploy to Vercel via GitHub integration:
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/procella-dev/procella)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/procella-dev/procella)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/procella-dev/procella)
 
-```bash
-vercel deploy --prod
-```
+| Platform | Method | Config file |
+|---|---|---|
+| [Render](apps/docs/src/content/docs/deployment/render.mdx) | One-click Blueprint | [`render.yaml`](render.yaml) |
+| [Railway](apps/docs/src/content/docs/deployment/railway.mdx) | One-click from repo | [`railway.toml`](railway.toml) |
+| [Vercel](https://vercel.com/docs) | One-click clone | [`vercel.json`](vercel.json) |
+| [Fly.io](apps/docs/src/content/docs/deployment/fly-io.mdx) | `fly launch && fly deploy` | [`fly.toml`](fly.toml) |
+| [Coolify](apps/docs/src/content/docs/deployment/coolify.mdx) | Docker Compose in Coolify UI | [`docker-compose.coolify.yml`](docker-compose.coolify.yml) |
+| [Docker Compose](apps/docs/src/content/docs/operations/docker-compose.md) | `docker compose --profile dev up` | [`docker-compose.yml`](docker-compose.yml) |
 
-All `PROCELLA_*` environment variables are set as Vercel environment variables in the dashboard or via `vercel env` CLI. The GC worker runs as a Vercel Cron job. The database uses a Neon serverless PostgreSQL connection string.
+All platforms need PostgreSQL and the `PROCELLA_*` environment variables. See the [full configuration reference](apps/docs/src/content/docs/operations/environment-variables.md).
 
 ## Configuration
 

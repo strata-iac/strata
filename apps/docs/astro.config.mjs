@@ -79,6 +79,15 @@ export default defineConfig({
             { label: 'Encryption API', slug: 'api/encryption' },
           ],
         },
+        {
+          label: 'Deployment',
+          items: [
+            { label: 'Fly.io', slug: 'deployment/fly-io' },
+            { label: 'Railway', slug: 'deployment/railway' },
+            { label: 'Render', slug: 'deployment/render' },
+            { label: 'Coolify', slug: 'deployment/coolify' },
+          ],
+        },
       ],
     }),
   ],

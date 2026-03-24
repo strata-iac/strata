@@ -1,0 +1,159 @@
+---
+title: Deploying to Render
+description: Deploy Procella to Render using a render.yaml Blueprint with a Docker web service, Postgres database, and environment groups.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Render Blueprints define your entire stack (web service + Postgres) as a single `render.yaml` file committed to your repo. Render handles TLS, health checks, and zero-downtime deploys automatically.
+
+**Official docs**: [render.com/docs/blueprint-spec](https://render.com/docs/blueprint-spec)
+
+---
+
+## `render.yaml`
+
+A ready-to-use `render.yaml` is included in the repo root:
+
+```yaml
+# render.yaml — Procella Blueprint
+databases:
+  - name: procella-db
+    plan: basic-1gb          # basic-256mb | basic-1gb | pro-4gb ...
+    region: oregon           # match your web service region
+    databaseName: procella
+    user: procella
+    postgresMajorVersion: 17
+
+envVarGroups:
+  - name: procella-secrets
+    envVars:
+      # Mark sync:false so Render prompts for values on first deploy
+      - key: PROCELLA_DEV_AUTH_TOKEN
+        sync: false
+      - key: PROCELLA_ENCRYPTION_KEY
+        sync: false
+      - key: PROCELLA_DESCOPE_PROJECT_ID
+        sync: false
+      - key: PROCELLA_DESCOPE_MANAGEMENT_KEY
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+
+services:
+  - name: procella
+    type: web
+    runtime: docker           # use your Dockerfile
+    region: oregon
+    plan: starter             # starter | standard | pro
+    dockerfilePath: ./Dockerfile
+    # dockerContext: .        # defaults to repo root
+
+    # Non-sensitive config
+    envVars:
+      - key: PROCELLA_LISTEN_ADDR
+        value: ":10000"        # Render assigns ~10000, not 9090
+      - key: PROCELLA_AUTH_MODE
+        value: descope         # or dev
+      - key: PROCELLA_BLOB_BACKEND
+        value: s3
+      - key: PROCELLA_BLOB_S3_REGION
+        value: us-east-1
+      - key: PROCELLA_BLOB_S3_BUCKET
+        value: your-bucket-name           # REQUIRED when using S3 backend
+      - key: PROCELLA_BLOB_S3_ENDPOINT
+        value: https://s3.amazonaws.com   # change for R2, MinIO, etc.
+
+      # Wire DATABASE_URL from the Blueprint Postgres instance
+      - key: PROCELLA_DATABASE_URL
+        fromDatabase:
+          name: procella-db
+          property: connectionString
+
+      # Pull in the secrets group
+      - fromGroup: procella-secrets
+
+    # Health check — Render marks deploy failed if this doesn't return 200
+    healthCheckPath: /healthz
+
+    # Auto-deploy on every push to the linked branch
+    autoDeploy: true
+
+    # Run DB migrations before starting the new instance.
+    # Procella uses drizzle-kit for migrations — run from the build stage:
+    # preDeployCommand: "bunx drizzle-kit migrate --config packages/db/drizzle.config.ts"
+```
+
+<Aside type="note">
+`sync: false` env vars require a value to be entered in the Render dashboard before the first deploy. This is the recommended pattern for secrets — they are never stored in your repo.
+</Aside>
+
+---
+
+## PostgreSQL
+
+The `databases` block provisions a fully managed Render Postgres. Available plans:
+
+| Plan | RAM | Notes |
+|---|---|---|
+| `free` | 256 MB | Dev/testing only, 90-day expiry |
+| `basic-256mb` | 256 MB | Smallest paid tier |
+| `basic-1gb` | 1 GB | Good for small production |
+| `pro-4gb` | 4 GB | Includes PITR, read replicas |
+
+Render Postgres v17 is available. Use `postgresMajorVersion: 17` to pin it.
+
+The `connectionString` property auto-generates as:
+`postgresql://user:password@host:5432/procella?sslmode=require`
+
+---
+
+## Secrets
+
+Set `sync: false` env vars in the Render Dashboard under **Environment → Environment Variables** before the first Blueprint sync. After that, values persist across resyncs.
+
+Alternatively, use the Render CLI:
+
+```bash
+render env:set PROCELLA_ENCRYPTION_KEY="$(openssl rand -hex 32)" --service procella
+```
+
+---
+
+## Deploy
+
+1. Push `render.yaml` to your GitHub/GitLab repo.
+2. In the Render Dashboard: **New → Blueprint** → connect your repo.
+3. Fill in `sync: false` secret values.
+4. Click **Apply** — Render provisions Postgres, then deploys your Docker image.
+
+On subsequent pushes, Render auto-deploys (if `autoDeploy: true`).
+
+---
+
+## Scaling
+
+```yaml
+services:
+  - name: procella
+    plan: standard           # upgrade plan for more CPU/RAM
+    scaling:
+      minInstances: 1
+      maxInstances: 5
+      targetMemoryPercent: 80
+      targetCPUPercent: 70
+```
+
+<Aside type="tip">
+Render auto-scaling is available on Standard plan and above. Procella is stateless (PostgreSQL + S3 for all state), so horizontal scaling works without any configuration changes.
+</Aside>
+
+---
+
+## Bun / Docker Notes
+
+- Render builds your `Dockerfile` on its own build machines. The `bun build --compile` output produces a standalone binary in a [distroless](https://github.com/GoogleContainerTools/distroless) container — no shell, no package manager, no runtime installation needed.
+- Render automatically terminates TLS and routes HTTPS on port 443 to your container's `internal_port` (Render uses the `PORT` env var; ensure your app binds to `0.0.0.0:$PORT` or set `PROCELLA_LISTEN_ADDR=:10000` — Render assigns a port around 10000).
+- Health check failures block the deploy and trigger a rollback.
