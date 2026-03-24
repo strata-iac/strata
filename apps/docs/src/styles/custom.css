@@ -1,20 +1,21 @@
-/* ── Procella Docs — Custom Theme ──────────────────────────────────────────
- * Overrides Starlight CSS variables to match the main Procella app:
- *   Background:   Deep Sky   #0D1B2A
- *   Nav/Sidebar:  Slate Brand #1B2838
- *   Borders:      #1B2838 / #2D3748
- *   Text primary: Mist       #E2E8F0
- *   Text muted:   Cloud      #4A5568
- *   Accent:       Lightning  #00D4FF  (hsl 191 100% 50%)
+/* ── Procella Docs — Descope-Style Theme ─────────────────────────────────
+ * Overrides Starlight CSS variables with Descope brand colors:
+ *   Background:   Deep Navy  #0A101A
+ *   Nav/Sidebar:  Near Black #121217
+ *   Borders:      #253754 / #334665
+ *   Text primary: #F4F4F5
+ *   Text muted:   #686E78
+ *   Accent:       Teal       #0ED7D1
+ *   CTA:          Blue       #0085FF
  *   Font:         Inter — loaded via <link> in Head.astro (non-blocking)
  * ─────────────────────────────────────────────────────────────────────── */
 
-/* ── Accent hue: Lightning ────────────────────────────────────────────── */
+/* ── Accent hue: Descope Teal ─────────────────────────────────────────── */
 :root {
-	--sl-hue-accent: 191;
-	--sl-color-accent-low: hsl(210, 60%, 12%); /* Deep Sky tinted */
-	--sl-color-accent: hsl(191, 100%, 50%); /* Lightning #00D4FF */
-	--sl-color-accent-high: hsl(191, 100%, 87%); /* Lightning light */
+	--sl-hue-accent: 177;
+	--sl-color-accent-low: hsl(210, 40%, 12%); /* Deep navy tinted */
+	--sl-color-accent: #0ed7d1; /* Descope teal */
+	--sl-color-accent-high: #7deded; /* Teal highlight */
 
 	/* Font */
 	--sl-font-system: "Inter", ui-sans-serif, system-ui, sans-serif;
@@ -26,33 +27,33 @@
 :root,
 :root[data-theme="dark"],
 [data-theme="dark"] ::backdrop {
-	/* Map Starlight's gray scale to Storm Sky */
-	--sl-color-white: #e2e8f0; /* Mist */
-	--sl-color-gray-1: #e2e8f0; /* Mist — primary text */
-	--sl-color-gray-2: #cbd5e1; /* Mist lighter variant */
-	--sl-color-gray-3: #4a5568; /* Cloud — secondary text */
-	--sl-color-gray-4: #4a5568; /* Cloud — muted text */
-	--sl-color-gray-5: #2d3748; /* Storm border — subtle borders */
-	--sl-color-gray-6: #1b2838; /* Slate Brand — nav/sidebar bg */
-	--sl-color-gray-7: #152030; /* Deep Sky variant */
-	--sl-color-black: #0d1b2a; /* Deep Sky — page bg */
+	/* Gray scale — Descope dark neutrals */
+	--sl-color-white: #f4f4f5;
+	--sl-color-gray-1: #f4f4f5; /* primary text */
+	--sl-color-gray-2: #e4e4e7; /* secondary text */
+	--sl-color-gray-3: #686e78; /* muted text */
+	--sl-color-gray-4: #686e78; /* muted text */
+	--sl-color-gray-5: #253754; /* borders */
+	--sl-color-gray-6: #121217; /* nav/sidebar bg */
+	--sl-color-gray-7: #0e0e12; /* deep variant */
+	--sl-color-black: #0a101a; /* page bg */
 
 	/* Semantic surface colors */
-	--sl-color-bg: #0d1b2a; /* Deep Sky */
-	--sl-color-bg-nav: #1b2838; /* Slate Brand */
-	--sl-color-bg-sidebar: #1b2838; /* Slate Brand */
-	--sl-color-bg-inline-code: #1b2838; /* Slate Brand */
-	--sl-color-bg-accent: hsl(210, 60%, 12%);
+	--sl-color-bg: #0a101a;
+	--sl-color-bg-nav: #121217;
+	--sl-color-bg-sidebar: #121217;
+	--sl-color-bg-inline-code: #121217;
+	--sl-color-bg-accent: hsl(210, 40%, 12%);
 
 	/* Text */
-	--sl-color-text: #e2e8f0; /* Mist */
-	--sl-color-text-accent: #00d4ff; /* Lightning */
-	--sl-color-text-invert: #0d1b2a; /* Deep Sky */
+	--sl-color-text: #f4f4f5;
+	--sl-color-text-accent: #0ed7d1; /* Descope teal */
+	--sl-color-text-invert: #0a101a;
 
 	/* Borders / hairlines */
-	--sl-color-hairline-light: #1b2838; /* Slate Brand */
-	--sl-color-hairline: #1b2838; /* Slate Brand */
-	--sl-color-hairline-shade: #152030; /* Deep Sky variant */
+	--sl-color-hairline-light: #253754;
+	--sl-color-hairline: #253754;
+	--sl-color-hairline-shade: #121217;
 
 	/* Shadows */
 	--sl-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -64,52 +65,52 @@
 /* Prevents flash of Starlight's default light theme if JS is slow */
 :root[data-theme="light"],
 [data-theme="light"] ::backdrop {
-	--sl-color-white: #e2e8f0;
-	--sl-color-gray-1: #e2e8f0;
-	--sl-color-gray-2: #cbd5e1;
-	--sl-color-gray-3: #4a5568;
-	--sl-color-gray-4: #4a5568;
-	--sl-color-gray-5: #2d3748;
-	--sl-color-gray-6: #1b2838;
-	--sl-color-gray-7: #152030;
-	--sl-color-black: #0d1b2a;
+	--sl-color-white: #f4f4f5;
+	--sl-color-gray-1: #f4f4f5;
+	--sl-color-gray-2: #e4e4e7;
+	--sl-color-gray-3: #686e78;
+	--sl-color-gray-4: #686e78;
+	--sl-color-gray-5: #253754;
+	--sl-color-gray-6: #121217;
+	--sl-color-gray-7: #0e0e12;
+	--sl-color-black: #0a101a;
 
-	--sl-color-bg: #0d1b2a;
-	--sl-color-bg-nav: #1b2838;
-	--sl-color-bg-sidebar: #1b2838;
-	--sl-color-bg-inline-code: #1b2838;
-	--sl-color-bg-accent: hsl(210, 60%, 12%);
+	--sl-color-bg: #0a101a;
+	--sl-color-bg-nav: #121217;
+	--sl-color-bg-sidebar: #121217;
+	--sl-color-bg-inline-code: #121217;
+	--sl-color-bg-accent: hsl(210, 40%, 12%);
 
-	--sl-color-text: #e2e8f0;
-	--sl-color-text-accent: #00d4ff;
-	--sl-color-text-invert: #0d1b2a;
+	--sl-color-text: #f4f4f5;
+	--sl-color-text-accent: #0ed7d1;
+	--sl-color-text-invert: #0a101a;
 
-	--sl-color-hairline-light: #1b2838;
-	--sl-color-hairline: #1b2838;
-	--sl-color-hairline-shade: #152030;
+	--sl-color-hairline-light: #253754;
+	--sl-color-hairline: #253754;
+	--sl-color-hairline-shade: #121217;
 }
 
 /* ── Header: tighten border to match Slate Brand ─────────────────────── */
 header.header {
-	border-bottom-color: #1b2838;
-	background-color: #1b2838;
+	border-bottom-color: #253754;
+	background-color: #121217;
 }
 
 /* ── Sidebar: match Slate Brand bg exactly ────────────────────────────── */
 .sidebar-pane {
-	background-color: #1b2838;
-	border-inline-end-color: #1b2838;
+	background-color: #121217;
+	border-inline-end-color: #253754;
 }
 
 /* ── Code blocks: Slate Brand bg ──────────────────────────────────────── */
 .expressive-code .frame {
-	--ec-frm-edBrdCol: #1b2838;
+	--ec-frm-edBrdCol: #253754;
 }
 
 /* ── Active sidebar item: Lightning accent ──────────────────────────── */
 .sidebar-content a[aria-current="page"],
 .sidebar-content a[aria-current="page"]:hover,
 .sidebar-content a[aria-current="page"]:focus {
-	background-color: hsl(210, 60%, 12%);
-	color: hsl(191, 100%, 87%);
+	background-color: hsl(210, 40%, 12%);
+	color: #7deded;
 }
