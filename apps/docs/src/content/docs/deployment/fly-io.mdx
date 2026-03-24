@@ -1,0 +1,187 @@
+---
+title: Deploying to Fly.io
+description: Deploy Procella to Fly.io with Managed Postgres, secrets management, health checks, and autoscaling.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Fly.io runs Docker containers as Firecracker microVMs in regions close to your users. It's well-suited for Procella's single-process Hono + tRPC server with PostgreSQL.
+
+**Official docs**: [fly.io/docs](https://fly.io/docs/reference/configuration/)
+
+---
+
+## Prerequisites
+
+```bash
+brew install flyctl      # macOS
+# or: curl -L https://fly.io/install.sh | sh
+
+flyctl auth login
+```
+
+---
+
+## PostgreSQL
+
+Fly now recommends **Fly Managed Postgres** (fully managed, HA, PITR) over the legacy unmanaged cluster. Use Neon as an alternative if you want serverless billing.
+
+**Option A — Fly Managed Postgres:**
+
+```bash
+# Provision in the same region as your app
+fly mpg create --name procella-db --region iad
+
+# Attach to your app (prints the connection string)
+fly mpg attach procella-db --app procella
+```
+
+<Aside type="caution">
+`fly mpg attach` injects `DATABASE_URL`, but Procella reads `PROCELLA_DATABASE_URL`. Copy the connection string from the attach output and set it:
+
+```bash
+fly secrets set PROCELLA_DATABASE_URL="postgres://<user>:<pass>@<host>:5432/<db>?sslmode=require" --app procella
+```
+</Aside>
+
+**Option B — Neon / external Postgres:**
+
+```bash
+fly secrets set PROCELLA_DATABASE_URL="postgres://user:pass@host/db?sslmode=require" --app procella
+```
+
+---
+
+## `fly.toml`
+
+A ready-to-use `fly.toml` is included in the repo root. Customize the `app` name and `primary_region` for your setup:
+
+```toml
+# fly.toml — Procella on Fly.io
+app = "procella"
+primary_region = "iad"   # pick closest to your users
+
+[build]
+  dockerfile = "Dockerfile"
+
+# Non-sensitive runtime config
+[env]
+  PROCELLA_LISTEN_ADDR   = ":9090"
+  PROCELLA_AUTH_MODE     = "descope"   # or "dev"
+  PROCELLA_BLOB_BACKEND  = "s3"        # use S3/R2 for multi-region
+  PROCELLA_BLOB_S3_REGION = "us-east-1"
+
+# HTTP service — Fly handles TLS termination
+[http_service]
+  internal_port     = 9090
+  force_https       = true
+  auto_stop_machines  = "stop"    # scale to zero when idle
+  auto_start_machines = true
+  min_machines_running = 1        # keep at least one warm
+
+  [http_service.concurrency]
+    type       = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+  # Health check on the Hono /healthz route
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval     = "15s"
+    method       = "GET"
+    path         = "/healthz"
+    timeout      = "5s"
+    type         = "http"
+
+# Machine sizing — shared-cpu-1x is sufficient for most workloads
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
+```
+
+<Aside type="note">
+`auto_stop_machines = "stop"` powers down idle VMs (saves cost). Use `"suspend"` for faster cold starts at higher memory cost. For production with SLAs, set `min_machines_running = 2`.
+</Aside>
+
+---
+
+## Secrets
+
+Sensitive values are set via CLI (never committed to `fly.toml`):
+
+```bash
+# Required secrets
+fly secrets set \
+  PROCELLA_DEV_AUTH_TOKEN="your-token-here" \
+  PROCELLA_ENCRYPTION_KEY="$(openssl rand -hex 32)" \
+  --app procella
+
+# Descope mode
+fly secrets set \
+  PROCELLA_DESCOPE_PROJECT_ID="P..." \
+  PROCELLA_DESCOPE_MANAGEMENT_KEY="..." \
+  --app procella
+
+# S3/R2 blob storage
+fly secrets set \
+  PROCELLA_BLOB_S3_BUCKET="procella-blobs" \
+  PROCELLA_BLOB_S3_ENDPOINT="https://..." \
+  AWS_ACCESS_KEY_ID="..." \
+  AWS_SECRET_ACCESS_KEY="..." \
+  --app procella
+```
+
+Secrets are injected as environment variables and never stored in `fly.toml`.
+
+---
+
+## Deploy
+
+```bash
+# Create the app (first time only)
+fly launch --no-deploy --name procella
+
+# Deploy
+fly deploy
+
+# View logs
+fly logs --app procella
+
+# Scale to 2 machines
+fly scale count 2 --app procella
+```
+
+---
+
+## Scaling
+
+```bash
+# Horizontal: add machines
+fly scale count 3 --app procella
+
+# Vertical: upgrade memory
+fly scale memory 1024 --app procella
+
+# Multi-region: add a region
+fly scale count 2 --region lhr --app procella
+```
+
+Procella is stateless (all state in PostgreSQL + S3), so horizontal scaling is safe out of the box.
+
+---
+
+## Blob Storage
+
+For multi-region deployments, use S3-compatible storage (Fly Tigris, Cloudflare R2, or AWS S3) instead of local disk:
+
+```bash
+# Fly Tigris (native to Fly.io)
+fly storage create --name procella-blobs
+# This injects AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, BUCKET_NAME, AWS_ENDPOINT_URL_S3
+
+fly secrets set \
+  PROCELLA_BLOB_BACKEND=s3 \
+  PROCELLA_BLOB_S3_BUCKET="$(fly storage info procella-blobs --json | jq -r .name)" \
+  PROCELLA_BLOB_S3_ENDPOINT="$(fly storage info procella-blobs --json | jq -r .endpoint)"
+```

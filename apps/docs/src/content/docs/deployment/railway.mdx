@@ -1,0 +1,126 @@
+---
+title: Deploying to Railway
+description: Deploy Procella to Railway with a Postgres addon, railway.toml config-as-code, and environment variable references.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Railway detects your `Dockerfile` and builds it automatically. PostgreSQL is provisioned as a first-class addon with variables that can be referenced directly in your service config.
+
+**Official docs**: [docs.railway.com](https://docs.railway.com/reference/config-as-code)
+
+---
+
+## PostgreSQL
+
+Add a Postgres database from the Railway dashboard (**New → Database → Add PostgreSQL**) or via CLI:
+
+```bash
+railway add --database postgres
+```
+
+Railway injects these variables into the Postgres service:
+- `DATABASE_URL` — full connection string
+- `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`
+
+Reference them in your app service using Railway's variable reference syntax:
+`${{Postgres.DATABASE_URL}}`
+
+<Aside type="tip">
+Railway Postgres runs the official `postgres` image (SSL-enabled variant). Use `?sslmode=require` in your connection string for production.
+</Aside>
+
+---
+
+## `railway.toml`
+
+A ready-to-use `railway.toml` is included in the repo root:
+
+```toml
+# railway.toml — Procella on Railway
+[build]
+  builder = "DOCKERFILE"
+  dockerfilePath = "Dockerfile"
+
+[deploy]
+  healthcheckPath    = "/healthz"
+  healthcheckTimeout = 30                # seconds
+  numReplicas        = 1
+  restartPolicyType  = "ON_FAILURE"
+  restartPolicyMaxRetries = 5
+```
+
+<Aside type="note">
+Railway auto-detects the `Dockerfile` even without `builder = "DOCKERFILE"`, but specifying it explicitly is cleaner. The Dockerfile's `ENTRYPOINT ["/procella"]` is used by default — only add `startCommand` if you need to override it.
+</Aside>
+
+---
+
+## Environment Variables
+
+Set these in the Railway dashboard under **Variables**, or commit a `.env` file (for non-secrets):
+
+| Variable | Value |
+|---|---|
+| `PROCELLA_LISTEN_ADDR` | `:9090` |
+| `PROCELLA_DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
+| `PROCELLA_AUTH_MODE` | `descope` or `dev` |
+| `PROCELLA_BLOB_BACKEND` | `s3` |
+| `PROCELLA_BLOB_S3_BUCKET` | your bucket name |
+| `PROCELLA_BLOB_S3_ENDPOINT` | your S3 endpoint |
+
+**Sensitive secrets** (set in dashboard, never in `railway.toml`):
+
+```bash
+railway variables set \
+  PROCELLA_DEV_AUTH_TOKEN="your-token" \
+  PROCELLA_ENCRYPTION_KEY="$(openssl rand -hex 32)" \
+  PROCELLA_DESCOPE_PROJECT_ID="P..." \
+  PROCELLA_DESCOPE_MANAGEMENT_KEY="..." \
+  AWS_ACCESS_KEY_ID="..." \
+  AWS_SECRET_ACCESS_KEY="..."
+```
+
+<Aside type="caution">
+Railway exposes all environment variables to the build context. Do **not** reference secrets in `railway.toml` — set them only via the dashboard or `railway variables set`.
+</Aside>
+
+---
+
+## Deploy
+
+```bash
+# Install CLI
+npm install -g @railway/cli
+railway login
+
+# Link to existing project
+railway link
+
+# Deploy
+railway up
+
+# Tail logs
+railway logs
+```
+
+---
+
+## Scaling
+
+Railway supports horizontal scaling via **numReplicas** (Pro plan):
+
+```toml
+[deploy]
+  numReplicas = 3
+```
+
+Or set it in the dashboard under **Settings → Deploy → Replicas**.
+
+---
+
+## Bun / Docker Notes
+
+- Railway builds using your `Dockerfile` as-is. The `bun build --compile` binary runs inside a [distroless](https://github.com/GoogleContainerTools/distroless) final stage — no shell, no package manager, no Node.js runtime.
+- The compiled binary listens on `PROCELLA_LISTEN_ADDR` (default `:9090`). Set this explicitly in your Railway variables. Railway's proxy routes public HTTPS traffic to it automatically.
+- Railway injects a `PORT` variable, but Procella does **not** read `PORT`. Always set `PROCELLA_LISTEN_ADDR` explicitly (e.g., `:9090`). Do not attempt `PROCELLA_LISTEN_ADDR=:$PORT` — env vars are not interpolated inside other values.
