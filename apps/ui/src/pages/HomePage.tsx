@@ -132,7 +132,7 @@ const features = [
 
 export function HomePage() {
 	return (
-		<div className="min-h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
+		<div className="min-h-screen bg-deep-sky text-mist overflow-hidden">
 			{/* Background grid */}
 			<div
 				className="fixed inset-0 opacity-[0.03]"
@@ -148,16 +148,16 @@ export function HomePage() {
 				className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] opacity-20 pointer-events-none"
 				style={{
 					background:
-						"radial-gradient(ellipse at center, rgba(59,130,246,0.15) 0%, transparent 70%)",
+						"radial-gradient(ellipse at center, rgba(0,212,255,0.15) 0%, transparent 70%)",
 				}}
 			/>
 
 			{/* Nav */}
-			<nav className="relative z-10 border-b border-zinc-800/50">
+			<nav className="relative z-10 border-b border-slate-brand/50">
 				<div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
 					<div className="flex items-center gap-3">
 						<ProcellaLogo size="sm" />
-						<span className="hidden sm:inline-flex px-2 py-0.5 rounded bg-zinc-800/80 text-[11px] font-medium text-zinc-500 border border-zinc-700/50 uppercase tracking-widest">
+						<span className="hidden sm:inline-flex px-2 py-0.5 rounded bg-slate-brand/80 text-[11px] font-medium text-cloud border border-cloud/20 uppercase tracking-widest">
 							Open Source
 						</span>
 					</div>
@@ -166,7 +166,7 @@ export function HomePage() {
 							href="https://docs.procella.dev"
 							target="_blank"
 							rel="noopener noreferrer"
-							className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+							className="text-sm text-cloud hover:text-mist/80 transition-colors"
 						>
 							Docs
 						</a>
@@ -174,13 +174,13 @@ export function HomePage() {
 							href="https://github.com/procella-dev/procella"
 							target="_blank"
 							rel="noopener noreferrer"
-							className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+							className="text-sm text-cloud hover:text-mist/80 transition-colors"
 						>
 							GitHub
 						</a>
 						<a
 							href={`${appUrl}/login`}
-							className="text-sm font-medium text-zinc-100 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-4 py-2 rounded-lg transition-colors"
+							className="text-sm font-medium text-mist bg-slate-brand hover:bg-cloud/50 border border-cloud/30 px-4 py-2 rounded-lg transition-colors"
 						>
 							Sign in
 						</a>
@@ -191,18 +191,18 @@ export function HomePage() {
 			{/* Hero */}
 			<section className="relative z-10 pt-24 sm:pt-32 pb-20 px-6">
 				<div className="max-w-3xl mx-auto text-center home-fade-in">
-					<div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium mb-8 tracking-wide">
-						<span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+					<div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-lightning/10 border border-lightning/20 text-lightning text-xs font-medium mb-8 tracking-wide">
+						<span className="w-1.5 h-1.5 rounded-full bg-lightning animate-pulse" />
 						Pulumi-compatible backend
 					</div>
 					<h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight leading-[1.1] mb-6">
-						<span className="text-zinc-100">Self-hosted Pulumi.</span>
+						<span className="text-mist">Self-hosted Pulumi.</span>
 						<br />
-						<span className="text-zinc-500">Your infrastructure, your rules.</span>
+						<span className="text-cloud">Your infrastructure, your rules.</span>
 					</h1>
-					<p className="text-lg sm:text-xl text-zinc-400 leading-relaxed max-w-2xl mx-auto mb-10">
+					<p className="text-lg sm:text-xl text-cloud leading-relaxed max-w-2xl mx-auto mb-10">
 						Run{" "}
-						<code className="text-zinc-300 bg-zinc-800/80 px-1.5 py-0.5 rounded text-[0.9em]">
+						<code className="text-mist/80 bg-slate-brand/80 px-1.5 py-0.5 rounded text-[0.9em]">
 							pulumi up
 						</code>{" "}
 						against your own backend. Full CLI compatibility, encrypted secrets, web dashboard — no
@@ -211,7 +211,7 @@ export function HomePage() {
 					<div className="flex flex-col sm:flex-row items-center justify-center gap-3">
 						<a
 							href={`${appUrl}/login`}
-							className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg transition-colors text-sm"
+							className="inline-flex items-center gap-2 px-6 py-3 bg-lightning hover:bg-lightning/80 text-deep-sky font-medium rounded-lg transition-colors text-sm"
 						>
 							Open Dashboard
 							<svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
@@ -226,7 +226,7 @@ export function HomePage() {
 							href="https://github.com/procella-dev/procella"
 							target="_blank"
 							rel="noopener noreferrer"
-							className="inline-flex items-center gap-2 px-6 py-3 text-zinc-400 hover:text-zinc-200 font-medium rounded-lg transition-colors text-sm border border-zinc-800 hover:border-zinc-700"
+							className="inline-flex items-center gap-2 px-6 py-3 text-cloud hover:text-mist font-medium rounded-lg transition-colors text-sm border border-slate-brand hover:border-cloud/30"
 						>
 							<svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" aria-hidden="true">
 								<path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
@@ -240,46 +240,46 @@ export function HomePage() {
 			{/* Terminal preview */}
 			<section className="relative z-10 pb-24 px-6">
 				<div className="max-w-2xl mx-auto home-fade-in home-fade-in-delay-1">
-					<div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl shadow-black/50">
-						<div className="flex items-center gap-2 px-4 py-3 border-b border-zinc-800 bg-zinc-900/50">
-							<div className="w-3 h-3 rounded-full bg-zinc-700" />
-							<div className="w-3 h-3 rounded-full bg-zinc-700" />
-							<div className="w-3 h-3 rounded-full bg-zinc-700" />
-							<span className="ml-2 text-xs text-zinc-600 font-mono">terminal</span>
+					<div className="bg-slate-brand border border-slate-brand rounded-xl overflow-hidden shadow-2xl shadow-black/50">
+						<div className="flex items-center gap-2 px-4 py-3 border-b border-slate-brand bg-slate-brand/50">
+							<div className="w-3 h-3 rounded-full bg-cloud/50" />
+							<div className="w-3 h-3 rounded-full bg-cloud/50" />
+							<div className="w-3 h-3 rounded-full bg-cloud/50" />
+							<span className="ml-2 text-xs text-cloud/60 font-mono">terminal</span>
 						</div>
 						<div className="p-5 font-mono text-sm leading-relaxed">
-							<div className="text-zinc-500">
+							<div className="text-cloud">
 								<span className="text-emerald-400">$</span> pulumi login https://api.procella.sh
 							</div>
-							<div className="text-zinc-400 mt-1">Logged in to api.procella.sh as dev-user</div>
-							<div className="mt-4 text-zinc-500">
+							<div className="text-cloud mt-1">Logged in to api.procella.sh as dev-user</div>
+							<div className="mt-4 text-cloud">
 								<span className="text-emerald-400">$</span> pulumi stack init
 								myorg/myproject/production
 							</div>
-							<div className="text-zinc-400 mt-1">Created stack &apos;production&apos;</div>
-							<div className="mt-4 text-zinc-500">
+							<div className="text-cloud mt-1">Created stack &apos;production&apos;</div>
+							<div className="mt-4 text-cloud">
 								<span className="text-emerald-400">$</span> pulumi up
 							</div>
-							<div className="text-zinc-400 mt-1">
+							<div className="text-cloud mt-1">
 								Previewing update (myorg/myproject/production)
 							</div>
-							<div className="mt-2 text-zinc-500">
+							<div className="mt-2 text-cloud">
 								&nbsp;&nbsp;&nbsp;&nbsp;
 								<span className="text-emerald-400">+</span> aws:s3:Bucket &nbsp;&nbsp;my-bucket{" "}
 								<span className="text-emerald-400">created</span>
 							</div>
-							<div className="text-zinc-500">
+							<div className="text-cloud">
 								&nbsp;&nbsp;&nbsp;&nbsp;
 								<span className="text-emerald-400">+</span> aws:lambda:Function &nbsp;&nbsp;handler{" "}
 								<span className="text-emerald-400">created</span>
 							</div>
-							<div className="mt-2 text-zinc-400">
+							<div className="mt-2 text-cloud">
 								Resources:
 								<br />
 								&nbsp;&nbsp;&nbsp;&nbsp;
 								<span className="text-emerald-400">+ 2 created</span>
 							</div>
-							<div className="mt-1 text-zinc-500">Duration: 12s</div>
+							<div className="mt-1 text-cloud">Duration: 12s</div>
 						</div>
 					</div>
 				</div>
@@ -292,23 +292,23 @@ export function HomePage() {
 						<h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-4">
 							Everything you need to run Pulumi
 						</h2>
-						<p className="text-zinc-500 max-w-xl mx-auto">
+						<p className="text-cloud max-w-xl mx-auto">
 							A complete, production-ready backend that replaces Pulumi Cloud — deployable on your
 							own infrastructure in minutes.
 						</p>
 					</div>
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-zinc-800/50 rounded-xl border border-zinc-800 overflow-hidden">
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-slate-brand/50 rounded-xl border border-slate-brand overflow-hidden">
 						{features.map((feature, i) => (
 							<div
 								key={feature.title}
-								className="bg-zinc-950 p-8 home-fade-in"
+								className="bg-deep-sky p-8 home-fade-in"
 								style={{ animationDelay: `${150 + i * 80}ms` }}
 							>
-								<div className="w-10 h-10 rounded-lg bg-zinc-800/80 border border-zinc-700/50 flex items-center justify-center text-blue-400 mb-4">
+								<div className="w-10 h-10 rounded-lg bg-slate-brand/80 border border-cloud/20 flex items-center justify-center text-lightning mb-4">
 									{feature.icon}
 								</div>
-								<h3 className="text-sm font-semibold text-zinc-100 mb-2">{feature.title}</h3>
-								<p className="text-sm text-zinc-500 leading-relaxed">{feature.description}</p>
+								<h3 className="text-sm font-semibold text-mist mb-2">{feature.title}</h3>
+								<p className="text-sm text-cloud leading-relaxed">{feature.description}</p>
 							</div>
 						))}
 					</div>
@@ -322,7 +322,7 @@ export function HomePage() {
 						<h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-4">
 							Get started in seconds
 						</h2>
-						<p className="text-zinc-500">
+						<p className="text-cloud">
 							Point the Pulumi CLI at your Procella instance and start deploying.
 						</p>
 					</div>
@@ -346,12 +346,12 @@ export function HomePage() {
 			{/* CTA */}
 			<section className="relative z-10 pb-32 px-6">
 				<div className="max-w-2xl mx-auto text-center home-fade-in home-fade-in-delay-2">
-					<div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-12">
+					<div className="bg-slate-brand/50 border border-slate-brand rounded-2xl p-12">
 						<h2 className="text-2xl font-bold tracking-tight mb-3">Ready to take control?</h2>
-						<p className="text-zinc-500 mb-8">Deploy Procella and own your infrastructure state.</p>
+						<p className="text-cloud mb-8">Deploy Procella and own your infrastructure state.</p>
 						<a
 							href={`${appUrl}/login`}
-							className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg transition-colors text-sm"
+							className="inline-flex items-center gap-2 px-6 py-3 bg-lightning hover:bg-lightning/80 text-deep-sky font-medium rounded-lg transition-colors text-sm"
 						>
 							Open Dashboard
 							<svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
@@ -367,10 +367,10 @@ export function HomePage() {
 			</section>
 
 			{/* Footer */}
-			<footer className="relative z-10 border-t border-zinc-800/50 py-8 px-6">
+			<footer className="relative z-10 border-t border-slate-brand/50 py-8 px-6">
 				<div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-					<div className="flex items-center gap-2 text-sm text-zinc-600">
-						<span className="font-medium text-zinc-500">Procella</span>
+					<div className="flex items-center gap-2 text-sm text-cloud/60">
+						<span className="font-medium text-cloud">Procella</span>
 						<span>·</span>
 						<span>Self-hosted Pulumi backend</span>
 					</div>
@@ -379,7 +379,7 @@ export function HomePage() {
 							href="https://docs.procella.dev"
 							target="_blank"
 							rel="noopener noreferrer"
-							className="text-sm text-zinc-600 hover:text-zinc-400 transition-colors"
+							className="text-sm text-cloud/60 hover:text-cloud transition-colors"
 						>
 							Docs
 						</a>
@@ -387,7 +387,7 @@ export function HomePage() {
 							href="https://github.com/procella-dev/procella"
 							target="_blank"
 							rel="noopener noreferrer"
-							className="text-sm text-zinc-600 hover:text-zinc-400 transition-colors"
+							className="text-sm text-cloud/60 hover:text-cloud transition-colors"
 						>
 							GitHub
 						</a>
@@ -400,13 +400,13 @@ export function HomePage() {
 
 function Step({ number, title, code }: { number: string; title: string; code: string }) {
 	return (
-		<div className="flex gap-4 items-start bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
-			<div className="w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-sm font-semibold shrink-0">
+		<div className="flex gap-4 items-start bg-slate-brand/50 border border-slate-brand rounded-xl p-5">
+			<div className="w-8 h-8 rounded-full bg-lightning/10 border border-lightning/20 flex items-center justify-center text-lightning text-sm font-semibold shrink-0">
 				{number}
 			</div>
 			<div className="min-w-0 flex-1">
-				<p className="text-sm font-medium text-zinc-300 mb-2">{title}</p>
-				<div className="bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 font-mono text-sm text-zinc-400 overflow-x-auto">
+				<p className="text-sm font-medium text-mist/80 mb-2">{title}</p>
+				<div className="bg-deep-sky border border-slate-brand rounded-lg px-4 py-2.5 font-mono text-sm text-cloud overflow-x-auto">
 					<span className="text-emerald-400 mr-2">$</span>
 					{code}
 				</div>
