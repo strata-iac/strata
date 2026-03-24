@@ -81,14 +81,14 @@ export function UpdateDetail() {
 			case "in-progress":
 				return "bg-yellow-900/30 text-yellow-400 border-yellow-900/50";
 			default:
-				return "bg-zinc-800 text-zinc-400 border-zinc-700";
+				return "bg-slate-brand text-cloud border-cloud/30";
 		}
 	};
 
 	const getKindColor = (kind?: string) => {
 		switch (kind) {
 			case "update":
-				return "bg-blue-900/30 text-blue-400 border-blue-900/50";
+				return "bg-lightning/10 text-lightning border-lightning/20";
 			case "preview":
 				return "bg-purple-900/30 text-purple-400 border-purple-900/50";
 			case "destroy":
@@ -96,7 +96,7 @@ export function UpdateDetail() {
 			case "refresh":
 				return "bg-teal-900/30 text-teal-400 border-teal-900/50";
 			default:
-				return "bg-zinc-800 text-zinc-400 border-zinc-700";
+				return "bg-slate-brand text-cloud border-cloud/30";
 		}
 	};
 
@@ -109,9 +109,9 @@ export function UpdateDetail() {
 			case "delete":
 				return "text-red-400";
 			case "same":
-				return "text-zinc-500";
+				return "text-cloud";
 			default:
-				return "text-blue-400";
+				return "text-lightning";
 		}
 	};
 
@@ -125,15 +125,15 @@ export function UpdateDetail() {
 					? "text-red-400"
 					: severity === "warning"
 						? "text-yellow-400"
-						: "text-blue-400";
+						: "text-lightning";
 			return (
 				<div
 					key={event.sequence}
-					className="flex gap-4 py-1 border-b border-zinc-800/50 last:border-0 hover:bg-zinc-800/30 px-2 -mx-2 rounded"
+					className="flex gap-4 py-1 border-b border-slate-brand/50 last:border-0 hover:bg-slate-brand/30 px-2 -mx-2 rounded"
 				>
-					<span className="text-zinc-500 shrink-0 w-20">{time}</span>
+					<span className="text-cloud shrink-0 w-20">{time}</span>
 					<span className={`shrink-0 w-16 font-medium ${colorClass}`}>[{severity}]</span>
-					<span className="text-zinc-300 whitespace-pre-wrap font-mono text-sm">{message}</span>
+					<span className="text-mist/80 whitespace-pre-wrap font-mono text-sm">{message}</span>
 				</div>
 			);
 		}
@@ -144,12 +144,12 @@ export function UpdateDetail() {
 			return (
 				<div
 					key={event.sequence}
-					className="flex gap-4 py-1 border-b border-zinc-800/50 last:border-0 hover:bg-zinc-800/30 px-2 -mx-2 rounded"
+					className="flex gap-4 py-1 border-b border-slate-brand/50 last:border-0 hover:bg-slate-brand/30 px-2 -mx-2 rounded"
 				>
-					<span className="text-zinc-500 shrink-0 w-20">{time}</span>
+					<span className="text-cloud shrink-0 w-20">{time}</span>
 					<span className={`shrink-0 w-16 font-medium ${getOpColor(op)}`}>{op}</span>
-					<span className="text-zinc-300 font-mono text-sm">
-						<span className="text-zinc-500">{type}</span> {name}
+					<span className="text-mist/80 font-mono text-sm">
+						<span className="text-cloud">{type}</span> {name}
 					</span>
 				</div>
 			);
@@ -161,12 +161,12 @@ export function UpdateDetail() {
 			return (
 				<div
 					key={event.sequence}
-					className="flex gap-4 py-1 border-b border-zinc-800/50 last:border-0 hover:bg-zinc-800/30 px-2 -mx-2 rounded"
+					className="flex gap-4 py-1 border-b border-slate-brand/50 last:border-0 hover:bg-slate-brand/30 px-2 -mx-2 rounded"
 				>
-					<span className="text-zinc-500 shrink-0 w-20">{time}</span>
+					<span className="text-cloud shrink-0 w-20">{time}</span>
 					<span className={`shrink-0 w-16 font-medium ${getOpColor(op)}`}>{op} done</span>
-					<span className="text-zinc-300 font-mono text-sm">
-						<span className="text-zinc-500">{type}</span> {name}
+					<span className="text-mist/80 font-mono text-sm">
+						<span className="text-cloud">{type}</span> {name}
 					</span>
 				</div>
 			);
@@ -176,13 +176,13 @@ export function UpdateDetail() {
 			return (
 				<div
 					key={event.sequence}
-					className="flex gap-4 py-3 border-b border-zinc-800/50 last:border-0 mt-4 bg-zinc-800/20 px-4 -mx-4 rounded-lg"
+					className="flex gap-4 py-3 border-b border-slate-brand/50 last:border-0 mt-4 bg-slate-brand/20 px-4 -mx-4 rounded-lg"
 				>
-					<span className="text-zinc-500 shrink-0 w-20">{time}</span>
+					<span className="text-cloud shrink-0 w-20">{time}</span>
 					<span className="shrink-0 w-16 font-medium text-purple-400">summary</span>
 					<div className="flex gap-4 text-sm">
 						{Object.entries(event.summaryEvent.resourceChanges).map(([op, count]) => (
-							<span key={op} className="text-zinc-300">
+							<span key={op} className="text-mist/80">
 								<span className={`font-bold ${getOpColor(op)}`}>{count}</span> {op}
 							</span>
 						))}
@@ -195,9 +195,9 @@ export function UpdateDetail() {
 			return (
 				<div
 					key={event.sequence}
-					className="flex gap-4 py-2 border-b border-zinc-800/50 last:border-0 bg-red-900/10 px-2 -mx-2 rounded"
+					className="flex gap-4 py-2 border-b border-slate-brand/50 last:border-0 bg-red-900/10 px-2 -mx-2 rounded"
 				>
-					<span className="text-zinc-500 shrink-0 w-20">{time}</span>
+					<span className="text-cloud shrink-0 w-20">{time}</span>
 					<span className="shrink-0 w-16 font-medium text-red-400">cancel</span>
 					<span className="text-red-300 font-mono text-sm">Update cancelled</span>
 				</div>
@@ -213,13 +213,13 @@ export function UpdateDetail() {
 				<div className="flex items-center gap-4">
 					<Link
 						to={`/stacks/${org}/${project}/${stack}`}
-						className="text-zinc-400 hover:text-zinc-200"
+						className="text-cloud hover:text-mist"
 					>
 						&larr; Back to Stack
 					</Link>
-					<h1 className="text-2xl font-bold text-zinc-100">Loading Update...</h1>
+					<h1 className="text-2xl font-bold text-mist">Loading Update...</h1>
 				</div>
-				<div className="animate-pulse h-96 bg-zinc-900 rounded-lg border border-zinc-800" />
+				<div className="animate-pulse h-96 bg-slate-brand rounded-lg border border-slate-brand" />
 			</div>
 		);
 	}
@@ -230,12 +230,12 @@ export function UpdateDetail() {
 				<div className="flex items-center gap-4">
 					<Link
 						to={`/stacks/${org}/${project}/${stack}`}
-						className="text-zinc-400 hover:text-zinc-200 transition-colors"
+						className="text-cloud hover:text-mist transition-colors"
 					>
 						&larr; Back
 					</Link>
-					<h1 className="text-2xl font-bold text-zinc-100">
-						Update <span className="text-zinc-500 font-normal">v{updateID}</span>
+					<h1 className="text-2xl font-bold text-mist">
+						Update <span className="text-cloud font-normal">v{updateID}</span>
 					</h1>
 				</div>
 
@@ -252,10 +252,10 @@ export function UpdateDetail() {
 							{updateInfo.result}
 						</span>
 						{isPolling && (
-							<span className="flex items-center gap-2 text-sm text-zinc-400">
+							<span className="flex items-center gap-2 text-sm text-cloud">
 								<span className="relative flex h-2.5 w-2.5">
-									<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-									<span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
+									<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-lightning opacity-75" />
+									<span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-lightning" />
 								</span>
 								Live
 							</span>
@@ -270,15 +270,15 @@ export function UpdateDetail() {
 				</div>
 			)}
 
-			<div className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg overflow-hidden flex flex-col shadow-xl">
-				<div className="bg-zinc-900 border-b border-zinc-800 px-4 py-2 flex justify-between items-center shrink-0">
-					<h3 className="text-sm font-medium text-zinc-300">Event Log</h3>
-					<div className="text-xs text-zinc-500 font-mono">{events.length} events</div>
+			<div className="flex-1 bg-deep-sky border border-slate-brand rounded-lg overflow-hidden flex flex-col shadow-xl">
+				<div className="bg-slate-brand border-b border-slate-brand px-4 py-2 flex justify-between items-center shrink-0">
+					<h3 className="text-sm font-medium text-mist/80">Event Log</h3>
+					<div className="text-xs text-cloud font-mono">{events.length} events</div>
 				</div>
 
 				<div className="flex-1 overflow-y-auto p-4 font-mono text-sm">
 					{events.length === 0 ? (
-						<div className="h-full flex items-center justify-center text-zinc-500">
+						<div className="h-full flex items-center justify-center text-cloud">
 							Waiting for events...
 						</div>
 					) : (

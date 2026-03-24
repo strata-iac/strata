@@ -35,26 +35,26 @@ function PropertyValue({ value }: { value: unknown }) {
 	}
 
 	if (value === null || value === undefined) {
-		return <span className="text-zinc-600 italic">null</span>;
+		return <span className="text-cloud/60 italic">null</span>;
 	}
 
 	if (typeof value === "boolean") {
-		return <span className={value ? "text-green-400" : "text-zinc-500"}>{String(value)}</span>;
+		return <span className={value ? "text-green-400" : "text-cloud"}>{String(value)}</span>;
 	}
 
 	if (typeof value === "number") {
-		return <span className="text-blue-400">{String(value)}</span>;
+		return <span className="text-lightning">{String(value)}</span>;
 	}
 
 	if (typeof value === "string") {
 		if (value.length > 120) {
 			return (
-				<span className="text-zinc-300 break-all" title={value}>
+				<span className="text-mist/80 break-all" title={value}>
 					{value.slice(0, 120)}…
 				</span>
 			);
 		}
-		return <span className="text-zinc-300 break-all">{value}</span>;
+		return <span className="text-mist/80 break-all">{value}</span>;
 	}
 
 	if (typeof value === "object") {
@@ -62,21 +62,21 @@ function PropertyValue({ value }: { value: unknown }) {
 		if (json.length > 200) {
 			return (
 				<details className="inline">
-					<summary className="text-zinc-500 cursor-pointer hover:text-zinc-300 text-xs">
+					<summary className="text-cloud cursor-pointer hover:text-mist/80 text-xs">
 						{Array.isArray(value)
 							? `Array(${value.length})`
 							: `Object(${Object.keys(value).length})`}
 					</summary>
-					<pre className="mt-1 text-xs text-zinc-400 bg-zinc-950 rounded p-2 overflow-x-auto max-h-48 border border-zinc-800">
+					<pre className="mt-1 text-xs text-cloud bg-deep-sky rounded p-2 overflow-x-auto max-h-48 border border-slate-brand">
 						{json}
 					</pre>
 				</details>
 			);
 		}
-		return <pre className="text-xs text-zinc-400 whitespace-pre-wrap break-all">{json}</pre>;
+		return <pre className="text-xs text-cloud whitespace-pre-wrap break-all">{json}</pre>;
 	}
 
-	return <span className="text-zinc-400">{String(value)}</span>;
+	return <span className="text-cloud">{String(value)}</span>;
 }
 
 // ============================================================================
@@ -97,40 +97,40 @@ function PropertyTable({
 	return (
 		<section>
 			<div className="flex items-center justify-between mb-3">
-				<h2 className="text-lg font-semibold text-zinc-100">{title}</h2>
+				<h2 className="text-lg font-semibold text-mist">{title}</h2>
 				{entries.length > 0 && (
-					<span className="text-xs text-zinc-500">{entries.length} properties</span>
+					<span className="text-xs text-cloud">{entries.length} properties</span>
 				)}
 			</div>
 
 			{entries.length === 0 ? (
-				<div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-6 text-center">
-					<p className="text-zinc-500 text-sm">{emptyMessage}</p>
+				<div className="bg-slate-brand/50 border border-cloud/20 rounded-lg p-6 text-center">
+					<p className="text-cloud text-sm">{emptyMessage}</p>
 				</div>
 			) : (
-				<div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
-					<table className="min-w-full divide-y divide-zinc-800">
-						<thead className="bg-zinc-950">
+				<div className="bg-slate-brand border border-slate-brand rounded-lg overflow-hidden">
+					<table className="min-w-full divide-y divide-slate-brand">
+						<thead className="bg-deep-sky">
 							<tr>
 								<th
 									scope="col"
-									className="px-4 py-2.5 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider w-1/3"
+									className="px-4 py-2.5 text-left text-xs font-medium text-cloud uppercase tracking-wider w-1/3"
 								>
 									Key
 								</th>
 								<th
 									scope="col"
-									className="px-4 py-2.5 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider"
+									className="px-4 py-2.5 text-left text-xs font-medium text-cloud uppercase tracking-wider"
 								>
 									Value
 								</th>
 							</tr>
 						</thead>
-						<tbody className="divide-y divide-zinc-800">
+						<tbody className="divide-y divide-slate-brand">
 							{entries.map(([key, val]) => (
-								<tr key={key} className="hover:bg-zinc-800/50 transition-colors">
+								<tr key={key} className="hover:bg-slate-brand/50 transition-colors">
 									<td className="px-4 py-2.5 whitespace-nowrap align-top">
-										<span className="font-mono text-sm text-zinc-300">{key}</span>
+										<span className="font-mono text-sm text-mist/80">{key}</span>
 									</td>
 									<td className="px-4 py-2.5 font-mono text-sm">
 										<PropertyValue value={val} />
@@ -175,13 +175,13 @@ export function ResourceDetail() {
 		return (
 			<div className="space-y-6">
 				<div className="flex items-center gap-4">
-					<Link to={stackPath} className="text-zinc-400 hover:text-zinc-200 transition-colors">
+					<Link to={stackPath} className="text-cloud hover:text-mist transition-colors">
 						&larr; Back to Stack
 					</Link>
-					<h1 className="text-2xl font-bold text-zinc-100">Invalid URL</h1>
+					<h1 className="text-2xl font-bold text-mist">Invalid URL</h1>
 				</div>
-				<div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-8 text-center">
-					<p className="text-zinc-500">
+				<div className="bg-slate-brand/50 border border-cloud/20 rounded-lg p-8 text-center">
+					<p className="text-cloud">
 						No resource URN specified. Navigate to a resource from the stack detail page.
 					</p>
 				</div>
@@ -194,20 +194,20 @@ export function ResourceDetail() {
 		return (
 			<div className="space-y-6">
 				<div className="flex items-center gap-4">
-					<Link to={stackPath} className="text-zinc-400 hover:text-zinc-200 transition-colors">
+					<Link to={stackPath} className="text-cloud hover:text-mist transition-colors">
 						&larr; Back to Stack
 					</Link>
-					<div className="h-8 w-64 bg-zinc-800 rounded animate-pulse" />
+					<div className="h-8 w-64 bg-slate-brand rounded animate-pulse" />
 				</div>
 				<div className="grid grid-cols-2 gap-4">
 					{[1, 2, 3, 4].map((i) => (
 						<div
 							key={i}
-							className="h-16 bg-zinc-800/50 rounded-lg border border-zinc-700 animate-pulse"
+							className="h-16 bg-slate-brand/50 rounded-lg border border-cloud/30 animate-pulse"
 						/>
 					))}
 				</div>
-				<div className="h-64 bg-zinc-800/50 rounded-lg border border-zinc-700 animate-pulse" />
+				<div className="h-64 bg-slate-brand/50 rounded-lg border border-cloud/30 animate-pulse" />
 			</div>
 		);
 	}
@@ -217,10 +217,10 @@ export function ResourceDetail() {
 		return (
 			<div className="space-y-6">
 				<div className="flex items-center gap-4">
-					<Link to={stackPath} className="text-zinc-400 hover:text-zinc-200 transition-colors">
+					<Link to={stackPath} className="text-cloud hover:text-mist transition-colors">
 						&larr; Back to Stack
 					</Link>
-					<h1 className="text-2xl font-bold text-zinc-100">Error</h1>
+					<h1 className="text-2xl font-bold text-mist">Error</h1>
 				</div>
 				<div className="bg-red-900/20 border border-red-900/50 text-red-400 p-4 rounded-lg">
 					{queryError.message}
@@ -234,13 +234,13 @@ export function ResourceDetail() {
 		return (
 			<div className="space-y-6">
 				<div className="flex items-center gap-4">
-					<Link to={stackPath} className="text-zinc-400 hover:text-zinc-200 transition-colors">
+					<Link to={stackPath} className="text-cloud hover:text-mist transition-colors">
 						&larr; Back to Stack
 					</Link>
-					<h1 className="text-2xl font-bold text-zinc-100">Resource Not Found</h1>
+					<h1 className="text-2xl font-bold text-mist">Resource Not Found</h1>
 				</div>
-				<div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-8 text-center">
-					<p className="text-zinc-500">The requested resource was not found in this stack.</p>
+				<div className="bg-slate-brand/50 border border-cloud/20 rounded-lg p-8 text-center">
+					<p className="text-cloud">The requested resource was not found in this stack.</p>
 				</div>
 			</div>
 		);
@@ -251,14 +251,14 @@ export function ResourceDetail() {
 			{/* ── Header ──────────────────────────────────────────────── */}
 			<div>
 				<div className="flex items-center gap-4 mb-3">
-					<Link to={stackPath} className="text-zinc-400 hover:text-zinc-200 transition-colors">
+					<Link to={stackPath} className="text-cloud hover:text-mist transition-colors">
 						&larr; Back to Stack
 					</Link>
 				</div>
 				<div className="flex items-start justify-between">
 					<div>
-						<h1 className="text-2xl font-bold text-zinc-100 mb-1">{resource.name}</h1>
-						<div className="font-mono text-sm text-zinc-500">{resource.type}</div>
+						<h1 className="text-2xl font-bold text-mist mb-1">{resource.name}</h1>
+						<div className="font-mono text-sm text-cloud">{resource.type}</div>
 					</div>
 					<div className="flex gap-2">
 						{resource.protect && (
@@ -298,63 +298,63 @@ export function ResourceDetail() {
 			{/* ── Metadata Grid ───────────────────────────────────────── */}
 			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 				{/* Provider */}
-				<div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-					<div className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1.5">
+				<div className="bg-slate-brand border border-slate-brand rounded-lg p-4">
+					<div className="text-xs font-medium text-cloud uppercase tracking-wider mb-1.5">
 						Provider
 					</div>
-					<div className="text-sm font-medium text-zinc-200">{resource.provider}</div>
+					<div className="text-sm font-medium text-mist">{resource.provider}</div>
 				</div>
 
 				{/* Resource ID */}
-				<div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-					<div className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1.5">
+				<div className="bg-slate-brand border border-slate-brand rounded-lg p-4">
+					<div className="text-xs font-medium text-cloud uppercase tracking-wider mb-1.5">
 						Resource ID
 					</div>
 					{resource.id ? (
-						<div className="font-mono text-sm text-zinc-300 truncate" title={resource.id}>
+						<div className="font-mono text-sm text-mist/80 truncate" title={resource.id}>
 							{resource.id}
 						</div>
 					) : (
-						<div className="text-sm text-zinc-600">-</div>
+						<div className="text-sm text-cloud/60">-</div>
 					)}
 				</div>
 
 				{/* Type */}
-				<div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-					<div className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1.5">
+				<div className="bg-slate-brand border border-slate-brand rounded-lg p-4">
+					<div className="text-xs font-medium text-cloud uppercase tracking-wider mb-1.5">
 						Type
 					</div>
-					<div className="text-sm text-zinc-300">{resource.custom ? "Custom" : "Component"}</div>
+					<div className="text-sm text-mist/80">{resource.custom ? "Custom" : "Component"}</div>
 				</div>
 
 				{/* Created */}
-				<div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-					<div className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1.5">
+				<div className="bg-slate-brand border border-slate-brand rounded-lg p-4">
+					<div className="text-xs font-medium text-cloud uppercase tracking-wider mb-1.5">
 						Created
 					</div>
-					<div className="text-sm text-zinc-300">{formatTimestamp(resource.created) ?? "-"}</div>
+					<div className="text-sm text-mist/80">{formatTimestamp(resource.created) ?? "-"}</div>
 				</div>
 			</div>
 
 			{/* ── URN ──────────────────────────────────────────────────── */}
-			<div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-				<div className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1.5">URN</div>
-				<div className="font-mono text-sm text-zinc-400 break-all select-all">{resource.urn}</div>
+			<div className="bg-slate-brand border border-slate-brand rounded-lg p-4">
+				<div className="text-xs font-medium text-cloud uppercase tracking-wider mb-1.5">URN</div>
+				<div className="font-mono text-sm text-cloud break-all select-all">{resource.urn}</div>
 			</div>
 
 			{/* ── Parent ───────────────────────────────────────────────── */}
 			{resource.parent && (
-				<div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-					<div className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1.5">
+				<div className="bg-slate-brand border border-slate-brand rounded-lg p-4">
+					<div className="text-xs font-medium text-cloud uppercase tracking-wider mb-1.5">
 						Parent
 					</div>
 					<Link
 						to={`${stackPath}/resources?urn=${encodeURIComponent(resource.parent.urn)}`}
-						className="text-blue-400 hover:text-blue-300 text-sm font-medium"
+						className="text-lightning hover:text-lightning/80 text-sm font-medium"
 					>
 						{resource.parent.name}
 					</Link>
-					<div className="font-mono text-xs text-zinc-500 mt-0.5 break-all">
+					<div className="font-mono text-xs text-cloud mt-0.5 break-all">
 						{resource.parent.urn}
 					</div>
 				</div>
@@ -393,26 +393,26 @@ export function ResourceDetail() {
 			{/* ── Dependencies ─────────────────────────────────────────── */}
 			{resource.dependencies.length > 0 && (
 				<section>
-					<h2 className="text-lg font-semibold text-zinc-100 mb-3">
+					<h2 className="text-lg font-semibold text-mist mb-3">
 						Dependencies
-						<span className="text-xs text-zinc-500 font-normal ml-2">
+						<span className="text-xs text-cloud font-normal ml-2">
 							{resource.dependencies.length}
 						</span>
 					</h2>
-					<div className="bg-zinc-900 border border-zinc-800 rounded-lg divide-y divide-zinc-800">
+					<div className="bg-slate-brand border border-slate-brand rounded-lg divide-y divide-slate-brand">
 						{resource.dependencies.map((dep) => (
 							<Link
 								key={dep.urn}
 								to={`${stackPath}/resources?urn=${encodeURIComponent(dep.urn)}`}
-								className="flex items-center justify-between px-4 py-3 hover:bg-zinc-800/50 transition-colors"
+								className="flex items-center justify-between px-4 py-3 hover:bg-slate-brand/50 transition-colors"
 							>
 								<div>
-									<span className="text-sm text-zinc-100 font-medium">{dep.name}</span>
-									<span className="ml-2 font-mono text-xs text-zinc-500">
+									<span className="text-sm text-mist font-medium">{dep.name}</span>
+									<span className="ml-2 font-mono text-xs text-cloud">
 										{shortType(dep.type)}
 									</span>
 								</div>
-								<span className="text-zinc-600 text-sm">&rarr;</span>
+								<span className="text-cloud/60 text-sm">&rarr;</span>
 							</Link>
 						))}
 					</div>
@@ -422,26 +422,26 @@ export function ResourceDetail() {
 			{/* ── Children ─────────────────────────────────────────────── */}
 			{resource.children.length > 0 && (
 				<section>
-					<h2 className="text-lg font-semibold text-zinc-100 mb-3">
+					<h2 className="text-lg font-semibold text-mist mb-3">
 						Children
-						<span className="text-xs text-zinc-500 font-normal ml-2">
+						<span className="text-xs text-cloud font-normal ml-2">
 							{resource.children.length}
 						</span>
 					</h2>
-					<div className="bg-zinc-900 border border-zinc-800 rounded-lg divide-y divide-zinc-800">
+					<div className="bg-slate-brand border border-slate-brand rounded-lg divide-y divide-slate-brand">
 						{resource.children.map((child) => (
 							<Link
 								key={child.urn}
 								to={`${stackPath}/resources?urn=${encodeURIComponent(child.urn)}`}
-								className="flex items-center justify-between px-4 py-3 hover:bg-zinc-800/50 transition-colors"
+								className="flex items-center justify-between px-4 py-3 hover:bg-slate-brand/50 transition-colors"
 							>
 								<div>
-									<span className="text-sm text-zinc-100 font-medium">{child.name}</span>
-									<span className="ml-2 font-mono text-xs text-zinc-500">
+									<span className="text-sm text-mist font-medium">{child.name}</span>
+									<span className="ml-2 font-mono text-xs text-cloud">
 										{shortType(child.type)}
 									</span>
 								</div>
-								<span className="text-zinc-600 text-sm">&rarr;</span>
+								<span className="text-cloud/60 text-sm">&rarr;</span>
 							</Link>
 						))}
 					</div>
@@ -451,15 +451,15 @@ export function ResourceDetail() {
 			{/* ── Aliases ──────────────────────────────────────────────── */}
 			{resource.aliases.length > 0 && (
 				<section>
-					<h2 className="text-lg font-semibold text-zinc-100 mb-3">
+					<h2 className="text-lg font-semibold text-mist mb-3">
 						Aliases
-						<span className="text-xs text-zinc-500 font-normal ml-2">
+						<span className="text-xs text-cloud font-normal ml-2">
 							{resource.aliases.length}
 						</span>
 					</h2>
-					<div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-1.5">
+					<div className="bg-slate-brand border border-slate-brand rounded-lg p-4 space-y-1.5">
 						{resource.aliases.map((alias) => (
-							<div key={alias} className="font-mono text-sm text-zinc-400 break-all">
+							<div key={alias} className="font-mono text-sm text-cloud break-all">
 								{alias}
 							</div>
 						))}
@@ -469,7 +469,7 @@ export function ResourceDetail() {
 
 			{/* ── Modified ─────────────────────────────────────────────── */}
 			{resource.modified && (
-				<div className="text-xs text-zinc-600 pt-4 border-t border-zinc-800">
+				<div className="text-xs text-cloud/60 pt-4 border-t border-slate-brand">
 					Last modified: {formatTimestamp(resource.modified)}
 				</div>
 			)}

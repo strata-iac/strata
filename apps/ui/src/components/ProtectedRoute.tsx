@@ -25,8 +25,8 @@ function DescopeGuard({ returnTo }: { returnTo: string }) {
 
 	if (isSessionLoading) {
 		return (
-			<div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-				<div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-blue-500" />
+			<div className="min-h-screen bg-deep-sky flex items-center justify-center">
+				<div className="h-8 w-8 animate-spin rounded-full border-2 border-cloud/30 border-t-lightning" />
 			</div>
 		);
 	}
@@ -37,8 +37,8 @@ function DescopeGuard({ returnTo }: { returnTo: string }) {
 
 	if (!sessionToken) {
 		return (
-			<div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-				<div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-blue-500" />
+			<div className="min-h-screen bg-deep-sky flex items-center justify-center">
+				<div className="h-8 w-8 animate-spin rounded-full border-2 border-cloud/30 border-t-lightning" />
 			</div>
 		);
 	}

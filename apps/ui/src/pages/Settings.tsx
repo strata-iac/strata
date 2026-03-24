@@ -43,9 +43,9 @@ export function Settings() {
 	if (!tenantId) {
 		return (
 			<div className="space-y-6">
-				<h1 className="text-2xl font-bold text-zinc-100">Settings</h1>
-				<div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-12 text-center">
-					<p className="text-zinc-500">Loading session…</p>
+				<h1 className="text-2xl font-bold text-mist">Settings</h1>
+				<div className="bg-slate-brand/50 border border-cloud/20 rounded-lg p-12 text-center">
+					<p className="text-cloud">Loading session…</p>
 				</div>
 			</div>
 		);
@@ -54,10 +54,10 @@ export function Settings() {
 	if (!isAdmin) {
 		return (
 			<div className="space-y-6">
-				<h1 className="text-2xl font-bold text-zinc-100">Settings</h1>
-				<div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-12 text-center">
-					<p className="text-zinc-300 font-medium">Admin access required</p>
-					<p className="text-zinc-500 text-sm mt-1">
+				<h1 className="text-2xl font-bold text-mist">Settings</h1>
+				<div className="bg-slate-brand/50 border border-cloud/20 rounded-lg p-12 text-center">
+					<p className="text-mist/80 font-medium">Admin access required</p>
+					<p className="text-cloud text-sm mt-1">
 						Your account does not have the admin role for this organization.
 					</p>
 				</div>
@@ -74,9 +74,9 @@ export function Settings() {
 
 	return (
 		<div className="space-y-6">
-			<h1 className="text-2xl font-bold text-zinc-100">Settings</h1>
+			<h1 className="text-2xl font-bold text-mist">Settings</h1>
 
-			<div className="border-b border-zinc-800">
+			<div className="border-b border-slate-brand">
 				<nav className="flex gap-1" aria-label="Settings tabs">
 					{tabs.map((t) => (
 						<button
@@ -85,8 +85,8 @@ export function Settings() {
 							onClick={() => selectTab(t.id)}
 							className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
 								tab === t.id
-									? "border-blue-500 text-zinc-100"
-									: "border-transparent text-zinc-400 hover:text-zinc-100 hover:border-zinc-600"
+									? "border-lightning text-mist"
+									: "border-transparent text-cloud hover:text-mist hover:border-cloud/30"
 							}`}
 						>
 							{t.label}

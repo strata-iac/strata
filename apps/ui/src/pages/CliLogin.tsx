@@ -82,7 +82,7 @@ function DescopeCliLogin({
 		return (
 			<Screen>
 				<div className="w-full max-w-md">
-					{description && <p className="text-zinc-400 text-sm text-center mb-6">{description}</p>}
+					{description && <p className="text-cloud text-sm text-center mb-6">{description}</p>}
 					<Descope flowId="sign-up-or-in" theme="dark" onSuccess={() => {}} onError={() => {}} />
 				</div>
 			</Screen>
@@ -92,9 +92,9 @@ function DescopeCliLogin({
 	if (status === "creating" || status === "done") {
 		return (
 			<Screen>
-				<div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-8 flex flex-col items-center gap-4">
-					<div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-blue-500" />
-					<p className="text-zinc-400 text-sm">Redirecting back to the CLI…</p>
+				<div className="w-full max-w-md bg-slate-brand border border-slate-brand rounded-2xl p-8 flex flex-col items-center gap-4">
+					<div className="h-8 w-8 animate-spin rounded-full border-2 border-cloud/30 border-t-lightning" />
+					<p className="text-cloud text-sm">Redirecting back to the CLI…</p>
 				</div>
 			</Screen>
 		);
@@ -103,10 +103,10 @@ function DescopeCliLogin({
 	if (status === "error") {
 		return (
 			<Screen>
-				<div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-8 space-y-3 text-center">
+				<div className="w-full max-w-md bg-slate-brand border border-slate-brand rounded-2xl p-8 space-y-3 text-center">
 					<p className="text-red-400 text-sm">{errorMsg}</p>
-					<p className="text-zinc-500 text-xs">
-						Make sure <code className="text-zinc-300">PROCELLA_DESCOPE_MANAGEMENT_KEY</code> is set
+					<p className="text-cloud text-xs">
+						Make sure <code className="text-mist/80">PROCELLA_DESCOPE_MANAGEMENT_KEY</code> is set
 						on the server.
 					</p>
 				</div>
@@ -119,31 +119,31 @@ function DescopeCliLogin({
 
 	return (
 		<Screen>
-			<div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-8 space-y-6">
+			<div className="w-full max-w-md bg-slate-brand border border-slate-brand rounded-2xl p-8 space-y-6">
 				<div className="text-center space-y-1">
-					<p className="text-zinc-400 text-sm">Authorize Pulumi CLI</p>
-					{description && <p className="text-zinc-500 text-xs">{description}</p>}
+					<p className="text-cloud text-sm">Authorize Pulumi CLI</p>
+					{description && <p className="text-cloud text-xs">{description}</p>}
 				</div>
 
-				<div className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl px-4 py-3 flex items-center gap-3">
-					<div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-semibold text-white shrink-0 select-none">
+				<div className="bg-slate-brand/60 border border-cloud/20 rounded-xl px-4 py-3 flex items-center gap-3">
+					<div className="h-8 w-8 rounded-full bg-lightning flex items-center justify-center text-xs font-semibold text-white shrink-0 select-none">
 						{email[0].toUpperCase()}
 					</div>
-					<span className="text-sm text-zinc-200 truncate">{email}</span>
+					<span className="text-sm text-mist truncate">{email}</span>
 				</div>
 
 				<div className="space-y-3">
 					<button
 						type="button"
 						onClick={createToken}
-						className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 px-4 rounded-xl transition-colors"
+						className="w-full bg-lightning hover:bg-lightning/80 text-deep-sky font-medium py-3 px-4 rounded-xl transition-colors"
 					>
 						Continue
 					</button>
 					<button
 						type="button"
 						onClick={() => sdk.logout()}
-						className="w-full text-zinc-400 hover:text-zinc-200 text-sm py-2 transition-colors"
+						className="w-full text-cloud hover:text-mist text-sm py-2 transition-colors"
 					>
 						Use a different account
 					</button>
@@ -166,19 +166,19 @@ function DevCliLogin({ port, nonce }: { port: string; nonce: string }) {
 
 	return (
 		<Screen>
-			<div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-8 space-y-4">
+			<div className="w-full max-w-sm bg-slate-brand border border-slate-brand rounded-2xl p-8 space-y-4">
 				<form onSubmit={handleSubmit} className="space-y-4">
 					<input
 						type="password"
 						value={token}
 						onChange={(e) => setToken(e.target.value)}
 						placeholder="API token"
-						className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+						className="w-full bg-slate-brand border border-cloud/30 rounded-xl px-4 py-3 text-sm text-mist placeholder-cloud focus:outline-none focus:ring-2 focus:ring-lightning focus:border-transparent transition-all"
 					/>
 					<button
 						type="submit"
 						disabled={!token.trim() || submitted}
-						className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-medium py-3 px-4 rounded-xl transition-colors"
+						className="w-full bg-lightning hover:bg-lightning disabled:bg-slate-brand disabled:text-cloud text-white font-medium py-3 px-4 rounded-xl transition-colors"
 					>
 						Authorize
 					</button>
@@ -190,10 +190,10 @@ function DevCliLogin({ port, nonce }: { port: string; nonce: string }) {
 
 function Screen({ children }: { children: React.ReactNode }) {
 	return (
-		<div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-4">
+		<div className="min-h-screen bg-deep-sky flex flex-col items-center justify-center px-4">
 			<div className="mb-8 text-center">
-				<h1 className="text-3xl font-bold text-zinc-100">Procella</h1>
-				<p className="mt-2 text-sm text-zinc-400">Sign in to your Pulumi backend</p>
+				<h1 className="text-3xl font-bold text-mist">Procella</h1>
+				<p className="mt-2 text-sm text-cloud">Sign in to your Pulumi backend</p>
 			</div>
 			{children}
 		</div>
@@ -202,8 +202,8 @@ function Screen({ children }: { children: React.ReactNode }) {
 
 function LoadingScreen() {
 	return (
-		<div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-			<div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-blue-500" />
+		<div className="min-h-screen bg-deep-sky flex items-center justify-center">
+			<div className="h-8 w-8 animate-spin rounded-full border-2 border-cloud/30 border-t-lightning" />
 		</div>
 	);
 }
