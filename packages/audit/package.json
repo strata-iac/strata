@@ -1,0 +1,10 @@
+{
+	"name": "@procella/audit",
+	"private": true,
+	"type": "module",
+	"main": "src/index.ts",
+	"types": "src/index.ts",
+	"dependencies": {
+		"@descope/node-sdk": "^2.0.0"
+	}
+}

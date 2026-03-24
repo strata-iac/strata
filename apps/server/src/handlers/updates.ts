@@ -1,8 +1,14 @@
 // @procella/server — Update lifecycle handlers.
 
+import {
+	buildPRCommentBody,
+	type GitHubService,
+	mapUpdateStatusToCommitState,
+} from "@procella/github";
 import type { StacksService } from "@procella/stacks";
 import type { CompleteUpdateRequest, StartUpdateRequest, UpdateKind } from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
+import type { WebhooksService } from "@procella/webhooks";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
 import { param } from "./params.js";
@@ -11,7 +17,12 @@ import { param } from "./params.js";
 // Update Handlers
 // ============================================================================
 
-export function updateHandlers(updates: UpdatesService, stacks: StacksService) {
+export function updateHandlers(
+	updates: UpdatesService,
+	stacks: StacksService,
+	webhooks?: WebhooksService,
+	github?: GitHubService | null,
+) {
 	return {
 		createUpdate: async (c: Context<Env>) => {
 			const caller = c.get("caller");
@@ -39,9 +50,78 @@ export function updateHandlers(updates: UpdatesService, stacks: StacksService) {
 		},
 
 		completeUpdate: async (c: Context<Env>) => {
+			const caller = c.get("caller");
+			const org = param(c, "org");
+			const project = param(c, "project");
+			const stack = param(c, "stack");
 			const updateId = param(c, "updateId");
 			const body = await c.req.json<CompleteUpdateRequest>();
 			await updates.completeUpdate(updateId, body);
+
+			if (github && (body.status === "succeeded" || body.status === "failed")) {
+				const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
+				const installation = await github.getInstallation(caller.tenantId);
+				if (installation) {
+					const owner = stackInfo.tags["github:owner"];
+					const repo = stackInfo.tags["github:repo"];
+					const pr = stackInfo.tags["github:pr"];
+					const sha = stackInfo.tags["github:sha"];
+
+					if (owner && repo && pr && sha) {
+						const prNumber = Number(pr);
+						if (!Number.isNaN(prNumber)) {
+							const latest = await updates.getHistory(stackInfo.id);
+							const summary = latest.updates[0];
+							const commitState = mapUpdateStatusToCommitState(body.status);
+							await github.setCommitStatus(
+								installation.installationId,
+								owner,
+								repo,
+								sha,
+								commitState,
+								`Procella ${body.status}`,
+							);
+
+							const resourceChanges = summary?.resourceChanges as
+								| Record<string, number>
+								| undefined;
+							const commentBody = buildPRCommentBody({
+								org,
+								project,
+								stack,
+								kind: summary?.kind ?? "update",
+								status: body.status,
+								resourceChanges: {
+									creates: resourceChanges?.create ?? resourceChanges?.creates,
+									updates: resourceChanges?.update ?? resourceChanges?.updates,
+									deletes: resourceChanges?.delete ?? resourceChanges?.deletes,
+									sames: resourceChanges?.same ?? resourceChanges?.sames,
+								},
+							});
+							await github.postPRComment(
+								installation.installationId,
+								owner,
+								repo,
+								prNumber,
+								commentBody,
+							);
+						}
+					}
+				}
+			}
+
+			if (body.status === "succeeded" || body.status === "failed" || body.status === "cancelled") {
+				void webhooks?.emit({
+					tenantId: caller.tenantId,
+					event:
+						body.status === "succeeded"
+							? "update.succeeded"
+							: body.status === "failed"
+								? "update.failed"
+								: "update.cancelled",
+					data: { org, project, stack, updateId, status: body.status },
+				});
+			}
 			return c.body(null, 204);
 		},
 

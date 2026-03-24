@@ -38,7 +38,7 @@ export function StackList() {
 		);
 	}
 
-	const items = stacks ?? [];
+	const items = stacks?.stacks ?? [];
 
 	return (
 		<div className="space-y-6">

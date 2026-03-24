@@ -13,12 +13,15 @@ import { schema } from "./schema.js";
 // Re-export schema for consumers
 export {
 	checkpoints,
+	githubInstallations,
 	journalEntries,
 	projects,
 	schema,
 	stacks,
 	updateEvents,
 	updates,
+	webhookDeliveries,
+	webhooks,
 } from "./schema.js";
 
 // ============================================================================

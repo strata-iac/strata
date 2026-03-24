@@ -1,0 +1,14 @@
+{
+	"name": "@procella/github",
+	"private": true,
+	"type": "module",
+	"main": "src/index.ts",
+	"types": "src/index.ts",
+	"dependencies": {
+		"@octokit/auth-app": "^8.1.1",
+		"@octokit/rest": "^22.0.0",
+		"@procella/db": "workspace:*",
+		"@procella/config": "workspace:*",
+		"drizzle-orm": "catalog:"
+	}
+}

@@ -17,6 +17,19 @@ const stackInput = z.object({
 	stack: z.string(),
 });
 
+export const stacksListInputSchema = z
+	.object({
+		query: z.string().optional(),
+		project: z.string().optional(),
+		tagName: z.string().optional(),
+		tagValue: z.string().optional(),
+		continuationToken: z.string().optional(),
+		pageSize: z.number().min(1).max(200).default(50).optional(),
+		sortBy: z.enum(["name", "lastUpdated", "created"]).default("name").optional(),
+		sortOrder: z.enum(["asc", "desc"]).default("asc").optional(),
+	})
+	.optional();
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -65,11 +78,39 @@ function redactSecrets(obj: unknown): unknown {
 // ============================================================================
 
 export const stacksRouter = router({
-	list: publicProcedure.query(async ({ ctx }) => {
-		const stackList = await ctx.stacks.listStacks(ctx.caller.tenantId);
+	list: publicProcedure.input(stacksListInputSchema).query(async ({ ctx, input }) => {
+		type StackListItem = {
+			orgName: string;
+			projectName: string;
+			stackName: string;
+			version: number;
+			activeUpdate: boolean;
+			currentOperation: string | null;
+			tags: Record<string, string>;
+		};
 
+		const stackPage =
+			input && ctx.stacks.searchStacks
+				? await ctx.stacks.searchStacks(ctx.caller.tenantId, {
+						query: input.query,
+						project: input.project,
+						tagName: input.tagName,
+						tagValue: input.tagValue,
+						continuationToken: input.continuationToken,
+						pageSize: input.pageSize,
+						sortBy: input.sortBy,
+						sortOrder: input.sortOrder,
+					})
+				: {
+						stacks: await ctx.stacks.listStacks(ctx.caller.tenantId, undefined, input?.project),
+					};
+
+		const stackList = stackPage.stacks;
 		if (stackList.length === 0) {
-			return [];
+			return {
+				stacks: [] as StackListItem[],
+				...(stackPage.continuationToken ? { continuationToken: stackPage.continuationToken } : {}),
+			};
 		}
 
 		// Batch-fetch max checkpoint version per stack
@@ -105,7 +146,7 @@ export const stacksRouter = router({
 			}
 		}
 
-		return stackList.map((s) => ({
+		const mapped: StackListItem[] = stackList.map((s) => ({
 			orgName: ctx.caller.orgSlug,
 			projectName: s.projectName,
 			stackName: s.stackName,
@@ -114,6 +155,11 @@ export const stacksRouter = router({
 			currentOperation: s.activeUpdateId ? (operationMap.get(s.activeUpdateId) ?? null) : null,
 			tags: s.tags,
 		}));
+
+		return {
+			stacks: mapped,
+			...(stackPage.continuationToken ? { continuationToken: stackPage.continuationToken } : {}),
+		};
 	}),
 
 	detail: publicProcedure.input(stackInput).query(async ({ ctx, input }) => {

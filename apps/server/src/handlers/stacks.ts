@@ -3,6 +3,7 @@
 import type { StackInfo, StacksService } from "@procella/stacks";
 import type { Stack, StackRenameRequest } from "@procella/types";
 import { BadRequestError } from "@procella/types";
+import type { WebhooksService } from "@procella/webhooks";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
 import { param } from "./params.js";
@@ -11,7 +12,7 @@ import { param } from "./params.js";
 // Stack Handlers
 // ============================================================================
 
-export function stackHandlers(stacks: StacksService) {
+export function stackHandlers(stacks: StacksService, webhooks?: WebhooksService) {
 	return {
 		/** POST /api/stacks/:org/:project/:stack OR POST /api/stacks/:org/:project (stack in body) */
 		createStack: async (c: Context<Env>) => {
@@ -26,6 +27,11 @@ export function stackHandlers(stacks: StacksService) {
 				throw new BadRequestError("Missing stack name in URL or body");
 			}
 			const result = await stacks.createStack(caller.tenantId, org, project, stack, typedBody.tags);
+			void webhooks?.emit({
+				tenantId: caller.tenantId,
+				event: "stack.created",
+				data: { org, project, stack },
+			});
 			return c.json(mapToStack(result, caller.orgSlug));
 		},
 
@@ -44,6 +50,11 @@ export function stackHandlers(stacks: StacksService) {
 			const project = param(c, "project");
 			const stack = param(c, "stack");
 			await stacks.deleteStack(caller.tenantId, org, project, stack);
+			void webhooks?.emit({
+				tenantId: caller.tenantId,
+				event: "stack.deleted",
+				data: { org, project, stack },
+			});
 			return c.body(null, 204);
 		},
 
@@ -51,8 +62,35 @@ export function stackHandlers(stacks: StacksService) {
 			const caller = c.get("caller");
 			const org = c.req.query("organization");
 			const project = c.req.query("project");
-			const results = await stacks.listStacks(caller.tenantId, org, project);
-			return c.json({ stacks: results.map((r) => mapToStack(r, caller.orgSlug)) });
+			const tagName = c.req.query("tagName");
+			const tagValue = c.req.query("tagValue");
+			const query = c.req.query("query");
+			const continuationToken = c.req.query("continuationToken");
+
+			const hasSearchParams = Boolean(tagName || tagValue || query || continuationToken);
+			if (!hasSearchParams) {
+				const results = await stacks.listStacks(caller.tenantId, org, project);
+				return c.json({ stacks: results.map((r) => mapToStack(r, caller.orgSlug)) });
+			}
+
+			if (!stacks.searchStacks) {
+				const results = await stacks.listStacks(caller.tenantId, org, project);
+				return c.json({ stacks: results.map((r) => mapToStack(r, caller.orgSlug)) });
+			}
+
+			const page = await stacks.searchStacks(caller.tenantId, {
+				organization: org,
+				project,
+				tagName,
+				tagValue,
+				query,
+				continuationToken,
+			});
+
+			return c.json({
+				stacks: page.stacks.map((r) => mapToStack(r, caller.orgSlug)),
+				...(page.continuationToken ? { continuationToken: page.continuationToken } : {}),
+			});
 		},
 
 		renameStack: async (c: Context<Env>) => {

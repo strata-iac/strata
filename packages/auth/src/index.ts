@@ -102,6 +102,8 @@ export interface DescopeAuthConfig {
 	managementKey?: string;
 }
 
+type DescopeClient = ReturnType<typeof DescopeSdk>;
+
 /** Cached access-key → Caller mapping with TTL from JWT exp claim. */
 interface CachedAuth {
 	caller: Caller;
@@ -110,15 +112,15 @@ interface CachedAuth {
 }
 
 export class DescopeAuthService implements AuthService {
-	private readonly sdk: ReturnType<typeof DescopeSdk>;
+	readonly sdk: DescopeClient;
 	private readonly cache = new Map<string, CachedAuth>();
 	private readonly pending = new Map<string, Promise<Caller>>();
 	private readonly EXPIRY_MARGIN_S = 60;
 	private readonly MAX_CACHE_TTL_S = 300;
 	private sweepTimer: ReturnType<typeof setInterval> | null = null;
 
-	constructor(config: DescopeAuthConfig) {
-		this.sdk = DescopeSdk({ projectId: config.projectId, managementKey: config.managementKey });
+	constructor(options: { sdk: DescopeClient; config: DescopeAuthConfig }) {
+		this.sdk = options.sdk;
 		this.sweepTimer = setInterval(() => this.sweep(), 60_000);
 		if (this.sweepTimer.unref) this.sweepTimer.unref();
 	}
@@ -348,11 +350,19 @@ export function createAuthService(config: AuthConfig): AuthService {
 				userLogin: config.userLogin,
 				orgLogin: config.orgLogin,
 			});
-		case "descope":
-			return new DescopeAuthService({
+		case "descope": {
+			const sdk = DescopeSdk({
 				projectId: config.projectId,
 				managementKey: config.managementKey,
 			});
+			return new DescopeAuthService({
+				sdk,
+				config: {
+					projectId: config.projectId,
+					managementKey: config.managementKey,
+				},
+			});
+		}
 	}
 }
 

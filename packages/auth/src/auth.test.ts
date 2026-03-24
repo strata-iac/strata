@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import DescopeSdk from "@descope/node-sdk";
 import { ForbiddenError, UnauthorizedError } from "@procella/types";
 import {
 	type AuthService,
@@ -125,7 +126,10 @@ describe("DevAuthService", () => {
 
 describe("DescopeAuthService", () => {
 	// Uses a placeholder project ID — the JWT guard fires before any SDK call.
-	const svc = new DescopeAuthService({ projectId: "P3Aaha02iJvkGVbPDAF78KWuAxe6" });
+	const svc = new DescopeAuthService({
+		sdk: DescopeSdk({ projectId: "P3Aaha02iJvkGVbPDAF78KWuAxe6" }),
+		config: { projectId: "P3Aaha02iJvkGVbPDAF78KWuAxe6" },
+	});
 	afterAll(() => svc.dispose());
 
 	test("rejects session JWT on 'token' prefix (CLI path)", async () => {
@@ -161,7 +165,10 @@ describe("DescopeAuthService — JWT cache", () => {
 	beforeEach(() => {
 		mockExchangeAccessKey.mockReset();
 		mockExchangeAccessKey.mockResolvedValue({ token: CLAIMS });
-		svc = new DescopeAuthService({ projectId: "test-cache" });
+		svc = new DescopeAuthService({
+			sdk: DescopeSdk({ projectId: "test-cache" }),
+			config: { projectId: "test-cache" },
+		});
 	});
 
 	afterEach(() => {

@@ -2,31 +2,39 @@
 
 import { appRouter } from "@procella/api/src/router/index.js";
 import type { TRPCContext } from "@procella/api/src/trpc.js";
+import type { AuditService } from "@procella/audit";
 import type { AuthConfig, AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
+import { type GitHubService, verifyGitHubWebhookSignature } from "@procella/github";
 import type { StacksService } from "@procella/stacks";
 import { tracingMiddleware } from "@procella/telemetry";
 import { PulumiRoutes } from "@procella/types";
 import { GCWorker, type UpdatesService } from "@procella/updates";
+import type { WebhooksService } from "@procella/webhooks";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import {
+	auditHandlers,
 	checkpointHandlers,
 	cryptoHandlers,
 	eventHandlers,
+	githubHandlers,
 	healthHandlers,
 	stackHandlers,
 	stateHandlers,
 	updateHandlers,
 	userHandlers,
+	webhookHandlers,
 } from "../handlers/index.js";
 import {
 	apiAuth,
+	auditMiddleware,
 	decompress,
 	errorHandler,
 	pulumiAccept,
 	requestLogger,
+	requireRoleMiddleware,
 	updateAuth,
 } from "../middleware/index.js";
 import type { Env } from "../types.js";
@@ -38,11 +46,15 @@ import type { Env } from "../types.js";
 export function createApp(deps: {
 	auth: AuthService;
 	authConfig: AuthConfig;
+	audit: AuditService;
 	corsOrigins?: string[];
 	db: Database;
 	dbUrl: string;
 	stacks: StacksService;
 	updates: UpdatesService;
+	webhooks: WebhooksService;
+	github: GitHubService | null;
+	githubWebhookSecret?: string;
 }): Hono<Env> {
 	const app = new Hono<Env>();
 
@@ -58,8 +70,15 @@ export function createApp(deps: {
 	// Create handler instances
 	const health = healthHandlers({ db: deps.db });
 	const user = userHandlers(deps.stacks);
-	const stackH = stackHandlers(deps.stacks);
-	const updateH = updateHandlers(deps.updates, deps.stacks);
+	const stackH = stackHandlers(deps.stacks, deps.webhooks);
+	const auditH = auditHandlers({ audit: deps.audit });
+	const updateH = updateHandlers(deps.updates, deps.stacks, deps.webhooks, deps.github);
+	const webhookH = webhookHandlers({ webhooks: deps.webhooks });
+	const githubH = githubHandlers({
+		github: deps.github,
+		webhookSecret: deps.githubWebhookSecret,
+		verifySignature: verifyGitHubWebhookSignature,
+	});
 	const checkpointH = checkpointHandlers(deps.updates);
 	const eventH = eventHandlers(deps.updates);
 	const cryptoH = cryptoHandlers(deps.updates);
@@ -67,6 +86,7 @@ export function createApp(deps: {
 
 	// Middleware instances
 	const withApiAuth = apiAuth(deps.auth);
+	const withAudit = auditMiddleware(deps.audit);
 	const withPulumiAccept = pulumiAccept();
 	const withUpdateAuth = updateAuth(deps.auth);
 
@@ -100,7 +120,10 @@ export function createApp(deps: {
 			db: deps.db,
 			dbUrl: deps.dbUrl,
 			stacks: deps.stacks,
+			audit: deps.audit,
 			updates: deps.updates,
+			webhooks: deps.webhooks,
+			github: deps.github,
 		};
 
 		return fetchRequestHandler({
@@ -168,6 +191,8 @@ export function createApp(deps: {
 		return c.json({ token: cleartext });
 	});
 
+	app.post("/api/webhooks/github", githubH.handleGitHubWebhook);
+
 	// ========================================================================
 	// Update-token authenticated routes (during active update execution)
 	// These use "Authorization: update-token <lease-token>" from the CLI.
@@ -189,12 +214,36 @@ export function createApp(deps: {
 
 	const api = new Hono<Env>();
 	api.use("*", withApiAuth);
+	api.use("*", withAudit);
 	api.use("*", withPulumiAccept);
 
 	// User
 	api.get("/user", user.getCurrentUser);
 	api.get("/user/stacks", user.getUserStacks);
 	api.get("/user/organizations/:orgName", user.getOrganization);
+	api.get("/orgs/:org/auditlogs", requireRoleMiddleware("admin"), auditH.queryAuditLogs);
+	api.get("/orgs/:org/auditlogs/export", requireRoleMiddleware("admin"), auditH.exportAuditLogs);
+	api.post("/orgs/:org/hooks", requireRoleMiddleware("admin"), webhookH.createWebhook);
+	api.get("/orgs/:org/hooks", requireRoleMiddleware("admin"), webhookH.listWebhooks);
+	api.get("/orgs/:org/hooks/:hookId", requireRoleMiddleware("admin"), webhookH.getWebhook);
+	api.put("/orgs/:org/hooks/:hookId", requireRoleMiddleware("admin"), webhookH.updateWebhook);
+	api.delete("/orgs/:org/hooks/:hookId", requireRoleMiddleware("admin"), webhookH.deleteWebhook);
+	api.get(
+		"/orgs/:org/hooks/:hookId/deliveries",
+		requireRoleMiddleware("admin"),
+		webhookH.listDeliveries,
+	);
+	api.post("/orgs/:org/hooks/:hookId/ping", requireRoleMiddleware("admin"), webhookH.ping);
+	api.get(
+		"/orgs/:org/integrations/github",
+		requireRoleMiddleware("admin"),
+		githubH.getInstallation,
+	);
+	api.delete(
+		"/orgs/:org/integrations/github",
+		requireRoleMiddleware("admin"),
+		githubH.removeInstallation,
+	);
 
 	// Stacks (specific routes first to avoid :kind catch-all)
 	api.get("/stacks", stackH.listStacks);
