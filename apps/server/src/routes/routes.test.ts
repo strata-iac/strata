@@ -143,7 +143,7 @@ function mockWebhooksService(): WebhooksService {
 			updatedAt: new Date("2025-01-01"),
 		}),
 		deleteWebhook: async () => {},
-		listDeliveries: async () => [],
+		listDeliveries: async (_tenantId: string, _webhookId: string, _limit?: number) => [],
 		emit: (_event: {
 			tenantId: string;
 			event: WebhookEventValue;

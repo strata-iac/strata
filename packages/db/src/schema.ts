@@ -56,8 +56,6 @@ export const stacks = pgTable(
 	(table) => [uniqueIndex("idx_stacks_project_name").on(table.projectId, table.name)],
 );
 
-export const stacksSearchIdx = index("idx_stacks_search").using("gin", sql`${stacks.searchVector}`);
-
 // ============================================================================
 // updates — Update lifecycle tracking
 // ============================================================================

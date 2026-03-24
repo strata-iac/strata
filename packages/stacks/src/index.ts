@@ -378,10 +378,6 @@ export class PostgresStacksService implements StacksService {
 		const sortOrder = params.sortOrder ?? "asc";
 		const conditions: SQL[] = [eq(projects.tenantId, tenantId)];
 
-		if (params.organization) {
-			conditions.push(eq(projects.tenantId, params.organization));
-		}
-
 		if (params.project) {
 			conditions.push(eq(projects.name, params.project));
 		}

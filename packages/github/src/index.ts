@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/rest";
 import type { Config } from "@procella/config";
@@ -82,7 +83,13 @@ export async function verifyGitHubWebhookSignature(
 		.map((b) => b.toString(16).padStart(2, "0"))
 		.join("");
 
-	return computed === expected;
+	const computedBuf = Buffer.from(computed, "hex");
+	const expectedBuf = Buffer.from(expected, "hex");
+	if (computedBuf.length !== expectedBuf.length) {
+		return false;
+	}
+
+	return timingSafeEqual(computedBuf, expectedBuf);
 }
 
 export function buildPRCommentBody(update: {

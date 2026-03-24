@@ -58,7 +58,11 @@ export interface WebhooksService {
 		updates: Partial<CreateWebhookInput>,
 	): Promise<WebhookInfo>;
 	deleteWebhook(tenantId: string, webhookId: string): Promise<void>;
-	listDeliveries(webhookId: string, limit?: number): Promise<WebhookDeliveryInfo[]>;
+	listDeliveries(
+		tenantId: string,
+		webhookId: string,
+		limit?: number,
+	): Promise<WebhookDeliveryInfo[]>;
 	emit(event: { tenantId: string; event: WebhookEventValue; data: Record<string, unknown> }): void;
 	ping(tenantId: string, webhookId: string): Promise<WebhookDeliveryInfo>;
 }
@@ -171,11 +175,15 @@ export class PostgresWebhooksService implements WebhooksService {
 		}
 	}
 
-	async listDeliveries(webhookId: string, limit = 50): Promise<WebhookDeliveryInfo[]> {
+	async listDeliveries(
+		tenantId: string,
+		webhookId: string,
+		limit = 50,
+	): Promise<WebhookDeliveryInfo[]> {
 		const [hook] = await this.db
 			.select({ id: webhooks.id })
 			.from(webhooks)
-			.where(eq(webhooks.id, webhookId))
+			.where(and(eq(webhooks.tenantId, tenantId), eq(webhooks.id, webhookId)))
 			.limit(1);
 
 		if (!hook) {
@@ -183,9 +191,19 @@ export class PostgresWebhooksService implements WebhooksService {
 		}
 
 		const rows = await this.db
-			.select()
+			.select({
+				id: webhookDeliveries.id,
+				event: webhookDeliveries.event,
+				responseStatus: webhookDeliveries.responseStatus,
+				success: webhookDeliveries.success,
+				attempt: webhookDeliveries.attempt,
+				error: webhookDeliveries.error,
+				duration: webhookDeliveries.duration,
+				createdAt: webhookDeliveries.createdAt,
+			})
 			.from(webhookDeliveries)
-			.where(eq(webhookDeliveries.webhookId, webhookId))
+			.innerJoin(webhooks, eq(webhookDeliveries.webhookId, webhooks.id))
+			.where(and(eq(webhooks.tenantId, tenantId), eq(webhookDeliveries.webhookId, webhookId)))
 			.orderBy(desc(webhookDeliveries.createdAt))
 			.limit(limit);
 
@@ -202,7 +220,13 @@ export class PostgresWebhooksService implements WebhooksService {
 	}
 
 	emit(event: { tenantId: string; event: WebhookEventValue; data: Record<string, unknown> }): void {
-		void this.emitAsync(event);
+		void this.emitAsync(event).catch((error: unknown) => {
+			console.error("[webhooks] Failed to emit event", {
+				tenantId: event.tenantId,
+				event: event.event,
+				error,
+			});
+		});
 	}
 
 	async ping(tenantId: string, webhookId: string): Promise<WebhookDeliveryInfo> {

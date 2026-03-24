@@ -110,7 +110,7 @@ export const webhooksRouter = router({
 				});
 			}
 
-			return ctx.webhooks.listDeliveries(input.webhookId, input.limit);
+			return ctx.webhooks.listDeliveries(ctx.caller.tenantId, input.webhookId, input.limit);
 		}),
 
 	ping: publicProcedure.input(webhookIdInput).mutation(async ({ ctx, input }) => {

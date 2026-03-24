@@ -83,7 +83,10 @@ export function mapRouteToAction(method: string, path: string): AuditActionValue
 	if (method === "PATCH" && /^\/api\/stacks\/[^/]+\/[^/]+\/[^/]+\/tags$/.test(path)) {
 		return AuditAction.STACK_TAGS_UPDATE;
 	}
-	if (method === "POST" && /^\/api\/stacks\/[^/]+\/[^/]+\/[^/]+\/update$/.test(path)) {
+	if (
+		method === "POST" &&
+		/^\/api\/stacks\/[^/]+\/[^/]+\/[^/]+\/(?:update|preview|refresh|destroy)$/.test(path)
+	) {
 		return AuditAction.UPDATE_CREATE;
 	}
 	if (
@@ -107,6 +110,12 @@ export function mapRouteToAction(method: string, path: string): AuditActionValue
 	if (method === "DELETE" && /^\/api\/orgs\/[^/]+\/tokens\/[^/]+$/.test(path)) {
 		return AuditAction.TOKEN_REVOKE;
 	}
+	if (method === "POST" && /^\/api\/orgs\/[^/]+\/hooks$/.test(path)) {
+		return AuditAction.WEBHOOK_CREATE;
+	}
+	if (method === "DELETE" && /^\/api\/orgs\/[^/]+\/hooks\/[^/]+$/.test(path)) {
+		return AuditAction.WEBHOOK_DELETE;
+	}
 
 	return null;
 }
@@ -121,7 +130,7 @@ export function extractResourceType(path: string): string {
 	if (path.includes("/tokens")) {
 		return "token";
 	}
-	if (path.includes("/webhooks")) {
+	if (path.includes("/hooks")) {
 		return "webhook";
 	}
 	return "unknown";
