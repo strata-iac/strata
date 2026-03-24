@@ -31,9 +31,10 @@ describe("ProcellaLogo", () => {
 		expect(source).toContain("<Link to={linkTo}");
 	});
 
-	test("loads Storm Petrel as img element", () => {
+	test("loads Storm Petrel as decorative img element", () => {
 		expect(source).toContain("storm-petrel.svg");
 		expect(source).toContain("<img");
-		expect(source).toContain('alt="Procella logo"');
+		expect(source).toContain('aria-hidden="true"');
+		expect(source).toContain('alt=""');
 	});
 });

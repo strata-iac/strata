@@ -23,7 +23,7 @@ export function ProcellaLogo({
 
 	const content = (
 		<>
-			<img src={stormPetrelSvg} className={s.icon} alt="Procella logo" />
+			<img src={stormPetrelSvg} className={s.icon} alt="" aria-hidden="true" />
 			<span className={`${s.text} font-bold tracking-tight text-mist`}>Procella</span>
 		</>
 	);

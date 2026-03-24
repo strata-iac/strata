@@ -126,7 +126,7 @@ function DescopeCliLogin({
 				</div>
 
 				<div className="bg-slate-brand/60 border border-cloud/20 rounded-xl px-4 py-3 flex items-center gap-3">
-					<div className="h-8 w-8 rounded-full bg-lightning flex items-center justify-center text-xs font-semibold text-white shrink-0 select-none">
+					<div className="h-8 w-8 rounded-full bg-lightning flex items-center justify-center text-xs font-semibold text-deep-sky shrink-0 select-none">
 						{email[0].toUpperCase()}
 					</div>
 					<span className="text-sm text-mist truncate">{email}</span>
@@ -178,7 +178,7 @@ function DevCliLogin({ port, nonce }: { port: string; nonce: string }) {
 					<button
 						type="submit"
 						disabled={!token.trim() || submitted}
-						className="w-full bg-lightning hover:bg-lightning disabled:bg-slate-brand disabled:text-cloud text-white font-medium py-3 px-4 rounded-xl transition-colors"
+						className="w-full bg-lightning hover:bg-lightning/80 disabled:bg-slate-brand disabled:text-cloud text-deep-sky font-medium py-3 px-4 rounded-xl transition-colors"
 					>
 						Authorize
 					</button>
