@@ -1,3 +1,4 @@
+import stormPetrelSvg from "../assets/storm-petrel.svg";
 import { ProcellaLogo } from "../components/ProcellaLogo";
 import { appUrl } from "../config";
 
@@ -191,6 +192,30 @@ export function HomePage() {
 			{/* Hero */}
 			<section className="relative z-10 pt-24 sm:pt-32 pb-20 px-6">
 				<div className="max-w-3xl mx-auto text-center home-fade-in">
+					{/* Storm Petrel Mascot — hero focal point */}
+					<div className="flex justify-center mb-10">
+						<div
+							className="relative w-36 h-36 sm:w-44 sm:h-44 md:w-52 md:h-52 rounded-2xl overflow-hidden"
+							style={{
+								boxShadow:
+									"0 0 60px rgba(0,212,255,0.25), 0 0 120px rgba(0,212,255,0.1), 0 8px 32px rgba(0,0,0,0.4)",
+							}}
+						>
+							<img
+								src={stormPetrelSvg}
+								alt="Procella — Storm Petrel mascot"
+								className="w-full h-full object-cover"
+							/>
+							{/* Glow ring */}
+							<div
+								className="absolute inset-0 rounded-2xl pointer-events-none"
+								style={{
+									boxShadow: "inset 0 0 0 1px rgba(0,212,255,0.2)",
+								}}
+							/>
+						</div>
+					</div>
+
 					<div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-lightning/10 border border-lightning/20 text-lightning text-xs font-medium mb-8 tracking-wide">
 						<span className="w-1.5 h-1.5 rounded-full bg-lightning animate-pulse" />
 						Pulumi-compatible backend

@@ -1,7 +1,8 @@
 ---
 /**
- * SiteTitle override — matches ProcellaLogo from apps/ui:
- *   Storm Petrel SVG icon in Lightning + "Procella" wordmark in Mist
+ * SiteTitle override — matches ProcellaLogo from apps/ui.
+ * Uses the same Storm Petrel bird geometry as apps/ui/src/assets/storm-petrel.svg.
+ * Inline SVG is used here because Astro Starlight overrides require self-contained components.
  */
 import type { Props } from '@astrojs/starlight/props';
 
@@ -9,12 +10,12 @@ const { siteTitle } = Astro.props as Props;
 ---
 
 <a href="/" class="site-title">
-  <!-- Storm Petrel mascot — inline SVG equivalent of the shared storm-petrel.svg asset used by ProcellaLogo.tsx -->
+  <!-- Storm Petrel icon — inline SVG matching apps/ui/src/assets/storm-petrel.svg geometry -->
   <svg
     viewBox="0 0 24 24"
     fill="none"
-    width="20"
-    height="20"
+    width="22"
+    height="22"
     aria-hidden="true"
     style="color: #00D4FF; flex-shrink: 0;"
   >

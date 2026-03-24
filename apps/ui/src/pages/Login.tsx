@@ -1,6 +1,7 @@
 import { Descope } from "@descope/react-sdk";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router";
+import stormPetrelSvg from "../assets/storm-petrel.svg";
 import { FullPageSpinner } from "../components/FullPageSpinner";
 import { ProcellaLogo } from "../components/ProcellaLogo";
 import { useAuthConfig } from "../hooks/useAuthConfig";
@@ -26,6 +27,16 @@ function DescopeLogin({ returnTo }: { returnTo: string }) {
 
 	return (
 		<div className="min-h-screen bg-deep-sky flex flex-col items-center justify-center px-4">
+			<div className="flex justify-center mb-6">
+				<div
+					className="w-20 h-20 rounded-xl overflow-hidden"
+					style={{
+						boxShadow: "0 0 40px rgba(0,212,255,0.2), 0 4px 16px rgba(0,0,0,0.3)",
+					}}
+				>
+					<img src={stormPetrelSvg} alt="Procella" className="w-full h-full object-cover" />
+				</div>
+			</div>
 			<ProcellaLogo linkTo="/" className="mb-3" />
 			<p className="text-sm text-cloud mb-8">Sign in to your Pulumi backend</p>
 			<div
@@ -62,6 +73,16 @@ function DevLogin({ returnTo }: { returnTo: string }) {
 
 	return (
 		<div className="min-h-screen bg-deep-sky flex flex-col items-center justify-center px-4">
+			<div className="flex justify-center mb-6">
+				<div
+					className="w-20 h-20 rounded-xl overflow-hidden"
+					style={{
+						boxShadow: "0 0 40px rgba(0,212,255,0.2), 0 4px 16px rgba(0,0,0,0.3)",
+					}}
+				>
+					<img src={stormPetrelSvg} alt="Procella" className="w-full h-full object-cover" />
+				</div>
+			</div>
 			<ProcellaLogo linkTo="/" className="mb-3" />
 			<p className="text-sm text-cloud mb-8">Enter your API token to continue</p>
 			<form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
