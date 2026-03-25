@@ -238,5 +238,23 @@ describe("@procella/stacks", () => {
 			const err = Object.assign(new Error("fail"), { code: "ERR_CONNECTION_CLOSED" });
 			expect(pgErrorCode(err)).toBeUndefined();
 		});
+
+		test("extracts SQLSTATE from Bun.sql errno (numeric)", () => {
+			const pgErr = Object.assign(new Error("unique_violation"), {
+				code: "ERR_POSTGRES_SERVER_ERROR",
+				errno: 23505,
+			});
+			expect(pgErrorCode(pgErr)).toBe("23505");
+		});
+
+		test("extracts SQLSTATE from Bun.sql errno via DrizzleQueryError cause", () => {
+			const pgErr = Object.assign(new Error("unique_violation"), {
+				code: "ERR_POSTGRES_SERVER_ERROR",
+				errno: 23505,
+			});
+			const drizzleErr = new Error("Failed query: INSERT INTO...");
+			drizzleErr.cause = pgErr;
+			expect(pgErrorCode(drizzleErr)).toBe("23505");
+		});
 	});
 });

@@ -15,8 +15,11 @@ export function pgErrorCode(err: unknown): string | undefined {
 	for (let i = 0; i < 10 && current != null; i++) {
 		if (typeof current === "object") {
 			const rec = current as Record<string, unknown>;
-			const code = rec.code;
-			if (typeof code === "string" && /^\d{5}$/.test(code)) return code;
+			for (const key of ["code", "errno"] as const) {
+				const val = rec[key];
+				const str = typeof val === "number" ? String(val) : val;
+				if (typeof str === "string" && /^\d{5}$/.test(str)) return str;
+			}
 			if (Array.isArray(rec.errors)) {
 				for (const inner of rec.errors) {
 					const found = pgErrorCode(inner);
