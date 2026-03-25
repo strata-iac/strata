@@ -1,5 +1,5 @@
 // Auto-generated from pulumi/pulumi pkg/backend/httpstate/client/api_endpoints.go
-// Pulumi SDK v3.227.0 — do not edit manually.
+// Pulumi SDK v3.228.0 — do not edit manually.
 // Regenerate: bun run packages/types/tygo/generate-routes.ts
 
 type Method = "GET" | "POST" | "PATCH" | "DELETE";
@@ -27,6 +27,13 @@ export const PulumiRoutes = {
   downloadTemplates: { method: "GET" as Method, path: "/api/orgs/:org/templates/download" },
   batchDecrypt: { method: "POST" as Method, path: "/api/stacks/:org/:project/:stack/batch-decrypt" },
   batchEncrypt: { method: "POST" as Method, path: "/api/stacks/:org/:project/:stack/batch-encrypt" },
+  projectExists: { method: "HEAD" as Method, path: "/api/stacks/:org/:project" },
+  renameStack: { method: "POST" as Method, path: "/api/stacks/:org/:project/:stack/rename" },
+  updateStackTags: { method: "PATCH" as Method, path: "/api/stacks/:org/:project/:stack/tags" },
+  updateStackConfig: { method: "PUT" as Method, path: "/api/stacks/:org/:project/:stack/config" },
+  updateDeploymentSettings: { method: "PUT" as Method, path: "/api/stacks/:org/:project/:stack/deployments/settings" },
+  encryptDeploymentSecret: { method: "POST" as Method, path: "/api/stacks/:org/:project/:stack/deployments/settings/encrypt" },
+  destroyDeploymentSettings: { method: "DELETE" as Method, path: "/api/stacks/:org/:project/:stack/deployments/settings" },
   createDestroy: { method: "POST" as Method, path: "/api/stacks/:org/:project/:stack/destroy" },
   createPreview: { method: "POST" as Method, path: "/api/stacks/:org/:project/:stack/preview" },
   createUpdate: { method: "POST" as Method, path: "/api/stacks/:org/:project/:stack/update" },
@@ -38,8 +45,11 @@ export const PulumiRoutes = {
   completeUpdate: { method: "POST" as Method, path: "/api/stacks/:org/:project/:stack/:kind/:updateId/complete" },
   postEngineEvent: { method: "POST" as Method, path: "/api/stacks/:org/:project/:stack/:kind/:updateId/events" },
   postEngineEventBatch: { method: "POST" as Method, path: "/api/stacks/:org/:project/:stack/:kind/:updateId/events/batch" },
+  patchJournalEntries: { method: "PATCH" as Method, path: "/api/stacks/:org/:project/:stack/:kind/:updateId/journalentries" },
   renewLease: { method: "POST" as Method, path: "/api/stacks/:org/:project/:stack/:kind/:updateId/renew_lease" },
+  getGHAppIntegration: { method: "GET" as Method, path: "/api/console/orgs/:org/integrations/github-app" },
   publishPolicyPack: { method: "POST" as Method, path: "/api/orgs/:org/policypacks" },
+  completePolicyPackPublish: { method: "POST" as Method, path: "/api/orgs/:org/policypacks/:policyPackName/:versionTag/complete" },
   getSearchResources: { method: "GET" as Method, path: "/api/orgs/:org/search/resources" },
   getSearchResourcesParse: { method: "GET" as Method, path: "/api/orgs/:org/search/resources/parse" },
   publishPackage: { method: "POST" as Method, path: "/api/preview/registry/packages/:source/:publisher/:name/versions" },

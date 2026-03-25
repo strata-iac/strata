@@ -155,11 +155,7 @@ export function createApp(deps: {
 	app.patch(R.patchCheckpoint.path, withUpdateAuth, checkpointH.patchCheckpoint);
 	app.patch(R.patchCheckpointVerbatim.path, withUpdateAuth, checkpointH.patchCheckpointVerbatim);
 	app.patch(R.patchCheckpointDelta.path, withUpdateAuth, checkpointH.patchCheckpointDelta);
-	app.patch(
-		"/api/stacks/:org/:project/:stack/:kind/:updateId/journalentries",
-		withUpdateAuth,
-		checkpointH.appendJournalEntries,
-	);
+	app.patch(R.patchJournalEntries.path, withUpdateAuth, checkpointH.appendJournalEntries);
 	app.post(R.postEngineEventBatch.path, withUpdateAuth, eventH.postEvents);
 	app.post(R.renewLease.path, withUpdateAuth, eventH.renewLease);
 	app.post(R.completeUpdate.path, withUpdateAuth, updateH.completeUpdate);
