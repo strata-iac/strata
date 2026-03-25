@@ -159,8 +159,8 @@ export function createApp(deps: {
 		withUpdateAuth,
 		checkpointH.patchCheckpointVerbatim,
 	);
-	app.post(
-		"/api/stacks/:org/:project/:stack/update/:updateId/checkpoint/delta",
+	app.patch(
+		"/api/stacks/:org/:project/:stack/update/:updateId/checkpointdelta",
 		withUpdateAuth,
 		checkpointH.patchCheckpointDelta,
 	);
