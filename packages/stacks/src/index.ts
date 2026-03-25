@@ -10,7 +10,7 @@ import {
 } from "@procella/types";
 import { and, eq, sql } from "drizzle-orm";
 
-function pgErrorCode(err: unknown): string | undefined {
+export function pgErrorCode(err: unknown): string | undefined {
 	let current: unknown = err;
 	for (let i = 0; i < 10 && current != null; i++) {
 		if (typeof current === "object") {
@@ -23,8 +23,12 @@ function pgErrorCode(err: unknown): string | undefined {
 					if (found) return found;
 				}
 			}
+			if ("cause" in rec) {
+				current = rec.cause;
+				continue;
+			}
 		}
-		current = current instanceof Error ? current.cause : undefined;
+		current = undefined;
 	}
 	return undefined;
 }
