@@ -1,46 +1,23 @@
-# fly.toml — Procella on Fly.io
+# fly.toml app configuration file generated for procella on 2026-03-25T08:11:31Z
 #
-# Deploy:
-#   fly launch --no-deploy --name procella
-#   fly deploy
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
-# Docs: https://fly.io/docs/reference/configuration/
 
-app = "procella"
-primary_region = "iad"
+app = 'procella'
+primary_region = 'ams'
 
 [build]
-  dockerfile = "Dockerfile"
 
-# Non-sensitive runtime config (secrets go via `fly secrets set`)
-[env]
-  PROCELLA_LISTEN_ADDR    = ":9090"
-  PROCELLA_AUTH_MODE      = "dev"
-  PROCELLA_BLOB_BACKEND   = "s3"
-  PROCELLA_BLOB_S3_REGION = "us-east-1"
-
-# HTTP service — Fly handles TLS termination
 [http_service]
-  internal_port       = 9090
-  force_https         = true
-  auto_stop_machines  = "stop"
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
   auto_start_machines = true
-  min_machines_running = 1
-
-  [http_service.concurrency]
-    type       = "requests"
-    soft_limit = 200
-    hard_limit = 250
-
-  [[http_service.checks]]
-    grace_period = "10s"
-    interval     = "15s"
-    method       = "GET"
-    path         = "/healthz"
-    timeout      = "5s"
-    type         = "http"
+  min_machines_running = 0
+  processes = ['app']
 
 [[vm]]
-  memory   = "512mb"
-  cpu_kind = "shared"
-  cpus     = 1
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 256
