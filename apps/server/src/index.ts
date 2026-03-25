@@ -43,7 +43,11 @@ if (process.argv.includes("--healthz")) {
 		if (existsSync(`${uiRoot}/index.html`)) {
 			const { serveStatic } = await import("hono/bun");
 			app.get("*", serveStatic({ root: uiRoot }));
-			app.get("*", serveStatic({ root: uiRoot, path: "/index.html" }));
+			app.get("*", (c, next) => {
+				const p = c.req.path;
+				if (p.startsWith("/api/") || p.startsWith("/trpc/")) return next();
+				return serveStatic({ root: uiRoot, path: "/index.html" })(c, next);
+			});
 		}
 
 		const [, portStr] = config.listenAddr.split(":");
