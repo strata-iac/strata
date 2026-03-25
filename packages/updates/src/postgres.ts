@@ -53,6 +53,18 @@ import {
 import type { UpdatesService } from "./types.js";
 import { BLOB_THRESHOLD, LEASE_DURATION_SECONDS } from "./types.js";
 
+function pgErrorCode(err: unknown): string | undefined {
+	let current: unknown = err;
+	for (let i = 0; i < 5 && current != null; i++) {
+		if (typeof current === "object" && "code" in (current as object)) {
+			const code = (current as Record<string, unknown>).code;
+			if (typeof code === "string" && /^\d{5}$/.test(code)) return code;
+		}
+		current = current instanceof Error ? current.cause : undefined;
+	}
+	return undefined;
+}
+
 // ============================================================================
 // PostgresUpdatesService
 // ============================================================================
@@ -685,12 +697,7 @@ export class PostgresUpdatesService implements UpdatesService {
 				}
 				return;
 			} catch (error: unknown) {
-				const pgErr = error instanceof Error && error.cause instanceof Error ? error.cause : error;
-				const errCode =
-					typeof pgErr === "object" && pgErr !== null
-						? (pgErr as Record<string, unknown>).code
-						: undefined;
-				if (errCode === "23505" && attempt < maxAttempts - 1) {
+				if (pgErrorCode(error) === "23505" && attempt < maxAttempts - 1) {
 					continue;
 				}
 				throw error;
