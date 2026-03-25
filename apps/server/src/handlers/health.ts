@@ -25,6 +25,7 @@ export function healthHandlers(deps: { db: Database }) {
 			c.json({
 				capabilities: [
 					{ capability: "batch-encrypt" },
+					{ capability: "delta-checkpoint-uploads-v2" },
 					{ capability: "deployment-schema-version", version: 3 },
 					{ capability: "journaling-v1", version: 1 },
 				],
