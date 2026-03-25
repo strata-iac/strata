@@ -1,8 +1,7 @@
-// @procella/server — Bun.serve entrypoint for local development and Docker.
-//
-// Production (Vercel) uses vercel.ts instead.
-
+import { existsSync } from "node:fs";
 import { formatConfigErrors } from "@procella/config";
+import { GCWorker } from "@procella/updates";
+import { serveStatic } from "hono/bun";
 import { ZodError } from "zod";
 import { logger } from "./logger.js";
 
@@ -22,7 +21,7 @@ if (process.argv.includes("--healthz")) {
 		.then((res) => process.exit(res.ok ? 0 : 1))
 		.catch(() => process.exit(1));
 } else if (process.argv.includes("--migrate")) {
-	(async () => {
+	try {
 		const { loadConfig } = await import("@procella/config");
 		const { runMigrations } = await import("@procella/db");
 		const config = loadConfig();
@@ -33,17 +32,15 @@ if (process.argv.includes("--healthz")) {
 		logger.info("Migrations complete.");
 		logger.flush();
 		process.exit(0);
-	})().catch(handleFatalError);
+	} catch (err) {
+		handleFatalError(err);
+	}
 } else {
-	(async () => {
-		const { existsSync } = await import("node:fs");
-		const { GCWorker } = await import("@procella/updates");
-		const { bootstrap } = await import("./bootstrap.js");
-		const { app, auth, config, db, client } = await bootstrap();
+	try {
+		const { app, auth, config, db, client } = await import("./bootstrap.js");
 
 		const uiRoot = process.env.PROCELLA_UI_PATH || "/ui";
 		if (existsSync(`${uiRoot}/index.html`)) {
-			const { serveStatic } = await import("hono/bun");
 			app.get("*", serveStatic({ root: uiRoot }));
 			app.get("*", serveStatic({ root: uiRoot, path: "/index.html" }));
 		}
@@ -80,5 +77,7 @@ if (process.argv.includes("--healthz")) {
 		};
 		process.on("SIGTERM", shutdown);
 		process.on("SIGINT", shutdown);
-	})().catch(handleFatalError);
+	} catch (err) {
+		handleFatalError(err);
+	}
 }

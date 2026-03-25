@@ -18,8 +18,7 @@ function getHandler() {
 	if (!handlerPromise) {
 		handlerPromise = (async () => {
 			const { handle } = await import("@hono/node-server/vercel");
-			const { bootstrap } = await import("./bootstrap.js");
-			const { app } = await bootstrap();
+			const { app } = await import("./bootstrap.js");
 			return handle(app);
 		})();
 	}

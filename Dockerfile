@@ -22,7 +22,7 @@ COPY packages/ packages/
 COPY apps/server/ apps/server/
 COPY tsconfig.json ./
 RUN bun build --compile \
-    --production --sourcemap --bytecode \
+    --production --sourcemap \
     --no-compile-autoload-dotenv --no-compile-autoload-bunfig \
     apps/server/src/index.ts --outfile procella
 
