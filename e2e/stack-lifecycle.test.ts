@@ -49,6 +49,10 @@ describe("stack lifecycle", () => {
 
 	test("duplicate stack creation fails with 409", async () => {
 		const res = await apiRequest("/stacks/dev-org/e2e-project/dev", { method: "POST" });
+		if (res.status !== 409) {
+			const body = await res.text();
+			console.error(`Expected 409 but got ${res.status}: ${body}`);
+		}
 		expect(res.status).toBe(409);
 	});
 
