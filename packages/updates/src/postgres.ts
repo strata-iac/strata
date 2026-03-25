@@ -381,7 +381,13 @@ export class PostgresUpdatesService implements UpdatesService {
 			fields: event as unknown,
 		}));
 
-		await this.db.insert(updateEvents).values(rows);
+		await this.db
+			.insert(updateEvents)
+			.values(rows)
+			.onConflictDoUpdate({
+				target: [updateEvents.updateId, updateEvents.sequence],
+				set: { kind: sql`excluded.kind`, fields: sql`excluded.fields` },
+			});
 	}
 
 	async getUpdateEvents(
