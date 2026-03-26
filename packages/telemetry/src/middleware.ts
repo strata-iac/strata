@@ -37,7 +37,7 @@ export function tracingMiddleware(): MiddlewareHandler {
 				kind: SpanKind.SERVER,
 				attributes: {
 					"http.method": method,
-					"http.url": c.req.url,
+					"http.url": c.req.url.split("?")[0],
 					"http.target": path,
 					"http.user_agent": c.req.header("user-agent") ?? "",
 				},
