@@ -27,6 +27,10 @@ export function healthHandlers(deps: { db: Database }) {
 					{ capability: "batch-encrypt" },
 					{ capability: "deployment-schema-version", version: 3 },
 					{ capability: "journaling-v1", version: 1 },
+					{
+						capability: "delta-checkpoint-uploads-v2",
+						configuration: { checkpointCutoffSizeBytes: 1_048_576 },
+					},
 				],
 			} satisfies CapabilitiesResponse),
 
