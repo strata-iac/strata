@@ -594,6 +594,8 @@ export class PostgresUpdatesService implements UpdatesService {
 	// ========================================================================
 
 	private async nextCheckpointVersion(updateId: string): Promise<number> {
+		this.evictStaleCaches();
+
 		const cached = this.checkpointVersionCache.get(updateId);
 		if (cached !== undefined) {
 			const next = cached + 1;
@@ -627,7 +629,6 @@ export class PostgresUpdatesService implements UpdatesService {
 
 	private async flushJournalToCheckpoint(updateId: string, stackId: string): Promise<void> {
 		return withDbSpan("flushJournalToCheckpoint", { "update.id": updateId }, async () => {
-			this.evictStaleCaches();
 			const allEntries = await this.db
 				.select()
 				.from(journalEntries)

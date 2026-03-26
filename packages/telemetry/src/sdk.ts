@@ -34,10 +34,17 @@ export function initTelemetry(config: TelemetryConfig): void {
 	if (config.debug) {
 		diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.DEBUG);
 	}
-
 	const serviceName = process.env.OTEL_SERVICE_NAME ?? config.serviceName ?? "procella";
+	const envAttrs: Record<string, string> = {};
+	for (const pair of (process.env.OTEL_RESOURCE_ATTRIBUTES ?? "").split(",")) {
+		const idx = pair.indexOf("=");
+		if (idx > 0) {
+			envAttrs[pair.slice(0, idx).trim()] = pair.slice(idx + 1).trim();
+		}
+	}
 	const resource = Resource.default().merge(
 		new Resource({
+			...envAttrs,
 			[ATTR_SERVICE_NAME]: serviceName,
 			[ATTR_SERVICE_VERSION]: config.serviceVersion ?? "0.0.0",
 		}),

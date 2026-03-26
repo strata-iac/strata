@@ -2,13 +2,19 @@ import { appendFile } from "node:fs/promises";
 import path from "node:path";
 import type { BaselineConfig, BenchmarkResults, Mode, TrialResult, Variant } from "./types";
 
+interface MetricCheck {
+	metric: string;
+	p50: number | null;
+	threshold: number;
+	limit: number;
+	pass: boolean;
+}
+
 interface ComboSummary {
 	n: number;
 	mode: Mode;
 	variant: Variant;
-	p50: number | null;
-	threshold: number;
-	limit: number;
+	checks: MetricCheck[];
 	pass: boolean;
 }
 
@@ -25,10 +31,6 @@ function median(values: number[]): number | null {
 
 function formatMs(value: number): string {
 	return `${value.toFixed(1)}ms`;
-}
-
-function getUpValues(rows: TrialResult[]): number[] {
-	return rows.map((r) => r.upMs).filter((value): value is number => typeof value === "number");
 }
 
 async function main(): Promise<void> {
@@ -86,31 +88,41 @@ async function main(): Promise<void> {
 		const thresholdEntry = baseline.thresholds[nKey]?.[comboKey];
 		if (!thresholdEntry) continue;
 
-		const threshold = thresholdEntry.maxUpP50Ms;
-		const limit = threshold * (1 + tolerancePct / 100);
-		const upValues = getUpValues(rows);
-		const p50 = median(upValues);
-		const pass = p50 !== null && p50 <= limit;
+		const successful = rows.filter((r) => r.upExitCode === 0);
+		const metrics: Array<{ metric: string; threshold: number; values: number[] }> = [
+			{ metric: "up", threshold: thresholdEntry.maxUpP50Ms, values: successful.map((r) => r.upMs).filter((v): v is number => v !== null) },
+		];
+		if (thresholdEntry.maxDestroyP50Ms) {
+			metrics.push({ metric: "destroy", threshold: thresholdEntry.maxDestroyP50Ms, values: successful.map((r) => r.destroyMs).filter((v): v is number => v !== null) });
+		}
+		if (thresholdEntry.maxPreviewP50Ms) {
+			metrics.push({ metric: "preview", threshold: thresholdEntry.maxPreviewP50Ms, values: successful.map((r) => r.previewMs).filter((v): v is number => v !== null) });
+		}
+
+		const checks: MetricCheck[] = [];
+		for (const m of metrics) {
+			const limit = m.threshold * (1 + tolerancePct / 100);
+			const p50 = median(m.values);
+			const pass = p50 !== null && p50 <= limit;
+			checks.push({ metric: m.metric, p50, threshold: m.threshold, limit, pass });
+			if (!pass) {
+				if (p50 === null) {
+					errors.push(`No successful ${m.metric} values for n=${sample.n}, combo=${comboKey}`);
+				} else {
+					errors.push(
+						`${comboKey} n=${sample.n} ${m.metric} p50=${formatMs(p50)} exceeds limit=${formatMs(limit)} (threshold=${formatMs(m.threshold)}, tolerance=${tolerancePct}%)`,
+					);
+				}
+			}
+		}
 
 		summaries.push({
 			n: sample.n,
 			mode: sample.mode,
 			variant: sample.variant,
-			p50,
-			threshold,
-			limit,
-			pass,
+			checks,
+			pass: checks.every((c) => c.pass),
 		});
-
-		if (!pass) {
-			if (p50 === null) {
-				errors.push(`No successful upMs values for n=${sample.n}, combo=${comboKey}`);
-			} else {
-				errors.push(
-					`${comboKey} n=${sample.n} p50=${formatMs(p50)} exceeds limit=${formatMs(limit)} (threshold=${formatMs(threshold)}, tolerance=${tolerancePct}%)`,
-				);
-			}
-		}
 	}
 
 	summaries.sort((a, b) => {
@@ -124,20 +136,22 @@ async function main(): Promise<void> {
 	}
 
 	console.log("");
-	console.log("━".repeat(68));
+	console.log("━".repeat(78));
 	console.log("  THRESHOLD CHECK");
-	console.log("━".repeat(68));
+	console.log("━".repeat(78));
 
 	for (const s of summaries) {
-		const p50Text = s.p50 === null ? "N/A" : formatMs(s.p50);
-		const icon = s.pass ? "✓" : "✗";
-		const status = s.pass ? "PASS" : "FAIL";
-		console.log(
-			`  ${icon} ${s.mode}/${s.variant} N=${String(s.n).padStart(4)}  p50=${padLeft(p50Text, 10)}  limit=${padLeft(formatMs(s.limit), 10)}  ${status}`,
-		);
+		for (const c of s.checks) {
+			const p50Text = c.p50 === null ? "N/A" : formatMs(c.p50);
+			const icon = c.pass ? "✓" : "✗";
+			const status = c.pass ? "PASS" : "FAIL";
+			console.log(
+				`  ${icon} ${s.mode}/${s.variant} N=${String(s.n).padStart(4)}  ${c.metric.padEnd(7)}  p50=${padLeft(p50Text, 10)}  limit=${padLeft(formatMs(c.limit), 10)}  ${status}`,
+			);
+		}
 	}
 
-	console.log("━".repeat(68));
+	console.log("━".repeat(78));
 	console.log("");
 
 	const summaryPath = process.env.GITHUB_STEP_SUMMARY;
@@ -145,12 +159,14 @@ async function main(): Promise<void> {
 		const md: string[] = [];
 		md.push("### 🎯 Threshold Check");
 		md.push("");
-		md.push("| N | Mode | Variant | p50 | Limit | Status |");
-		md.push("|---:|------|---------|----:|------:|--------|");
+		md.push("| N | Mode | Variant | Metric | p50 | Limit | Status |");
+		md.push("|---:|------|---------|--------|----:|------:|--------|");
 		for (const s of summaries) {
-			const p50Text = s.p50 === null ? "N/A" : formatMs(s.p50);
-			const status = s.pass ? "✅ PASS" : "❌ FAIL";
-			md.push(`| ${s.n} | ${s.mode} | ${s.variant} | ${p50Text} | ${formatMs(s.limit)} | ${status} |`);
+			for (const c of s.checks) {
+				const p50Text = c.p50 === null ? "N/A" : formatMs(c.p50);
+				const status = c.pass ? "✅ PASS" : "❌ FAIL";
+				md.push(`| ${s.n} | ${s.mode} | ${s.variant} | ${c.metric} | ${p50Text} | ${formatMs(c.limit)} | ${status} |`);
+			}
 		}
 		if (errors.length > 0) {
 			md.push("");
