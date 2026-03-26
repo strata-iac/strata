@@ -8,9 +8,17 @@ import { PostgresUpdatesService } from "@procella/updates";
 import { createApp } from "./routes/index.js";
 
 export async function bootstrap() {
+	console.log("[bootstrap] loadConfig");
 	const config = loadConfig();
+	console.log(
+		"[bootstrap] config ok, authMode=%s, dbUrl=%s",
+		config.authMode,
+		config.databaseUrl?.replace(/\/\/.*@/, "//***@"),
+	);
 
+	console.log("[bootstrap] createDb");
 	const { db, client } = await createDb({ url: config.databaseUrl, max: config.databasePoolMax });
+	console.log("[bootstrap] db ok");
 
 	const authConfig =
 		config.authMode === "dev"
@@ -25,8 +33,10 @@ export async function bootstrap() {
 					projectId: config.descopeProjectId as string,
 					managementKey: config.descopeManagementKey,
 				};
+	console.log("[bootstrap] createAuthService");
 	const auth = createAuthService(authConfig);
 
+	console.log("[bootstrap] createBlobStorage");
 	const storage = createBlobStorage(
 		config.blobBackend === "local"
 			? { backend: "local", basePath: config.blobLocalPath }
@@ -49,6 +59,7 @@ export async function bootstrap() {
 				})());
 	const crypto = new AesCryptoService(encryptionKey);
 
+	console.log("[bootstrap] creating services + app");
 	const stacksService = new PostgresStacksService({ db });
 	const updatesService = new PostgresUpdatesService({ db, storage, crypto });
 
@@ -61,5 +72,6 @@ export async function bootstrap() {
 		updates: updatesService,
 	});
 
+	console.log("[bootstrap] complete");
 	return { app, auth, config, db, client };
 }

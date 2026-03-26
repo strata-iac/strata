@@ -24,6 +24,16 @@ function normalizeRequest(req: Request): Request {
 
 export default async function fetch(req: Request): Promise<Response> {
 	if (!appPromise) appPromise = init();
-	const app = await appPromise;
-	return app.fetch(normalizeRequest(req));
+	try {
+		const app = await appPromise;
+		return app.fetch(normalizeRequest(req));
+	} catch (e: unknown) {
+		console.error("[vercel] bootstrap failed:", e);
+		const msg = e instanceof Error ? e.message : String(e);
+		const stack = e instanceof Error ? e.stack : undefined;
+		return new Response(JSON.stringify({ error: msg, stack }), {
+			status: 500,
+			headers: { "content-type": "application/json" },
+		});
+	}
 }
