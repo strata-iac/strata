@@ -37,6 +37,23 @@ const BENCH_TRIALS = (() => {
   return Math.floor(raw);
 })();
 
+const IS_CI = !!process.env.GITHUB_ACTIONS;
+const STEP_SUMMARY_PATH = process.env.GITHUB_STEP_SUMMARY;
+
+const BENCH_MODES: Mode[] = (() => {
+  const raw = process.env.BENCH_MODES;
+  if (!raw) return ["journal"] as Mode[];
+  const parsed = raw.split(",").map((v) => v.trim()).filter((v): v is Mode => v === "checkpoint" || v === "journal");
+  return parsed.length > 0 ? parsed : ["journal"] as Mode[];
+})();
+
+const BENCH_VARIANTS: Variant[] = (() => {
+  const raw = process.env.BENCH_VARIANTS;
+  if (!raw) return ["plain", "secrets"] as Variant[];
+  const parsed = raw.split(",").map((v) => v.trim()).filter((v): v is Variant => v === "plain" || v === "secrets");
+  return parsed.length > 0 ? parsed : ["plain", "secrets"] as Variant[];
+})();
+
 function cleanEnv(): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
@@ -213,6 +230,7 @@ async function runPulumi(
 interface TimedResult {
   ms: number | null;
   exitCode: number;
+  stdout: string;
   stderr: string;
 }
 
@@ -223,6 +241,7 @@ async function timed(fn: () => Promise<CommandResult>): Promise<TimedResult> {
   return {
     ms: result.exitCode === 0 ? elapsed : null,
     exitCode: result.exitCode,
+    stdout: result.stdout,
     stderr: result.stderr,
   };
 }
@@ -265,7 +284,7 @@ async function runTrial(
     const up = await timed(() => runPulumi(["up", "--yes"], projectDir, pulumiHome, mode));
 
     if (up.exitCode !== 0) {
-      console.error(`[${mode}/${variant}] N=${n} trial=${trial} up failed:\n${up.stderr}`);
+      console.error(`[${mode}/${variant}] N=${n} trial=${trial} up failed (exit ${up.exitCode}):\n  stdout: ${up.stdout.slice(0, 500)}\n  stderr: ${up.stderr.slice(0, 500)}`);
       return {
         n, mode, variant, trial,
         upMs: null, previewMs: null, destroyMs: null,
@@ -330,7 +349,69 @@ function average(values: number[]): number | null {
   return sum / values.length;
 }
 
-function renderMarkdownTable(results: BenchmarkResults): string {
+function stddev(values: number[]): number | null {
+  const avg = average(values);
+  if (avg === null || values.length < 2) return null;
+  const sumSq = values.reduce((acc, v) => acc + (v - avg) ** 2, 0);
+  return Math.sqrt(sumSq / (values.length - 1));
+}
+
+async function writeStepSummary(results: BenchmarkResults): Promise<void> {
+  if (!STEP_SUMMARY_PATH) return;
+
+  const modes = [...new Set(results.results.map((r) => r.mode))];
+  const variants = [...new Set(results.results.map((r) => r.variant))];
+  const lines: string[] = [];
+
+  lines.push("### 📊 Benchmark Results");
+  lines.push("");
+  lines.push(`> ${results.trialsPerSize} trials per combo · modes: ${modes.join(", ")} · sizes: ${results.benchSizes.join(", ")}`);
+  lines.push("");
+  lines.push("| N | Mode | Variant | up p50 | up σ | up min | up max | preview p50 | destroy p50 |");
+  lines.push("|---:|------|---------|-------:|-----:|-------:|-------:|------------:|------------:|");
+
+  for (const n of results.benchSizes) {
+    for (const mode of modes) {
+      for (const variant of variants) {
+        const rows = results.results.filter((r) => r.n === n && r.mode === mode && r.variant === variant);
+        const successful = rows.filter((r) => r.upExitCode === 0);
+        if (successful.length === 0) {
+          lines.push(`| ${n} | ${mode} | ${variant} | ❌ FAIL | — | — | — | — | — |`);
+          continue;
+        }
+        const upVals = successful.map((r) => r.upMs).filter((v): v is number => typeof v === "number");
+        const preVals = successful.map((r) => r.previewMs).filter((v): v is number => typeof v === "number");
+        const desVals = successful.map((r) => r.destroyMs).filter((v): v is number => typeof v === "number");
+        const upSd = stddev(upVals);
+        lines.push(
+          `| ${n} | ${mode} | ${variant} | ${formatMs(median(upVals))} | ${upSd !== null ? formatMs(upSd) : "—"} | ${formatMs(upVals.length > 0 ? Math.min(...upVals) : null)} | ${formatMs(upVals.length > 0 ? Math.max(...upVals) : null)} | ${formatMs(median(preVals))} | ${formatMs(median(desVals))} |`,
+        );
+      }
+    }
+  }
+
+  lines.push("");
+  lines.push("<details><summary>Per-trial breakdown</summary>");
+  lines.push("");
+  lines.push("| N | Mode | Variant | Trial | up | preview | destroy |");
+  lines.push("|---:|------|---------|------:|---:|--------:|--------:|");
+  for (const r of results.results) {
+    const status = r.upExitCode === 0 ? "" : " ❌";
+    lines.push(
+      `| ${r.n} | ${r.mode} | ${r.variant} | ${r.trial} | ${formatMs(r.upMs)}${status} | ${formatMs(r.previewMs)} | ${formatMs(r.destroyMs)} |`,
+    );
+  }
+  lines.push("");
+  lines.push("</details>");
+
+  await Bun.write(STEP_SUMMARY_PATH, `${lines.join("\n")}\n`);
+}
+
+function padLeft(s: string, width: number): string {
+  return s.length >= width ? s : `${" ".repeat(width - s.length)}${s}`;
+}
+
+function renderSummary(results: BenchmarkResults): string {
   const modes = [...new Set(results.results.map((r) => r.mode))];
   const variants = [...new Set(results.results.map((r) => r.variant))];
   const combos: Array<{ n: number; mode: Mode; variant: Variant }> = [];
@@ -342,67 +423,57 @@ function renderMarkdownTable(results: BenchmarkResults): string {
     }
   }
 
-  const timingLines: string[] = [
-    "| N | Mode | Variant | up p50 | up min | up max | preview p50 | destroy p50 | Status |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-  ];
-
-  const storageLines: string[] = [
-    "| N | Mode | Variant | Checkpoint Bytes | Journal Entries |",
-    "| --- | --- | --- | --- | --- |",
-  ];
+  const lines: string[] = [];
+  lines.push("");
+  lines.push("━".repeat(78));
+  lines.push("  BENCHMARK SUMMARY");
+  lines.push("━".repeat(78));
 
   for (const combo of combos) {
     const rows = results.results.filter(
       (r) => r.n === combo.n && r.mode === combo.mode && r.variant === combo.variant,
     );
     const successful = rows.filter((r) => r.upExitCode === 0);
-    const status = successful.length > 0 ? "OK" : "FAIL";
 
-    if (status === "FAIL") {
-      timingLines.push(`| ${combo.n} | ${combo.mode} | ${combo.variant} | FAIL | FAIL | FAIL | FAIL | FAIL | FAIL |`);
-      storageLines.push(`| ${combo.n} | ${combo.mode} | ${combo.variant} | FAIL | FAIL |`);
+    lines.push("");
+    lines.push(`  ${combo.mode}/${combo.variant}  N=${combo.n}`);
+    lines.push(`  ${"─".repeat(50)}`);
+
+    if (successful.length === 0) {
+      lines.push("    ✗ ALL TRIALS FAILED");
       continue;
     }
 
-    const upValues = successful
-      .map((r) => r.upMs)
-      .filter((v): v is number => typeof v === "number");
-    const previewValues = successful
-      .map((r) => r.previewMs)
-      .filter((v): v is number => typeof v === "number");
-    const destroyValues = successful
-      .map((r) => r.destroyMs)
-      .filter((v): v is number => typeof v === "number");
-
-    const checkpointValues = successful
-      .map((r) => r.checkpointBytes)
-      .filter((v): v is number => typeof v === "number");
-    const journalValues = successful
-      .map((r) => r.journalEntryCount)
-      .filter((v): v is number => typeof v === "number");
+    const upValues = successful.map((r) => r.upMs).filter((v): v is number => typeof v === "number");
+    const previewValues = successful.map((r) => r.previewMs).filter((v): v is number => typeof v === "number");
+    const destroyValues = successful.map((r) => r.destroyMs).filter((v): v is number => typeof v === "number");
+    const journalValues = successful.map((r) => r.journalEntryCount).filter((v): v is number => typeof v === "number");
 
     const upP50 = median(upValues);
     const upMin = upValues.length > 0 ? Math.min(...upValues) : null;
     const upMax = upValues.length > 0 ? Math.max(...upValues) : null;
     const previewP50 = median(previewValues);
     const destroyP50 = median(destroyValues);
+    const avgJournal = average(journalValues);
 
-    timingLines.push(
-      `| ${combo.n} | ${combo.mode} | ${combo.variant} | ${formatMs(upP50)} | ${formatMs(upMin)} | ${formatMs(upMax)} | ${formatMs(previewP50)} | ${formatMs(destroyP50)} | ${status} |`,
-    );
-
-    storageLines.push(
-      `| ${combo.n} | ${combo.mode} | ${combo.variant} | ${formatNumber(average(checkpointValues), 0)} | ${formatNumber(average(journalValues), 1)} |`,
-    );
+    const upStd = stddev(upValues);
+    const stdText = upStd !== null ? `, σ=${formatMs(upStd)}` : "";
+    lines.push(`    up      ${padLeft(formatMs(upP50), 10)}  (min ${formatMs(upMin)}, max ${formatMs(upMax)}${stdText})`);
+    lines.push(`    preview ${padLeft(formatMs(previewP50), 10)}`);
+    lines.push(`    destroy ${padLeft(formatMs(destroyP50), 10)}`);
+    if (avgJournal !== null) {
+      lines.push(`    journal ${padLeft(formatNumber(avgJournal, 0), 10)} entries`);
+    }
   }
 
-  return `${timingLines.join("\n")}\n\n${storageLines.join("\n")}`;
+  lines.push("");
+  lines.push("━".repeat(78));
+  return lines.join("\n");
 }
 
 async function main(): Promise<void> {
   PULUMI_BIN = await findPulumi();
-  console.log(`Procella journaling benchmark: sizes=${BENCH_SIZES.join(",")}, trials=${BENCH_TRIALS}`);
+  console.log(`Procella benchmark: modes=${BENCH_MODES.join(",")}, variants=${BENCH_VARIANTS.join(",")}, sizes=${BENCH_SIZES.join(",")}, trials=${BENCH_TRIALS}`);
   console.log(`Using pulumi: ${PULUMI_BIN}`);
   if (IS_REMOTE) {
     console.log(`Remote mode: ${BACKEND_URL}`);
@@ -430,22 +501,32 @@ async function main(): Promise<void> {
   const allResults: TrialResult[] = [];
 
   try {
-    const modes: Mode[] = ["checkpoint", "journal"];
-    const variants: Variant[] = ["plain", "secrets"];
+    const variants = BENCH_VARIANTS;
 
     let server: Subprocess | null = null;
     if (!IS_REMOTE) {
       server = await startBenchServer();
     }
     try {
-      for (const mode of modes) {
+      for (const mode of BENCH_MODES) {
         for (const variant of variants) {
           for (const n of BENCH_SIZES) {
+            if (IS_CI) console.log(`::group::${mode}/${variant} N=${n}`);
             for (let trial = 1; trial <= BENCH_TRIALS; trial += 1) {
-              console.log(`  [${mode}/${variant}] N=${n} trial=${trial}`);
+              const label = `  [${mode}/${variant}] N=${n} trial=${trial}`;
+              process.stdout.write(`${label} ...`);
               const result = await runTrial(n, mode, variant, trial, pulumiHome);
               allResults.push(result);
+              if (result.upExitCode !== 0) {
+                console.log(` FAIL (exit ${result.upExitCode})`);
+              } else {
+                const up = result.upMs !== null ? `up=${formatMs(result.upMs)}` : "up=N/A";
+                const preview = result.previewMs !== null ? `preview=${formatMs(result.previewMs)}` : "";
+                const destroy = result.destroyMs !== null ? `destroy=${formatMs(result.destroyMs)}` : "";
+                console.log(` ${[up, preview, destroy].filter(Boolean).join("  ")}`);
+              }
             }
+            if (IS_CI) console.log("::endgroup::");
           }
         }
       }
@@ -465,7 +546,8 @@ async function main(): Promise<void> {
     await mkdir(import.meta.dir, { recursive: true });
     await Bun.write(path.join(import.meta.dir, "results.json"), JSON.stringify(payload, null, 2));
 
-    console.log(renderMarkdownTable(payload));
+    console.log(renderSummary(payload));
+    await writeStepSummary(payload);
   } finally {
     await rm(pulumiHome, { recursive: true, force: true });
   }
