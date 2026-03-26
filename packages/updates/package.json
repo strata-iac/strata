@@ -9,6 +9,7 @@
 		"@procella/db": "workspace:*",
 		"@procella/storage": "workspace:*",
 		"@procella/crypto": "workspace:*",
+		"@procella/telemetry": "workspace:*",
 		"drizzle-orm": "catalog:"
 	}
 }

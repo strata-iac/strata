@@ -43,6 +43,12 @@ const configSchema = z
 			.regex(/^[0-9a-fA-F]{64}$/, "Must be 64 hex chars (32 bytes)")
 			.optional(),
 
+		// Telemetry
+		otelEnabled: z
+			.enum(["true", "false", "1", "0"])
+			.default("false")
+			.transform((v) => v === "true" || v === "1"),
+
 		// CORS
 		corsOrigins: z
 			.string()
@@ -108,6 +114,7 @@ const envMapping = {
 	blobS3Endpoint: "PROCELLA_BLOB_S3_ENDPOINT",
 	blobS3Region: "PROCELLA_BLOB_S3_REGION",
 	encryptionKey: "PROCELLA_ENCRYPTION_KEY",
+	otelEnabled: "PROCELLA_OTEL_ENABLED",
 	corsOrigins: "PROCELLA_CORS_ORIGINS",
 } as const;
 

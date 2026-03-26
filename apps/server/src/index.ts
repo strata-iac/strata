@@ -35,6 +35,7 @@ if (process.argv.includes("--healthz")) {
 } else {
 	try {
 		const { existsSync } = await import("node:fs");
+		const { shutdownTelemetry } = await import("@procella/telemetry");
 		const { GCWorker } = await import("@procella/updates");
 		const { bootstrap } = await import("./bootstrap.js");
 		const { app, auth, config, db, client } = await bootstrap();
@@ -75,6 +76,7 @@ if (process.argv.includes("--healthz")) {
 
 			await server.stop();
 			await gc.stop();
+			await shutdownTelemetry();
 			auth.dispose?.();
 			await client.close();
 			clearTimeout(forceTimer);

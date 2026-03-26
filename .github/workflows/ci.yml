@@ -120,6 +120,18 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      jaeger:
+        image: jaegertracing/all-in-one:1
+        env:
+          COLLECTOR_OTLP_ENABLED: "true"
+        ports:
+          - 4318:4318
+          - 16686:16686
+        options: >-
+          --health-cmd "wget -q --spider http://localhost:14269/ || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
@@ -135,9 +147,16 @@ jobs:
       - name: Run benchmark
         env:
           PROCELLA_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
+          PROCELLA_OTEL_ENABLED: "true"
+          OTEL_SERVICE_NAME: procella-ci-bench
+          OTEL_EXPORTER_OTLP_ENDPOINT: http://localhost:4318
+          OTEL_RESOURCE_ATTRIBUTES: deployment.environment=ci,vcs.revision=${{ github.sha }},ci.run_id=${{ github.run_id }}
         run: BENCH_MODES=journal BENCH_VARIANTS=secrets BENCH_SIZES=100 BENCH_TRIALS=10 bun run bench
       - name: Check benchmark thresholds
         run: bun run bench:check
+      - name: Analyze traces
+        if: always()
+        run: bun run bench/analyze-traces.ts
       - name: Upload benchmark results
         if: always()
         uses: actions/upload-artifact@v7

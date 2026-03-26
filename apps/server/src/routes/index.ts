@@ -5,6 +5,7 @@ import type { TRPCContext } from "@procella/api/src/trpc.js";
 import type { AuthConfig, AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
 import type { StacksService } from "@procella/stacks";
+import { tracingMiddleware } from "@procella/telemetry";
 import { PulumiRoutes } from "@procella/types";
 import { GCWorker, type UpdatesService } from "@procella/updates";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
@@ -48,6 +49,7 @@ export function createApp(deps: {
 	app.onError(errorHandler());
 
 	// Global middleware
+	app.use("*", tracingMiddleware());
 	app.use("*", requestLogger());
 	app.use("*", cors(deps.corsOrigins ? { origin: deps.corsOrigins } : undefined));
 	app.use("*", decompress());

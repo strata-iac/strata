@@ -159,6 +159,10 @@ jobs:
           VITE_API_URL: https://api.procella.sh
           VITE_APP_URL: https://app.procella.sh
           PROCELLA_CORS_ORIGINS: https://app.procella.sh,https://procella.sh
+          PROCELLA_OTEL_ENABLED: "true"
+          OTEL_SERVICE_NAME: procella-prod
+          OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+          OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
         run: |
           vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
           vercel build --prod --token="$VERCEL_TOKEN"
@@ -174,7 +178,11 @@ jobs:
             --env PROCELLA_DESCOPE_MANAGEMENT_KEY="$PROCELLA_DESCOPE_MANAGEMENT_KEY" \
             --env AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
             --env AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
-            --env PROCELLA_CORS_ORIGINS="$PROCELLA_CORS_ORIGINS"
+            --env PROCELLA_CORS_ORIGINS="$PROCELLA_CORS_ORIGINS" \
+            --env PROCELLA_OTEL_ENABLED="$PROCELLA_OTEL_ENABLED" \
+            --env OTEL_SERVICE_NAME="$OTEL_SERVICE_NAME" \
+            --env OTEL_EXPORTER_OTLP_ENDPOINT="$OTEL_EXPORTER_OTLP_ENDPOINT" \
+            --env OTEL_EXPORTER_OTLP_HEADERS="$OTEL_EXPORTER_OTLP_HEADERS"
 
   # ── Deploy Docs to Vercel (production) ───────────────────────────────────
   deploy-docs:

@@ -77,17 +77,20 @@ async function waitForHealth(url: string, timeoutMs: number): Promise<void> {
 }
 
 async function startBenchServer(): Promise<Subprocess> {
-  const proc = Bun.spawn(["bun", "run", "apps/server/src/index.ts"], {
-    cwd: PROJECT_ROOT,
-    env: {
-      ...cleanEnv(),
-      PROCELLA_LISTEN_ADDR: `:${BENCH_PORT}`,
-      PROCELLA_DATABASE_URL: TEST_DB_URL,
-      PROCELLA_AUTH_MODE: "dev",
-      PROCELLA_DEV_AUTH_TOKEN: TEST_TOKEN,
-      PROCELLA_BLOB_BACKEND: "local",
-      PROCELLA_BLOB_LOCAL_PATH: "./data/bench-blobs",
-    },
+	const proc = Bun.spawn(["bun", "run", "apps/server/src/index.ts"], {
+		cwd: PROJECT_ROOT,
+		env: {
+			...cleanEnv(),
+			PROCELLA_LISTEN_ADDR: `:${BENCH_PORT}`,
+			PROCELLA_DATABASE_URL: TEST_DB_URL,
+			PROCELLA_AUTH_MODE: "dev",
+			PROCELLA_DEV_AUTH_TOKEN: TEST_TOKEN,
+			PROCELLA_BLOB_BACKEND: "local",
+			PROCELLA_BLOB_LOCAL_PATH: "./data/bench-blobs",
+			...(process.env.PROCELLA_OTEL_ENABLED
+				? { PROCELLA_OTEL_ENABLED: process.env.PROCELLA_OTEL_ENABLED }
+				: {}),
+		},
     stdout: "ignore",
     stderr: "ignore",
   });
