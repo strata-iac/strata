@@ -2,7 +2,7 @@
 
 import type { Database } from "@procella/db";
 import { projects, stacks } from "@procella/db";
-import { withDbSpan } from "@procella/telemetry";
+import { withDbSpan, withSpan } from "@procella/telemetry";
 import {
 	ConflictError,
 	parseStackFQN,
@@ -471,9 +471,14 @@ export class PostgresStacksService implements StacksService {
 	}
 
 	async getStackByFQN(tenantId: string, fqn: string): Promise<StackInfo> {
-		return withDbSpan("getStackByFQN", { "tenant.id": tenantId, "stack.fqn": fqn }, async () => {
-			const parsed = parseStackFQN(fqn);
-			return this.getStack(tenantId, parsed.org, parsed.project, parsed.stack);
-		});
+		return withSpan(
+			"procella.stacks",
+			"getStackByFQN",
+			{ "tenant.id": tenantId, "stack.fqn": fqn },
+			async () => {
+				const parsed = parseStackFQN(fqn);
+				return this.getStack(tenantId, parsed.org, parsed.project, parsed.stack);
+			},
+		);
 	}
 }

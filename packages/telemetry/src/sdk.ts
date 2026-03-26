@@ -60,11 +60,10 @@ export function initTelemetry(config: TelemetryConfig): void {
 	traceProvider.addSpanProcessor(new BatchSpanProcessor(traceExporter) as SpanProcessor);
 	traceProvider.register();
 
-	const metricExporter = new FetchOtlpMetricExporter(
-		config.otlpEndpoint
-			? { url: `${config.otlpEndpoint.replace(/\/v1\/traces$/, "")}/v1/metrics` }
-			: undefined,
-	);
+	const metricsUrl = config.otlpEndpoint
+		? `${config.otlpEndpoint.replace(/\/v1\/(traces|metrics)$/, "")}/v1/metrics`
+		: undefined;
+	const metricExporter = new FetchOtlpMetricExporter(metricsUrl ? { url: metricsUrl } : undefined);
 	const metricReader = new PeriodicExportingMetricReader({
 		exporter: metricExporter,
 		exportIntervalMillis: 15_000,

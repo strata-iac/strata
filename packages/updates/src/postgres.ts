@@ -245,7 +245,7 @@ export class PostgresUpdatesService implements UpdatesService {
 	}
 
 	async cancelUpdate(updateId: string): Promise<void> {
-		await withDbSpan("cancelUpdate", { "update.id": updateId }, () =>
+		const wasRunning = await withDbSpan("cancelUpdate", { "update.id": updateId }, () =>
 			this.db.transaction(async (tx) => {
 				const [row] = await tx.select().from(updates).where(eq(updates.id, updateId));
 
@@ -253,10 +253,11 @@ export class PostgresUpdatesService implements UpdatesService {
 					throw new UpdateNotFoundError(updateId);
 				}
 
-				// Idempotent: already terminal → no-op
 				if (row.status === "cancelled" || row.status === "succeeded" || row.status === "failed") {
-					return;
+					return false;
 				}
+
+				const previouslyRunning = row.status === "running";
 
 				await tx
 					.update(updates)
@@ -273,10 +274,14 @@ export class PostgresUpdatesService implements UpdatesService {
 					.update(stacks)
 					.set({ activeUpdateId: null, updatedAt: sql`now()` })
 					.where(eq(stacks.id, row.stackId));
+
+				return previouslyRunning;
 			}),
 		);
 
-		activeUpdatesGauge().add(-1);
+		if (wasRunning) {
+			activeUpdatesGauge().add(-1);
+		}
 		this.clearUpdateCaches(updateId);
 	}
 

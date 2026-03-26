@@ -68,15 +68,6 @@ export function tracingMiddleware(): MiddlewareHandler {
 					} else {
 						span.setStatus({ code: SpanStatusCode.OK });
 					}
-
-					const durationMs = performance.now() - startTime;
-					const route = routePath && routePath !== "/*" ? routePath : path;
-					const metricAttrs = {
-						"http.method": method,
-						"http.route": route,
-						"http.status_code": status,
-					};
-					durationHist.record(durationMs, metricAttrs);
 				} catch (err) {
 					span.setStatus({
 						code: SpanStatusCode.ERROR,
@@ -85,6 +76,15 @@ export function tracingMiddleware(): MiddlewareHandler {
 					span.recordException(err instanceof Error ? err : new Error(String(err)));
 					throw err;
 				} finally {
+					const durationMs = performance.now() - startTime;
+					const status = c.res?.status ?? 500;
+					const routePath = c.req.routePath;
+					const route = routePath && routePath !== "/*" ? routePath : path;
+					durationHist.record(durationMs, {
+						"http.method": method,
+						"http.route": route,
+						"http.status_code": status,
+					});
 					activeGauge.add(-1);
 					span.end();
 				}
