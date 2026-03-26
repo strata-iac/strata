@@ -151,6 +151,11 @@ function mockWebhooksService(): WebhooksService {
 			event: WebhookEventValue;
 			data: Record<string, unknown>;
 		}) => {},
+		emitAndWait: async (_event: {
+			tenantId: string;
+			event: WebhookEventValue;
+			data: Record<string, unknown>;
+		}) => {},
 		ping: async () => ({
 			id: "delivery-1",
 			event: "webhook.ping",

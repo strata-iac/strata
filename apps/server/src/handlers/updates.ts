@@ -137,11 +137,13 @@ export function updateHandlers(
 				});
 			}
 
-			if (body.status === "succeeded" || body.status === "failed" || body.status === "cancelled") {
-				if (!org) {
-					console.error("[updates] completeUpdate: org param missing, skipping webhook emit");
-				} else {
-					void webhooks?.emit({
+			if (
+				org &&
+				webhooks &&
+				(body.status === "succeeded" || body.status === "failed" || body.status === "cancelled")
+			) {
+				await webhooks
+					.emitAndWait({
 						tenantId: org,
 						event:
 							body.status === "succeeded"
@@ -150,8 +152,10 @@ export function updateHandlers(
 									? "update.failed"
 									: "update.cancelled",
 						data: { org, project, stack, updateId, status: body.status },
+					})
+					.catch((error: unknown) => {
+						console.error("[updates] Failed to emit webhook for completeUpdate", error);
 					});
-				}
 			}
 			return c.body(null, 204);
 		},

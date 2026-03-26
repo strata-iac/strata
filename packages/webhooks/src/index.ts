@@ -64,6 +64,11 @@ export interface WebhooksService {
 		limit?: number,
 	): Promise<WebhookDeliveryInfo[]>;
 	emit(event: { tenantId: string; event: WebhookEventValue; data: Record<string, unknown> }): void;
+	emitAndWait(event: {
+		tenantId: string;
+		event: WebhookEventValue;
+		data: Record<string, unknown>;
+	}): Promise<void>;
 	ping(tenantId: string, webhookId: string): Promise<WebhookDeliveryInfo>;
 }
 
@@ -227,6 +232,14 @@ export class PostgresWebhooksService implements WebhooksService {
 				error,
 			});
 		});
+	}
+
+	async emitAndWait(event: {
+		tenantId: string;
+		event: WebhookEventValue;
+		data: Record<string, unknown>;
+	}): Promise<void> {
+		await this.emitAsync(event);
 	}
 
 	async ping(tenantId: string, webhookId: string): Promise<WebhookDeliveryInfo> {
