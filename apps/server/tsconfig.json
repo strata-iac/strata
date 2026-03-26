@@ -14,6 +14,7 @@
 		{ "path": "../../packages/storage" },
 		{ "path": "../../packages/auth" },
 		{ "path": "../../packages/stacks" },
-		{ "path": "../../packages/updates" }
+		{ "path": "../../packages/updates" },
+		{ "path": "../../packages/telemetry" }
 	]
 }

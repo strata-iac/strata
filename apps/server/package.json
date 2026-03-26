@@ -12,6 +12,7 @@
 		"@procella/db": "workspace:*",
 		"@procella/stacks": "workspace:*",
 		"@procella/storage": "workspace:*",
+		"@procella/telemetry": "workspace:*",
 		"@procella/types": "workspace:*",
 		"@procella/updates": "workspace:*",
 		"@trpc/server": "catalog:",

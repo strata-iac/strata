@@ -4,6 +4,7 @@ import type { CryptoService } from "@procella/crypto";
 import type { Database } from "@procella/db";
 import { checkpoints, journalEntries, stacks, updateEvents, updates } from "@procella/db";
 import type { BlobStorage } from "@procella/storage";
+import { withDbSpan } from "@procella/telemetry";
 import type {
 	CompleteUpdateRequest,
 	EngineEvent,
@@ -63,6 +64,12 @@ export class PostgresUpdatesService implements UpdatesService {
 	private readonly storage: BlobStorage;
 	private readonly crypto: CryptoService;
 
+	// Per-update caches for immutable/monotonic data. Cleared on completeUpdate/cancelUpdate.
+	// Journal entries are NOT cached — DB remains source of truth for cluster safety.
+	private static readonly MAX_CACHE_ENTRIES = 64;
+	private readonly baseDeploymentCache = new Map<string, Record<string, unknown>>();
+	private readonly checkpointVersionCache = new Map<string, number>();
+
 	constructor({
 		db,
 		storage,
@@ -83,104 +90,114 @@ export class PostgresUpdatesService implements UpdatesService {
 		config?: unknown,
 		program?: unknown,
 	): Promise<UpdateProgramResponse> {
-		// Get next version from existing checkpoints
-		const [versionRow] = await this.db
-			.select({ maxVersion: max(checkpoints.version) })
-			.from(checkpoints)
-			.where(eq(checkpoints.stackId, stackId));
+		return withDbSpan("createUpdate", { "update.kind": kind, "stack.id": stackId }, async () => {
+			const [versionRow] = await this.db
+				.select({ maxVersion: max(checkpoints.version) })
+				.from(checkpoints)
+				.where(eq(checkpoints.stackId, stackId));
 
-		const version = (versionRow?.maxVersion ?? 0) + 1;
+			const version = (versionRow?.maxVersion ?? 0) + 1;
 
-		const [row] = await this.db
-			.insert(updates)
-			.values({
-				stackId,
-				kind,
-				status: "not started",
-				version,
-				config: config ?? null,
-				program: program ?? null,
-			})
-			.returning();
+			const [row] = await this.db
+				.insert(updates)
+				.values({
+					stackId,
+					kind,
+					status: "not started",
+					version,
+					config: config ?? null,
+					program: program ?? null,
+				})
+				.returning();
 
-		return { updateID: row.id, version } as UpdateProgramResponse;
+			return { updateID: row.id, version } as UpdateProgramResponse;
+		});
 	}
 
 	async startUpdate(updateId: string, request: StartUpdateRequest): Promise<StartUpdateResponse> {
-		return this.db.transaction(async (tx) => {
-			const [row] = await tx.select().from(updates).where(eq(updates.id, updateId));
+		return withDbSpan("startUpdate", { "update.id": updateId }, () =>
+			this.db.transaction(async (tx) => {
+				const [row] = await tx.select().from(updates).where(eq(updates.id, updateId));
 
-			if (!row) {
-				throw new UpdateNotFoundError(updateId);
-			}
+				if (!row) {
+					throw new UpdateNotFoundError(updateId);
+				}
 
-			if (row.status !== "not started") {
-				throw new UpdateConflictError(
-					`Update ${updateId} is in status "${row.status}", expected "not started"`,
-				);
-			}
+				if (row.status !== "not started") {
+					throw new UpdateConflictError(
+						`Update ${updateId} is in status "${row.status}", expected "not started"`,
+					);
+				}
 
-			const token = generateLeaseToken(updateId, row.stackId);
-			const expiry = leaseExpiresAt();
+				const token = generateLeaseToken(updateId, row.stackId);
+				const expiry = leaseExpiresAt();
 
-			await tx
-				.update(updates)
-				.set({
-					status: "running",
-					leaseToken: token,
-					leaseExpiresAt: expiry,
-					startedAt: sql`now()`,
-					updatedAt: sql`now()`,
-				})
-				.where(eq(updates.id, updateId));
+				await tx
+					.update(updates)
+					.set({
+						status: "running",
+						leaseToken: token,
+						leaseExpiresAt: expiry,
+						startedAt: sql`now()`,
+						updatedAt: sql`now()`,
+					})
+					.where(eq(updates.id, updateId));
 
-			await tx
-				.update(stacks)
-				.set({ activeUpdateId: updateId, updatedAt: sql`now()` })
-				.where(eq(stacks.id, row.stackId));
+				await tx
+					.update(stacks)
+					.set({ activeUpdateId: updateId, updatedAt: sql`now()` })
+					.where(eq(stacks.id, row.stackId));
 
-			const journalVersion = (request.journalVersion ?? 0) >= 1 ? 1 : 0;
+				const journalVersion = (request.journalVersion ?? 0) >= 1 ? 1 : 0;
 
-			return {
-				token,
-				version: row.version,
-				tokenExpiration: Math.floor(expiry.getTime() / 1000),
-				...(journalVersion > 0 ? { journalVersion } : {}),
-			} as StartUpdateResponse;
-		});
+				return {
+					token,
+					version: row.version,
+					tokenExpiration: Math.floor(expiry.getTime() / 1000),
+					...(journalVersion > 0 ? { journalVersion } : {}),
+				} as StartUpdateResponse;
+			}),
+		);
 	}
 
 	async completeUpdate(updateId: string, request: CompleteUpdateRequest): Promise<void> {
-		await this.db.transaction(async (tx) => {
-			const [row] = await tx.select().from(updates).where(eq(updates.id, updateId));
+		await withDbSpan(
+			"completeUpdate",
+			{ "update.id": updateId, "update.status": request.status },
+			() =>
+				this.db.transaction(async (tx) => {
+					const [row] = await tx.select().from(updates).where(eq(updates.id, updateId));
 
-			if (!row) {
-				throw new UpdateNotFoundError(updateId);
-			}
+					if (!row) {
+						throw new UpdateNotFoundError(updateId);
+					}
 
-			if (row.status !== "running") {
-				throw new UpdateConflictError(
-					`Update ${updateId} is in status "${row.status}", expected "running"`,
-				);
-			}
+					if (row.status !== "running") {
+						throw new UpdateConflictError(
+							`Update ${updateId} is in status "${row.status}", expected "running"`,
+						);
+					}
 
-			await tx
-				.update(updates)
-				.set({
-					status: request.status,
-					result: request.status,
-					completedAt: sql`now()`,
-					leaseToken: null,
-					leaseExpiresAt: null,
-					updatedAt: sql`now()`,
-				})
-				.where(eq(updates.id, updateId));
+					await tx
+						.update(updates)
+						.set({
+							status: request.status,
+							result: request.status,
+							completedAt: sql`now()`,
+							leaseToken: null,
+							leaseExpiresAt: null,
+							updatedAt: sql`now()`,
+						})
+						.where(eq(updates.id, updateId));
 
-			await tx
-				.update(stacks)
-				.set({ activeUpdateId: null, updatedAt: sql`now()` })
-				.where(eq(stacks.id, row.stackId));
-		});
+					await tx
+						.update(stacks)
+						.set({ activeUpdateId: null, updatedAt: sql`now()` })
+						.where(eq(stacks.id, row.stackId));
+				}),
+		);
+
+		this.clearUpdateCaches(updateId);
 	}
 
 	async cancelUpdate(updateId: string): Promise<void> {
@@ -212,6 +229,8 @@ export class PostgresUpdatesService implements UpdatesService {
 				.set({ activeUpdateId: null, updatedAt: sql`now()` })
 				.where(eq(stacks.id, row.stackId));
 		});
+
+		this.clearUpdateCaches(updateId);
 	}
 
 	async getUpdate(updateId: string): Promise<UpdateResults> {
@@ -256,14 +275,16 @@ export class PostgresUpdatesService implements UpdatesService {
 	// ========================================================================
 
 	async patchCheckpoint(updateId: string, request: PatchUpdateCheckpointRequest): Promise<void> {
-		const [row] = await this.db.select().from(updates).where(eq(updates.id, updateId));
+		return withDbSpan("patchCheckpoint", { "update.id": updateId }, async () => {
+			const [row] = await this.db.select().from(updates).where(eq(updates.id, updateId));
 
-		if (!row) {
-			throw new UpdateNotFoundError(updateId);
-		}
+			if (!row) {
+				throw new UpdateNotFoundError(updateId);
+			}
 
-		const deployment = (request as { deployment?: unknown }).deployment;
-		await this.upsertCheckpoint(updateId, row.stackId, deployment);
+			const deployment = (request as { deployment?: unknown }).deployment;
+			await this.upsertCheckpoint(updateId, row.stackId, deployment);
+		});
 	}
 
 	async patchCheckpointVerbatim(
@@ -343,50 +364,52 @@ export class PostgresUpdatesService implements UpdatesService {
 	}
 
 	async appendJournalEntries(updateId: string, batch: JournalEntries): Promise<void> {
-		const [row] = await this.db.select().from(updates).where(eq(updates.id, updateId));
+		return withDbSpan("appendJournalEntries", { "update.id": updateId }, async () => {
+			const [row] = await this.db.select().from(updates).where(eq(updates.id, updateId));
 
-		if (!row) {
-			throw new UpdateNotFoundError(updateId);
-		}
-
-		const entries = batch.entries ?? [];
-		if (entries.length === 0) {
-			return;
-		}
-
-		const rows = entries.map((entry: JournalEntry) => {
-			if (
-				typeof entry.sequenceID !== "number" ||
-				typeof entry.operationID !== "number" ||
-				typeof entry.kind !== "number"
-			) {
-				throw new BadRequestError(
-					"Invalid journal entry: sequenceID, operationID, and kind must be numbers",
-				);
+			if (!row) {
+				throw new UpdateNotFoundError(updateId);
 			}
-			return {
-				updateId,
-				stackId: row.stackId,
-				sequenceId: BigInt(entry.sequenceID),
-				operationId: BigInt(entry.operationID),
-				kind: entry.kind,
-				state: entry.state ?? null,
-				operation: entry.operation ?? null,
-				secretsProvider: entry.secretsProvider ?? null,
-				newSnapshot: entry.newSnapshot ?? null,
-				operationType: null,
-				removeOld: entry.removeOld != null ? BigInt(entry.removeOld) : null,
-				removeNew: entry.removeNew != null ? BigInt(entry.removeNew) : null,
-				elideWrite: entry.elideWrite ?? false,
-			};
+
+			const entries = batch.entries ?? [];
+			if (entries.length === 0) {
+				return;
+			}
+
+			const rows = entries.map((entry: JournalEntry) => {
+				if (
+					typeof entry.sequenceID !== "number" ||
+					typeof entry.operationID !== "number" ||
+					typeof entry.kind !== "number"
+				) {
+					throw new BadRequestError(
+						"Invalid journal entry: sequenceID, operationID, and kind must be numbers",
+					);
+				}
+				return {
+					updateId,
+					stackId: row.stackId,
+					sequenceId: BigInt(entry.sequenceID),
+					operationId: BigInt(entry.operationID),
+					kind: entry.kind,
+					state: entry.state ?? null,
+					operation: entry.operation ?? null,
+					secretsProvider: entry.secretsProvider ?? null,
+					newSnapshot: entry.newSnapshot ?? null,
+					operationType: null,
+					removeOld: entry.removeOld != null ? BigInt(entry.removeOld) : null,
+					removeNew: entry.removeNew != null ? BigInt(entry.removeNew) : null,
+					elideWrite: entry.elideWrite ?? false,
+				};
+			});
+
+			await this.db.insert(journalEntries).values(rows).onConflictDoNothing();
+
+			const hasNonElided = entries.some((e: JournalEntry) => !e.elideWrite);
+			if (hasNonElided) {
+				await this.flushJournalToCheckpoint(updateId, row.stackId);
+			}
 		});
-
-		await this.db.insert(journalEntries).values(rows).onConflictDoNothing();
-
-		const hasNonElided = entries.some((e: JournalEntry) => !e.elideWrite);
-		if (hasNonElided) {
-			await this.flushJournalToCheckpoint(updateId, row.stackId);
-		}
 	}
 
 	async postEvents(updateId: string, batch: EngineEventBatch): Promise<void> {
@@ -395,20 +418,26 @@ export class PostgresUpdatesService implements UpdatesService {
 			return;
 		}
 
-		const rows = events.map((event) => ({
-			updateId,
-			sequence: (event as { sequence?: number }).sequence ?? 0,
-			kind: detectEventKind(event),
-			fields: event as unknown,
-		}));
+		return withDbSpan(
+			"postEvents",
+			{ "update.id": updateId, "events.count": events.length },
+			async () => {
+				const rows = events.map((event) => ({
+					updateId,
+					sequence: (event as { sequence?: number }).sequence ?? 0,
+					kind: detectEventKind(event),
+					fields: event as unknown,
+				}));
 
-		await this.db
-			.insert(updateEvents)
-			.values(rows)
-			.onConflictDoUpdate({
-				target: [updateEvents.updateId, updateEvents.sequence],
-				set: { kind: sql`excluded.kind`, fields: sql`excluded.fields` },
-			});
+				await this.db
+					.insert(updateEvents)
+					.values(rows)
+					.onConflictDoUpdate({
+						target: [updateEvents.updateId, updateEvents.sequence],
+						set: { kind: sql`excluded.kind`, fields: sql`excluded.fields` },
+					});
+			},
+		);
 	}
 
 	async getUpdateEvents(
@@ -565,60 +594,98 @@ export class PostgresUpdatesService implements UpdatesService {
 	// ========================================================================
 
 	private async nextCheckpointVersion(updateId: string): Promise<number> {
+		this.evictStaleCaches();
+
+		const cached = this.checkpointVersionCache.get(updateId);
+		if (cached !== undefined) {
+			const next = cached + 1;
+			this.checkpointVersionCache.set(updateId, next);
+			return next;
+		}
+
 		const [row] = await this.db
 			.select({ maxVersion: max(checkpoints.version) })
 			.from(checkpoints)
 			.where(eq(checkpoints.updateId, updateId));
 
-		return (row?.maxVersion ?? 0) + 1;
+		const next = (row?.maxVersion ?? 0) + 1;
+		this.checkpointVersionCache.set(updateId, next);
+		return next;
+	}
+
+	private clearUpdateCaches(updateId: string): void {
+		this.baseDeploymentCache.delete(updateId);
+		this.checkpointVersionCache.delete(updateId);
+	}
+
+	private evictStaleCaches(): void {
+		if (this.baseDeploymentCache.size > PostgresUpdatesService.MAX_CACHE_ENTRIES) {
+			this.baseDeploymentCache.clear();
+		}
+		if (this.checkpointVersionCache.size > PostgresUpdatesService.MAX_CACHE_ENTRIES) {
+			this.checkpointVersionCache.clear();
+		}
 	}
 
 	private async flushJournalToCheckpoint(updateId: string, stackId: string): Promise<void> {
-		const allEntries = await this.db
-			.select()
-			.from(journalEntries)
-			.where(eq(journalEntries.updateId, updateId))
-			.orderBy(journalEntries.sequenceId);
+		return withDbSpan("flushJournalToCheckpoint", { "update.id": updateId }, async () => {
+			const allEntries = await this.db
+				.select()
+				.from(journalEntries)
+				.where(eq(journalEntries.updateId, updateId))
+				.orderBy(journalEntries.sequenceId);
 
-		if (allEntries.length === 0) {
-			return;
-		}
+			if (allEntries.length === 0) {
+				return;
+			}
 
-		const baseDeployment = await this.loadBaseDeploymentForUpdate(stackId, updateId);
-		const reconstructed = applyJournalEntries(baseDeployment, allEntries);
-		await this.upsertCheckpoint(updateId, stackId, reconstructed);
+			let baseDeployment = this.baseDeploymentCache.get(updateId);
+			if (!baseDeployment) {
+				baseDeployment = await this.loadBaseDeploymentForUpdate(stackId, updateId);
+				this.baseDeploymentCache.set(updateId, baseDeployment);
+			}
+
+			const reconstructed = applyJournalEntries(baseDeployment, allEntries);
+			await this.upsertCheckpoint(updateId, stackId, reconstructed);
+		});
 	}
 
 	private async upsertCheckpoint(updateId: string, stackId: string, data: unknown): Promise<void> {
-		const serialized = JSON.stringify(data);
-		const version = await this.nextCheckpointVersion(updateId);
+		return withDbSpan(
+			"upsertCheckpoint",
+			{ "update.id": updateId, "stack.id": stackId },
+			async () => {
+				const serialized = JSON.stringify(data);
+				const version = await this.nextCheckpointVersion(updateId);
 
-		let blobKey: string | null = null;
-		let checkpointData: unknown = data;
-		if (serialized.length > BLOB_THRESHOLD) {
-			blobKey = formatBlobKey(stackId, updateId, version);
-			await this.storage.put(blobKey, new TextEncoder().encode(serialized));
-			checkpointData = null;
-		}
+				let blobKey: string | null = null;
+				let checkpointData: unknown = data;
+				if (serialized.length > BLOB_THRESHOLD) {
+					blobKey = formatBlobKey(stackId, updateId, version);
+					await this.storage.put(blobKey, new TextEncoder().encode(serialized));
+					checkpointData = null;
+				}
 
-		await this.db
-			.insert(checkpoints)
-			.values({
-				updateId,
-				stackId,
-				version,
-				data: checkpointData,
-				blobKey,
-				isDelta: false,
-			})
-			.onConflictDoUpdate({
-				target: [checkpoints.updateId, checkpoints.version],
-				set: {
-					data: checkpointData,
-					blobKey,
-					isDelta: false,
-				},
-			});
+				await this.db
+					.insert(checkpoints)
+					.values({
+						updateId,
+						stackId,
+						version,
+						data: checkpointData,
+						blobKey,
+						isDelta: false,
+					})
+					.onConflictDoUpdate({
+						target: [checkpoints.updateId, checkpoints.version],
+						set: {
+							data: checkpointData,
+							blobKey,
+							isDelta: false,
+						},
+					});
+			},
+		);
 	}
 
 	private async loadBaseDeploymentForUpdate(

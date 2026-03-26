@@ -28,6 +28,8 @@ export interface BenchmarkResults {
 
 export interface BaselineThreshold {
   maxUpP50Ms: number;
+  maxDestroyP50Ms?: number;
+  maxPreviewP50Ms?: number;
 }
 
 export interface BaselineConfig {

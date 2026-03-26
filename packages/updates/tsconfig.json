@@ -9,6 +9,7 @@
 		{ "path": "../types" },
 		{ "path": "../db" },
 		{ "path": "../storage" },
-		{ "path": "../crypto" }
+		{ "path": "../crypto" },
+		{ "path": "../telemetry" }
 	]
 }

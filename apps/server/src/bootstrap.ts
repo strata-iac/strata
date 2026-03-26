@@ -4,11 +4,14 @@ import { AesCryptoService, devMasterKey } from "@procella/crypto";
 import { createDb } from "@procella/db";
 import { PostgresStacksService } from "@procella/stacks";
 import { createBlobStorage } from "@procella/storage";
+import { initTelemetry } from "@procella/telemetry";
 import { PostgresUpdatesService } from "@procella/updates";
 import { createApp } from "./routes/index.js";
 
 export async function bootstrap() {
 	const config = loadConfig();
+
+	initTelemetry({ enabled: config.otelEnabled, serviceName: "procella" });
 
 	const { db, client } = await createDb({ url: config.databaseUrl, max: config.databasePoolMax });
 
