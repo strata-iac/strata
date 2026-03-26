@@ -280,7 +280,8 @@ export class PostgresUpdatesService implements UpdatesService {
 		// representation — required for delta checkpoint base computation.
 		const wrapper = (request as { untypedDeployment?: { deployment?: unknown } }).untypedDeployment;
 		const rawDeployment = wrapper?.deployment ?? wrapper;
-		const rawJson = JSON.stringify(rawDeployment);
+		const rawJson =
+			typeof rawDeployment === "string" ? rawDeployment : JSON.stringify(rawDeployment ?? {});
 		await this.upsertCheckpointRaw(updateId, row.stackId, rawJson);
 	}
 
@@ -303,18 +304,16 @@ export class PostgresUpdatesService implements UpdatesService {
 
 		// Load base as raw JSON string — must read from blob to preserve exact bytes.
 		// JSONB normalizes key ordering which corrupts byte-offset-based text edits.
-		let baseJson: string;
-		if (baseCheckpoint?.blobKey) {
-			const data = await this.storage.get(baseCheckpoint.blobKey);
-			if (!data) {
-				throw new Error("Checkpoint blob data missing from storage");
-			}
-			baseJson = new TextDecoder().decode(data);
-		} else if (baseCheckpoint?.data) {
-			baseJson = JSON.stringify(baseCheckpoint.data);
-		} else {
-			baseJson = "{}";
+		if (!baseCheckpoint?.blobKey) {
+			throw new BadRequestError(
+				"Delta checkpoint requires a blob-backed base checkpoint (JSONB base is not byte-safe)",
+			);
 		}
+		const baseData = await this.storage.get(baseCheckpoint.blobKey);
+		if (!baseData) {
+			throw new Error("Checkpoint blob data missing from storage");
+		}
+		const baseJson = new TextDecoder().decode(baseData);
 
 		const edits = (request as { deploymentDelta?: unknown }).deploymentDelta;
 		if (!Array.isArray(edits)) {
@@ -334,6 +333,12 @@ export class PostgresUpdatesService implements UpdatesService {
 					`Checkpoint hash mismatch: expected ${expectedHash}, got ${actualHash}`,
 				);
 			}
+		}
+
+		try {
+			JSON.parse(newJson);
+		} catch {
+			throw new BadRequestError("Delta produced invalid JSON");
 		}
 
 		await this.upsertCheckpointRaw(updateId, row.stackId, newJson);
