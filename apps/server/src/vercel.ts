@@ -7,14 +7,15 @@ async function init() {
 }
 
 /**
- * Vercel's Bun runtime may pass a Request whose `headers` is a plain
- * object (missing .get/.set/.has) rather than a proper Headers instance.
- * Reconstruct with real Headers so Hono's middleware chain works.
+ * Vercel's Bun runtime may pass a non-standard Request-like object:
+ *   - `headers` is a plain object (missing .get/.set/.has)
+ *   - `url` is a relative path (e.g. "/api/auth/config")
  *
+ * Reconstruct a spec-compliant Request so Hono's middleware works.
  * See: remix-i18next#117, oven-sh/bun#9846
  */
-function normalizeRequest(req: Request): Request {
-	if (typeof req.headers?.get === "function") return req;
+export function normalizeRequest(req: Request): Request {
+	if (req.headers instanceof Headers) return req;
 
 	const rawHeaders = req.headers as unknown as Record<string, string>;
 	const headers = new Headers(rawHeaders);
@@ -35,10 +36,9 @@ export default async function fetch(req: Request): Promise<Response> {
 		const app = await appPromise;
 		return app.fetch(normalizeRequest(req));
 	} catch (e: unknown) {
-		console.error("[vercel] bootstrap failed:", e);
+		console.error("[vercel] unhandled error:", e);
 		const msg = e instanceof Error ? e.message : String(e);
-		const stack = e instanceof Error ? e.stack : undefined;
-		return new Response(JSON.stringify({ error: msg, stack }), {
+		return new Response(JSON.stringify({ error: msg }), {
 			status: 500,
 			headers: { "content-type": "application/json" },
 		});

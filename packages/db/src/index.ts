@@ -94,8 +94,7 @@ export async function createDb(
 	const { neonConfig, Pool } = await import("@neondatabase/serverless");
 	const { drizzle } = await import("drizzle-orm/neon-serverless");
 
-	// Bun/Deno/CF Workers provide a native WebSocket global.
-	// Only fall back to the `ws` npm package for Node.js < 22.
+	// Fall back to the `ws` npm package only when no global WebSocket is available.
 	if (typeof globalThis.WebSocket === "undefined") {
 		neonConfig.webSocketConstructor = (await import("ws")).default;
 	}
