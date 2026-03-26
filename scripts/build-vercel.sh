@@ -32,13 +32,12 @@ cp -rf apps/ui/dist/* "$OUT/static/"
 echo "→ Bundle API"
 FUNC_DIR="$OUT/functions/api/index.func"
 mkdir -p "$FUNC_DIR"
-bun build apps/server/src/vercel.ts --target=bun --outfile="$FUNC_DIR/index.mjs" --format=esm
+bun build apps/server/src/vercel.ts --target=node --external bun --outfile="$FUNC_DIR/index.js" --format=esm
 
 cat > "$FUNC_DIR/.vc-config.json" << 'EOF'
 {
-  "runtime": "bun1.x",
-  "handler": "index.mjs",
-  "maxDuration": 60
+  "runtime": "edge",
+  "entrypoint": "index.js"
 }
 EOF
 
