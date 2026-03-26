@@ -4,6 +4,7 @@
 // Dev mode uses a static token for local development.
 
 import DescopeSdk from "@descope/node-sdk";
+import { authAuthenticateDuration, authFailureCount, withSpan } from "@procella/telemetry";
 
 import type { Caller, Role } from "@procella/types";
 import { ForbiddenError, UnauthorizedError } from "@procella/types";
@@ -49,21 +50,46 @@ export class DevAuthService implements AuthService {
 	}
 
 	async authenticate(request: Request): Promise<Caller> {
-		const { token } = extractToken(request);
-		if (token !== this.config.token) {
-			throw new UnauthorizedError("Invalid authentication token");
-		}
-		return {
-			tenantId: this.config.orgLogin,
-			orgSlug: this.config.orgLogin,
-			userId: this.config.userLogin,
-			login: this.config.userLogin,
-			roles: ["admin"] as const,
-		};
+		return withSpan("procella.auth", "auth.authenticate", { "auth.mode": "dev" }, async () => {
+			const start = performance.now();
+			try {
+				const { token } = extractToken(request);
+				if (token !== this.config.token) {
+					throw new UnauthorizedError("Invalid authentication token");
+				}
+				return {
+					tenantId: this.config.orgLogin,
+					orgSlug: this.config.orgLogin,
+					userId: this.config.userLogin,
+					login: this.config.userLogin,
+					roles: ["admin"] as const,
+				};
+			} catch (error) {
+				authFailureCount().add(1, { "auth.mode": "dev" });
+				throw error;
+			} finally {
+				authAuthenticateDuration().record(performance.now() - start, { "auth.mode": "dev" });
+			}
+		});
 	}
 
 	async authenticateUpdateToken(token: string): Promise<{ updateId: string; stackId: string }> {
-		return parseUpdateToken(token);
+		return withSpan(
+			"procella.auth",
+			"auth.authenticateUpdateToken",
+			{ "auth.mode": "dev" },
+			async () => {
+				const start = performance.now();
+				try {
+					return parseUpdateToken(token);
+				} catch (error) {
+					authFailureCount().add(1, { "auth.mode": "dev" });
+					throw error;
+				} finally {
+					authAuthenticateDuration().record(performance.now() - start, { "auth.mode": "dev" });
+				}
+			},
+		);
 	}
 }
 
@@ -98,54 +124,90 @@ export class DescopeAuthService implements AuthService {
 	}
 
 	async authenticate(request: Request): Promise<Caller> {
-		const { scheme, token } = extractToken(request);
+		return withSpan("procella.auth", "auth.authenticate", { "auth.mode": "descope" }, async () => {
+			const start = performance.now();
+			try {
+				const { scheme, token } = extractToken(request);
 
-		// Block raw JWTs on the Pulumi CLI path — CLI should use access keys.
-		// "token <value>" = CLI; "Bearer <value>" = UI dashboard (session JWTs OK there).
-		if (scheme === "token" && token.startsWith("eyJ")) {
-			throw new UnauthorizedError(
-				"Session JWTs cannot be used as CLI tokens (they expire). Use `pulumi login` to create a long-lived access key.",
-			);
-		}
+				// Block raw JWTs on the Pulumi CLI path — CLI should use access keys.
+				// "token <value>" = CLI; "Bearer <value>" = UI dashboard (session JWTs OK there).
+				if (scheme === "token" && token.startsWith("eyJ")) {
+					throw new UnauthorizedError(
+						"Session JWTs cannot be used as CLI tokens (they expire). Use `pulumi login` to create a long-lived access key.",
+					);
+				}
 
-		// JWT tokens (Bearer from UI) — validate directly, no caching needed.
-		if (token.startsWith("eyJ")) {
-			const authInfo = await this.sdk.validateJwt(token);
-			return this.extractCaller(authInfo.token);
-		}
+				// JWT tokens (Bearer from UI) — validate directly, no caching needed.
+				if (token.startsWith("eyJ")) {
+					const authInfo = await this.sdk.validateJwt(token);
+					return this.extractCaller(authInfo.token);
+				}
 
-		// Access key tokens — cache the exchanged JWT.
-		return this.authenticateAccessKey(token);
+				// Access key tokens — cache the exchanged JWT.
+				return this.authenticateAccessKey(token);
+			} catch (error) {
+				authFailureCount().add(1, { "auth.mode": "descope" });
+				throw error;
+			} finally {
+				authAuthenticateDuration().record(performance.now() - start, { "auth.mode": "descope" });
+			}
+		});
 	}
 
 	async authenticateUpdateToken(token: string): Promise<{ updateId: string; stackId: string }> {
-		return parseUpdateToken(token);
+		return withSpan(
+			"procella.auth",
+			"auth.authenticateUpdateToken",
+			{ "auth.mode": "descope" },
+			async () => {
+				const start = performance.now();
+				try {
+					return parseUpdateToken(token);
+				} catch (error) {
+					authFailureCount().add(1, { "auth.mode": "descope" });
+					throw error;
+				} finally {
+					authAuthenticateDuration().record(performance.now() - start, {
+						"auth.mode": "descope",
+					});
+				}
+			},
+		);
 	}
 
 	async createCliAccessKey(caller: Caller, name: string): Promise<string> {
-		const userResp = await this.sdk.management.user.loadByUserId(caller.userId);
-		const u = userResp.ok ? userResp.data : undefined;
-		const loginId =
-			u?.email ??
-			u?.name ??
-			(u?.givenName && u?.familyName ? `${u.givenName} ${u.familyName}` : undefined) ??
-			u?.loginIds?.[0] ??
-			caller.userId;
+		return withSpan(
+			"procella.auth",
+			"auth.createCliAccessKey",
+			{ "auth.mode": "descope" },
+			async () => {
+				const userResp = await this.sdk.management.user.loadByUserId(caller.userId);
+				const u = userResp.ok ? userResp.data : undefined;
+				const loginId =
+					u?.email ??
+					u?.name ??
+					(u?.givenName && u?.familyName ? `${u.givenName} ${u.familyName}` : undefined) ??
+					u?.loginIds?.[0] ??
+					caller.userId;
 
-		const resp = await this.sdk.management.accessKey.create(
-			name,
-			0,
-			undefined,
-			[{ tenantId: caller.tenantId, roleNames: [...caller.roles] }],
-			caller.userId,
-			{ procellaLogin: loginId },
+				const resp = await this.sdk.management.accessKey.create(
+					name,
+					0,
+					undefined,
+					[{ tenantId: caller.tenantId, roleNames: [...caller.roles] }],
+					caller.userId,
+					{ procellaLogin: loginId },
+				);
+				if (!resp.ok || !resp.data?.cleartext) {
+					throw new Error(
+						resp.error?.errorMessage ??
+							resp.error?.errorDescription ??
+							"Failed to create access key",
+					);
+				}
+				return resp.data.cleartext;
+			},
 		);
-		if (!resp.ok || !resp.data?.cleartext) {
-			throw new Error(
-				resp.error?.errorMessage ?? resp.error?.errorDescription ?? "Failed to create access key",
-			);
-		}
-		return resp.data.cleartext;
 	}
 
 	/** Stop the sweep timer. Call on server shutdown. */

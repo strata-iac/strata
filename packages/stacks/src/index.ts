@@ -2,6 +2,7 @@
 
 import type { Database } from "@procella/db";
 import { projects, stacks } from "@procella/db";
+import { withDbSpan } from "@procella/telemetry";
 import {
 	ConflictError,
 	parseStackFQN,
@@ -171,49 +172,60 @@ export class PostgresStacksService implements StacksService {
 		stack: string,
 		userTags?: Record<string, string>,
 	): Promise<StackInfo> {
-		const tags = buildStackTags(project, stack, userTags);
+		return withDbSpan(
+			"createStack",
+			{
+				"tenant.id": tenantId,
+				"org.name": _org,
+				"project.name": project,
+				"stack.name": stack,
+			},
+			async () => {
+				const tags = buildStackTags(project, stack, userTags);
 
-		try {
-			return await this.db.transaction(async (tx) => {
-				// Auto-create project (INSERT ON CONFLICT DO NOTHING)
-				await tx
-					.insert(projects)
-					.values({ tenantId, name: project })
-					.onConflictDoNothing({
-						target: [projects.tenantId, projects.name],
+				try {
+					return await this.db.transaction(async (tx) => {
+						// Auto-create project (INSERT ON CONFLICT DO NOTHING)
+						await tx
+							.insert(projects)
+							.values({ tenantId, name: project })
+							.onConflictDoNothing({
+								target: [projects.tenantId, projects.name],
+							});
+
+						// Fetch the project (may have existed already)
+						const [proj] = await tx
+							.select({ id: projects.id })
+							.from(projects)
+							.where(and(eq(projects.tenantId, tenantId), eq(projects.name, project)));
+
+						// Insert the stack
+						const [row] = await tx
+							.insert(stacks)
+							.values({ projectId: proj.id, name: stack, tags })
+							.returning();
+
+						return {
+							id: row.id,
+							projectId: proj.id,
+							tenantId,
+							orgName: tenantId,
+							projectName: project,
+							stackName: stack,
+							tags: (row.tags ?? {}) as Record<string, string>,
+							activeUpdateId: row.activeUpdateId,
+							createdAt: row.createdAt,
+							updatedAt: row.updatedAt,
+						};
 					});
-
-				// Fetch the project (may have existed already)
-				const [proj] = await tx
-					.select({ id: projects.id })
-					.from(projects)
-					.where(and(eq(projects.tenantId, tenantId), eq(projects.name, project)));
-
-				// Insert the stack
-				const [row] = await tx
-					.insert(stacks)
-					.values({ projectId: proj.id, name: stack, tags })
-					.returning();
-
-				return {
-					id: row.id,
-					projectId: proj.id,
-					tenantId,
-					orgName: tenantId,
-					projectName: project,
-					stackName: stack,
-					tags: (row.tags ?? {}) as Record<string, string>,
-					activeUpdateId: row.activeUpdateId,
-					createdAt: row.createdAt,
-					updatedAt: row.updatedAt,
-				};
-			});
-		} catch (err: unknown) {
-			if (pgErrorCode(err) === "23505") {
-				throw new StackAlreadyExistsError(tenantId, project, stack);
-			}
-			throw err;
-		}
+				} catch (err: unknown) {
+					if (pgErrorCode(err) === "23505") {
+						throw new StackAlreadyExistsError(tenantId, project, stack);
+					}
+					throw err;
+				}
+			},
+		);
 	}
 
 	async getStack(
@@ -222,72 +234,108 @@ export class PostgresStacksService implements StacksService {
 		project: string,
 		stack: string,
 	): Promise<StackInfo> {
-		const rows = await this.db
-			.select({
-				stack_id: stacks.id,
-				stack_name: stacks.name,
-				stack_tags: stacks.tags,
-				stack_active_update_id: stacks.activeUpdateId,
-				stack_created_at: stacks.createdAt,
-				stack_updated_at: stacks.updatedAt,
-				project_id: projects.id,
-				project_tenant_id: projects.tenantId,
-				project_name: projects.name,
-			})
-			.from(stacks)
-			.innerJoin(projects, eq(stacks.projectId, projects.id))
-			.where(
-				and(eq(projects.tenantId, tenantId), eq(projects.name, project), eq(stacks.name, stack)),
-			);
+		return withDbSpan(
+			"getStack",
+			{
+				"tenant.id": tenantId,
+				"org.name": _org,
+				"project.name": project,
+				"stack.name": stack,
+			},
+			async () => {
+				const rows = await this.db
+					.select({
+						stack_id: stacks.id,
+						stack_name: stacks.name,
+						stack_tags: stacks.tags,
+						stack_active_update_id: stacks.activeUpdateId,
+						stack_created_at: stacks.createdAt,
+						stack_updated_at: stacks.updatedAt,
+						project_id: projects.id,
+						project_tenant_id: projects.tenantId,
+						project_name: projects.name,
+					})
+					.from(stacks)
+					.innerJoin(projects, eq(stacks.projectId, projects.id))
+					.where(
+						and(
+							eq(projects.tenantId, tenantId),
+							eq(projects.name, project),
+							eq(stacks.name, stack),
+						),
+					);
 
-		if (rows.length === 0) {
-			throw new StackNotFoundError(tenantId, project, stack);
-		}
+				if (rows.length === 0) {
+					throw new StackNotFoundError(tenantId, project, stack);
+				}
 
-		return toStackInfo(rows[0]);
+				return toStackInfo(rows[0]);
+			},
+		);
 	}
 
 	async listStacks(tenantId: string, _org?: string, project?: string): Promise<StackInfo[]> {
-		const conditions = [eq(projects.tenantId, tenantId)];
+		return withDbSpan(
+			"listStacks",
+			{ "tenant.id": tenantId, "org.name": _org ?? "", "project.name": project ?? "" },
+			async () => {
+				const conditions = [eq(projects.tenantId, tenantId)];
 
-		if (project) {
-			conditions.push(eq(projects.name, project));
-		}
+				if (project) {
+					conditions.push(eq(projects.name, project));
+				}
 
-		const rows = await this.db
-			.select({
-				stack_id: stacks.id,
-				stack_name: stacks.name,
-				stack_tags: stacks.tags,
-				stack_active_update_id: stacks.activeUpdateId,
-				stack_created_at: stacks.createdAt,
-				stack_updated_at: stacks.updatedAt,
-				project_id: projects.id,
-				project_tenant_id: projects.tenantId,
-				project_name: projects.name,
-			})
-			.from(stacks)
-			.innerJoin(projects, eq(stacks.projectId, projects.id))
-			.where(and(...conditions));
+				const rows = await this.db
+					.select({
+						stack_id: stacks.id,
+						stack_name: stacks.name,
+						stack_tags: stacks.tags,
+						stack_active_update_id: stacks.activeUpdateId,
+						stack_created_at: stacks.createdAt,
+						stack_updated_at: stacks.updatedAt,
+						project_id: projects.id,
+						project_tenant_id: projects.tenantId,
+						project_name: projects.name,
+					})
+					.from(stacks)
+					.innerJoin(projects, eq(stacks.projectId, projects.id))
+					.where(and(...conditions));
 
-		return rows.map(toStackInfo);
+				return rows.map(toStackInfo);
+			},
+		);
 	}
 
 	async deleteStack(tenantId: string, _org: string, project: string, stack: string): Promise<void> {
-		// Find the stack first to verify ownership
-		const rows = await this.db
-			.select({ stackId: stacks.id })
-			.from(stacks)
-			.innerJoin(projects, eq(stacks.projectId, projects.id))
-			.where(
-				and(eq(projects.tenantId, tenantId), eq(projects.name, project), eq(stacks.name, stack)),
-			);
+		return withDbSpan(
+			"deleteStack",
+			{
+				"tenant.id": tenantId,
+				"org.name": _org,
+				"project.name": project,
+				"stack.name": stack,
+			},
+			async () => {
+				// Find the stack first to verify ownership
+				const rows = await this.db
+					.select({ stackId: stacks.id })
+					.from(stacks)
+					.innerJoin(projects, eq(stacks.projectId, projects.id))
+					.where(
+						and(
+							eq(projects.tenantId, tenantId),
+							eq(projects.name, project),
+							eq(stacks.name, stack),
+						),
+					);
 
-		if (rows.length === 0) {
-			throw new StackNotFoundError(tenantId, project, stack);
-		}
+				if (rows.length === 0) {
+					throw new StackNotFoundError(tenantId, project, stack);
+				}
 
-		await this.db.delete(stacks).where(eq(stacks.id, rows[0].stackId));
+				await this.db.delete(stacks).where(eq(stacks.id, rows[0].stackId));
+			},
+		);
 	}
 
 	async renameStack(
@@ -297,44 +345,56 @@ export class PostgresStacksService implements StacksService {
 		oldStack: string,
 		newStack: string,
 	): Promise<void> {
-		if (oldStack === newStack) {
-			throw new ConflictError(`Cannot rename stack to the same name: ${oldStack}`);
-		}
+		return withDbSpan(
+			"renameStack",
+			{
+				"tenant.id": tenantId,
+				"org.name": _org,
+				"project.name": project,
+				"stack.old_name": oldStack,
+				"stack.new_name": newStack,
+			},
+			async () => {
+				if (oldStack === newStack) {
+					throw new ConflictError(`Cannot rename stack to the same name: ${oldStack}`);
+				}
 
-		await this.db.transaction(async (tx) => {
-			// Find the stack
-			const rows = await tx
-				.select({ stackId: stacks.id, projectId: projects.id })
-				.from(stacks)
-				.innerJoin(projects, eq(stacks.projectId, projects.id))
-				.where(
-					and(
-						eq(projects.tenantId, tenantId),
-						eq(projects.name, project),
-						eq(stacks.name, oldStack),
-					),
-				);
+				await this.db.transaction(async (tx) => {
+					// Find the stack
+					const rows = await tx
+						.select({ stackId: stacks.id, projectId: projects.id })
+						.from(stacks)
+						.innerJoin(projects, eq(stacks.projectId, projects.id))
+						.where(
+							and(
+								eq(projects.tenantId, tenantId),
+								eq(projects.name, project),
+								eq(stacks.name, oldStack),
+							),
+						);
 
-			if (rows.length === 0) {
-				throw new StackNotFoundError(tenantId, project, oldStack);
-			}
+					if (rows.length === 0) {
+						throw new StackNotFoundError(tenantId, project, oldStack);
+					}
 
-			// Check if new name already exists in the same project
-			const existing = await tx
-				.select({ id: stacks.id })
-				.from(stacks)
-				.where(and(eq(stacks.projectId, rows[0].projectId), eq(stacks.name, newStack)));
+					// Check if new name already exists in the same project
+					const existing = await tx
+						.select({ id: stacks.id })
+						.from(stacks)
+						.where(and(eq(stacks.projectId, rows[0].projectId), eq(stacks.name, newStack)));
 
-			if (existing.length > 0) {
-				throw new StackAlreadyExistsError(tenantId, project, newStack);
-			}
+					if (existing.length > 0) {
+						throw new StackAlreadyExistsError(tenantId, project, newStack);
+					}
 
-			// Rename
-			await tx
-				.update(stacks)
-				.set({ name: newStack, updatedAt: sql`now()` })
-				.where(eq(stacks.id, rows[0].stackId));
-		});
+					// Rename
+					await tx
+						.update(stacks)
+						.set({ name: newStack, updatedAt: sql`now()` })
+						.where(eq(stacks.id, rows[0].stackId));
+				});
+			},
+		);
 	}
 
 	async updateStackTags(
@@ -344,29 +404,45 @@ export class PostgresStacksService implements StacksService {
 		stack: string,
 		tags: Record<string, string>,
 	): Promise<void> {
-		// Find the stack
-		const rows = await this.db
-			.select({
-				stackId: stacks.id,
-				existingTags: stacks.tags,
-			})
-			.from(stacks)
-			.innerJoin(projects, eq(stacks.projectId, projects.id))
-			.where(
-				and(eq(projects.tenantId, tenantId), eq(projects.name, project), eq(stacks.name, stack)),
-			);
+		return withDbSpan(
+			"updateStackTags",
+			{
+				"tenant.id": tenantId,
+				"org.name": _org,
+				"project.name": project,
+				"stack.name": stack,
+				"tags.count": Object.keys(tags).length,
+			},
+			async () => {
+				// Find the stack
+				const rows = await this.db
+					.select({
+						stackId: stacks.id,
+						existingTags: stacks.tags,
+					})
+					.from(stacks)
+					.innerJoin(projects, eq(stacks.projectId, projects.id))
+					.where(
+						and(
+							eq(projects.tenantId, tenantId),
+							eq(projects.name, project),
+							eq(stacks.name, stack),
+						),
+					);
 
-		if (rows.length === 0) {
-			throw new StackNotFoundError(tenantId, project, stack);
-		}
+				if (rows.length === 0) {
+					throw new StackNotFoundError(tenantId, project, stack);
+				}
 
-		const existingTags = (rows[0].existingTags ?? {}) as Record<string, string>;
-		const merged = mergeTags(existingTags, tags);
+				const existingTags = (rows[0].existingTags ?? {}) as Record<string, string>;
+				const merged = mergeTags(existingTags, tags);
 
-		await this.db
-			.update(stacks)
-			.set({ tags: merged, updatedAt: sql`now()` })
-			.where(eq(stacks.id, rows[0].stackId));
+				await this.db
+					.update(stacks)
+					.set({ tags: merged, updatedAt: sql`now()` })
+					.where(eq(stacks.id, rows[0].stackId));
+			},
+		);
 	}
 
 	async replaceStackTags(
@@ -395,7 +471,9 @@ export class PostgresStacksService implements StacksService {
 	}
 
 	async getStackByFQN(tenantId: string, fqn: string): Promise<StackInfo> {
-		const parsed = parseStackFQN(fqn);
-		return this.getStack(tenantId, parsed.org, parsed.project, parsed.stack);
+		return withDbSpan("getStackByFQN", { "tenant.id": tenantId, "stack.fqn": fqn }, async () => {
+			const parsed = parseStackFQN(fqn);
+			return this.getStack(tenantId, parsed.org, parsed.project, parsed.stack);
+		});
 	}
 }

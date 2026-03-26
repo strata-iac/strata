@@ -2,6 +2,7 @@
 
 import type { Database } from "@procella/db";
 import { stacks, updates } from "@procella/db";
+import { gcCycleCount, gcOrphansCleanedCount } from "@procella/telemetry";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { GC_ADVISORY_LOCK_ID, GC_INTERVAL_MS, GC_STALE_THRESHOLD_MS } from "./types.js";
 
@@ -42,6 +43,7 @@ export class GCWorker {
 	}
 
 	private async runCycle(): Promise<void> {
+		gcCycleCount().add(1);
 		if (this.running) return;
 		this.running = true;
 
@@ -79,8 +81,9 @@ export class GCWorker {
 					);
 
 				const allOrphans = [...expiredLeaseUpdates, ...staleUpdates];
+				const orphanCount = allOrphans.length;
 
-				if (allOrphans.length > 0) {
+				if (orphanCount > 0) {
 					const orphanIds = allOrphans.map((u) => u.id);
 					const affectedStackIds = [...new Set(allOrphans.map((u) => u.stackId))];
 
@@ -104,6 +107,8 @@ export class GCWorker {
 							.where(and(eq(stacks.id, stackId), inArray(stacks.activeUpdateId, orphanIds)));
 					}
 				}
+
+				gcOrphansCleanedCount().add(orphanCount);
 			} finally {
 				// Always release the advisory lock
 				await this.db.execute(sql`SELECT pg_advisory_unlock(${GC_ADVISORY_LOCK_ID})`);

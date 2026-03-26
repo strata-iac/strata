@@ -4,14 +4,17 @@
 // All standard OTEL_* env vars are respected for endpoint, headers, etc.
 // Call initTelemetry() before any other imports that need tracing.
 
-import { DiagConsoleLogger, DiagLogLevel, diag } from "@opentelemetry/api";
+import { DiagConsoleLogger, DiagLogLevel, diag, metrics } from "@opentelemetry/api";
 import { Resource } from "@opentelemetry/resources";
+import { MeterProvider, PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
 import { BatchSpanProcessor, type SpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from "@opentelemetry/semantic-conventions";
 import { FetchOtlpTraceExporter } from "./fetch-exporter.js";
+import { FetchOtlpMetricExporter } from "./metrics-exporter.js";
 
-let provider: NodeTracerProvider | null = null;
+let traceProvider: NodeTracerProvider | null = null;
+let meterProvider: MeterProvider | null = null;
 
 export interface TelemetryConfig {
 	enabled: boolean;
@@ -50,13 +53,24 @@ export function initTelemetry(config: TelemetryConfig): void {
 		}),
 	);
 
-	provider = new NodeTracerProvider({ resource });
-
-	const exporter = new FetchOtlpTraceExporter(
+	traceProvider = new NodeTracerProvider({ resource });
+	const traceExporter = new FetchOtlpTraceExporter(
 		config.otlpEndpoint ? { url: config.otlpEndpoint } : undefined,
 	);
-	provider.addSpanProcessor(new BatchSpanProcessor(exporter) as SpanProcessor);
-	provider.register();
+	traceProvider.addSpanProcessor(new BatchSpanProcessor(traceExporter) as SpanProcessor);
+	traceProvider.register();
+
+	const metricExporter = new FetchOtlpMetricExporter(
+		config.otlpEndpoint
+			? { url: `${config.otlpEndpoint.replace(/\/v1\/traces$/, "")}/v1/metrics` }
+			: undefined,
+	);
+	const metricReader = new PeriodicExportingMetricReader({
+		exporter: metricExporter,
+		exportIntervalMillis: 15_000,
+	});
+	meterProvider = new MeterProvider({ resource, readers: [metricReader] });
+	metrics.setGlobalMeterProvider(meterProvider);
 }
 
 /**
@@ -64,8 +78,7 @@ export function initTelemetry(config: TelemetryConfig): void {
  * Call during server shutdown, before process.exit().
  */
 export async function shutdownTelemetry(): Promise<void> {
-	if (provider) {
-		await provider.shutdown();
-		provider = null;
-	}
+	await Promise.all([traceProvider?.shutdown(), meterProvider?.shutdown()]);
+	traceProvider = null;
+	meterProvider = null;
 }

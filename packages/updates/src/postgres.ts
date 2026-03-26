@@ -4,7 +4,12 @@ import type { CryptoService } from "@procella/crypto";
 import type { Database } from "@procella/db";
 import { checkpoints, journalEntries, stacks, updateEvents, updates } from "@procella/db";
 import type { BlobStorage } from "@procella/storage";
-import { withDbSpan } from "@procella/telemetry";
+import {
+	activeUpdatesGauge,
+	checkpointSizeHistogram,
+	journalEntriesCount,
+	withDbSpan,
+} from "@procella/telemetry";
 import type {
 	CompleteUpdateRequest,
 	EngineEvent,
@@ -151,8 +156,8 @@ export class PostgresUpdatesService implements UpdatesService {
 	}
 
 	async startUpdate(updateId: string, request: StartUpdateRequest): Promise<StartUpdateResponse> {
-		return withDbSpan("startUpdate", { "update.id": updateId }, () =>
-			this.db.transaction(async (tx) => {
+		return withDbSpan("startUpdate", { "update.id": updateId }, async () => {
+			const result = await this.db.transaction(async (tx) => {
 				const [row] = await tx.select().from(updates).where(eq(updates.id, updateId));
 
 				if (!row) {
@@ -192,8 +197,10 @@ export class PostgresUpdatesService implements UpdatesService {
 					tokenExpiration: Math.floor(expiry.getTime() / 1000),
 					...(journalVersion > 0 ? { journalVersion } : {}),
 				} as StartUpdateResponse;
-			}),
-		);
+			});
+			activeUpdatesGauge().add(1);
+			return result;
+		});
 	}
 
 	async completeUpdate(updateId: string, request: CompleteUpdateRequest): Promise<void> {
@@ -233,80 +240,88 @@ export class PostgresUpdatesService implements UpdatesService {
 				}),
 		);
 
+		activeUpdatesGauge().add(-1);
 		this.clearUpdateCaches(updateId);
 	}
 
 	async cancelUpdate(updateId: string): Promise<void> {
-		await this.db.transaction(async (tx) => {
-			const [row] = await tx.select().from(updates).where(eq(updates.id, updateId));
+		await withDbSpan("cancelUpdate", { "update.id": updateId }, () =>
+			this.db.transaction(async (tx) => {
+				const [row] = await tx.select().from(updates).where(eq(updates.id, updateId));
+
+				if (!row) {
+					throw new UpdateNotFoundError(updateId);
+				}
+
+				// Idempotent: already terminal → no-op
+				if (row.status === "cancelled" || row.status === "succeeded" || row.status === "failed") {
+					return;
+				}
+
+				await tx
+					.update(updates)
+					.set({
+						status: "cancelled",
+						leaseToken: null,
+						leaseExpiresAt: null,
+						completedAt: sql`now()`,
+						updatedAt: sql`now()`,
+					})
+					.where(eq(updates.id, updateId));
+
+				await tx
+					.update(stacks)
+					.set({ activeUpdateId: null, updatedAt: sql`now()` })
+					.where(eq(stacks.id, row.stackId));
+			}),
+		);
+
+		activeUpdatesGauge().add(-1);
+		this.clearUpdateCaches(updateId);
+	}
+
+	async getUpdate(updateId: string): Promise<UpdateResults> {
+		return withDbSpan("getUpdate", { "update.id": updateId }, async () => {
+			const [row] = await this.db.select().from(updates).where(eq(updates.id, updateId));
 
 			if (!row) {
 				throw new UpdateNotFoundError(updateId);
 			}
 
-			// Idempotent: already terminal → no-op
-			if (row.status === "cancelled" || row.status === "succeeded" || row.status === "failed") {
-				return;
-			}
-
-			await tx
-				.update(updates)
-				.set({
-					status: "cancelled",
-					leaseToken: null,
-					leaseExpiresAt: null,
-					completedAt: sql`now()`,
-					updatedAt: sql`now()`,
-				})
-				.where(eq(updates.id, updateId));
-
-			await tx
-				.update(stacks)
-				.set({ activeUpdateId: null, updatedAt: sql`now()` })
-				.where(eq(stacks.id, row.stackId));
+			return {
+				status: mapStatusToApiStatus(row.status) as UpdateStatus,
+				events: [],
+				continuationToken: undefined,
+			} satisfies UpdateResults;
 		});
-
-		this.clearUpdateCaches(updateId);
-	}
-
-	async getUpdate(updateId: string): Promise<UpdateResults> {
-		const [row] = await this.db.select().from(updates).where(eq(updates.id, updateId));
-
-		if (!row) {
-			throw new UpdateNotFoundError(updateId);
-		}
-
-		return {
-			status: mapStatusToApiStatus(row.status) as UpdateStatus,
-			events: [],
-			continuationToken: undefined,
-		} satisfies UpdateResults;
 	}
 
 	async getHistory(stackId: string): Promise<GetHistoryResponse> {
-		const rows = await this.db
-			.select()
-			.from(updates)
-			.where(eq(updates.stackId, stackId))
-			.orderBy(desc(updates.createdAt));
+		return withDbSpan("getHistory", { "stack.id": stackId }, async () => {
+			const rows = await this.db
+				.select()
+				.from(updates)
+				.where(eq(updates.stackId, stackId))
+				.orderBy(desc(updates.createdAt));
 
-		const updateList: UpdateInfo[] = rows.map(
-			(row) =>
-				({
-					updateID: row.id,
-					kind: row.kind,
-					startTime: row.startedAt ? Math.floor(row.startedAt.getTime() / 1000) : 0,
-					endTime: row.completedAt ? Math.floor(row.completedAt.getTime() / 1000) : 0,
-					version: row.version ?? 0,
-					message: row.message ?? "",
-					result: row.result ?? "",
-					environment: {},
-					config: (row.config ?? {}) as Record<string, unknown>,
-					resourceChanges: {},
-				}) as unknown as UpdateInfo,
-		);
+			const updateList: UpdateInfo[] = rows.map(
+				(row) =>
+					({
+						updateID: row.id,
+						kind: row.kind,
+						startTime: row.startedAt ? Math.floor(row.startedAt.getTime() / 1000) : 0,
+						endTime: row.completedAt ? Math.floor(row.completedAt.getTime() / 1000) : 0,
+						version: row.version ?? 0,
+						message: row.message ?? "",
+						result: row.result ?? "",
+						environment: {},
+						config: (row.config ?? {}) as Record<string, unknown>,
+						resourceChanges: {},
+					}) as unknown as UpdateInfo,
+			);
 
-		return { updates: updateList } as GetHistoryResponse;
+			return { updates: updateList } as GetHistoryResponse;
+		});
 	}
 
 	// ========================================================================
@@ -330,76 +345,79 @@ export class PostgresUpdatesService implements UpdatesService {
 		updateId: string,
 		request: PatchUpdateVerbatimCheckpointRequest,
 	): Promise<void> {
-		const [row] = await this.db.select().from(updates).where(eq(updates.id, updateId));
+		return withDbSpan("patchCheckpointVerbatim", { "update.id": updateId }, async () => {
+			const [row] = await this.db.select().from(updates).where(eq(updates.id, updateId));
 
-		if (!row) {
-			throw new UpdateNotFoundError(updateId);
-		}
+			if (!row) {
+				throw new UpdateNotFoundError(updateId);
+			}
 
-		// Verbatim: untypedDeployment is the full UntypedDeployment wrapper { version, deployment }.
-		// Extract the inner deployment to store consistently with patchCheckpoint.
-		const wrapper = (request as { untypedDeployment?: { deployment?: unknown } }).untypedDeployment;
-		const rawDeployment = wrapper?.deployment ?? wrapper;
-		await this.upsertCheckpoint(updateId, row.stackId, rawDeployment);
+			const wrapper = (request as { untypedDeployment?: { deployment?: unknown } })
+				.untypedDeployment;
+			const rawDeployment = wrapper?.deployment ?? wrapper;
+			await this.upsertCheckpoint(updateId, row.stackId, rawDeployment);
+		});
 	}
 
 	async patchCheckpointDelta(
 		updateId: string,
 		request: PatchUpdateCheckpointDeltaRequest,
 	): Promise<void> {
-		const [row] = await this.db.select().from(updates).where(eq(updates.id, updateId));
+		return withDbSpan("patchCheckpointDelta", { "update.id": updateId }, async () => {
+			const [row] = await this.db.select().from(updates).where(eq(updates.id, updateId));
 
-		if (!row) {
-			throw new UpdateNotFoundError(updateId);
-		}
+			if (!row) {
+				throw new UpdateNotFoundError(updateId);
+			}
 
-		// Fetch latest non-delta checkpoint for this update
-		const [baseCheckpoint] = await this.db
-			.select()
-			.from(checkpoints)
-			.where(and(eq(checkpoints.updateId, updateId), eq(checkpoints.isDelta, false)))
-			.orderBy(desc(checkpoints.version))
-			.limit(1);
+			// Fetch latest non-delta checkpoint for this update
+			const [baseCheckpoint] = await this.db
+				.select()
+				.from(checkpoints)
+				.where(and(eq(checkpoints.updateId, updateId), eq(checkpoints.isDelta, false)))
+				.orderBy(desc(checkpoints.version))
+				.limit(1);
 
-		let baseDeployment: unknown;
-		if (baseCheckpoint) {
-			if (baseCheckpoint.blobKey) {
-				const data = await this.storage.get(baseCheckpoint.blobKey);
-				if (!data) {
-					throw new Error("Checkpoint blob data missing from storage");
+			let baseDeployment: unknown;
+			if (baseCheckpoint) {
+				if (baseCheckpoint.blobKey) {
+					const data = await this.storage.get(baseCheckpoint.blobKey);
+					if (!data) {
+						throw new Error("Checkpoint blob data missing from storage");
+					}
+					baseDeployment = JSON.parse(new TextDecoder().decode(data));
+				} else {
+					baseDeployment = baseCheckpoint.data;
 				}
-				baseDeployment = JSON.parse(new TextDecoder().decode(data));
 			} else {
-				baseDeployment = baseCheckpoint.data;
+				baseDeployment = {};
 			}
-		} else {
-			baseDeployment = {};
-		}
 
-		const baseJson = JSON.stringify(baseDeployment);
+			const baseJson = JSON.stringify(baseDeployment);
 
-		const edits = (request as { deploymentDelta?: unknown }).deploymentDelta;
-		if (!Array.isArray(edits)) {
-			throw new BadRequestError("deploymentDelta must be an array of TextEdit");
-		}
-
-		const newJson = applyTextEdits(baseJson, edits as TextEdit[]);
-
-		const expectedHash = (request as { checkpointHash?: string }).checkpointHash;
-		if (expectedHash) {
-			const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(newJson));
-			const actualHash = Array.from(new Uint8Array(hashBuffer))
-				.map((b) => b.toString(16).padStart(2, "0"))
-				.join("");
-			if (actualHash !== expectedHash) {
-				throw new BadRequestError(
-					`Checkpoint hash mismatch: expected ${expectedHash}, got ${actualHash}`,
-				);
+			const edits = (request as { deploymentDelta?: unknown }).deploymentDelta;
+			if (!Array.isArray(edits)) {
+				throw new BadRequestError("deploymentDelta must be an array of TextEdit");
 			}
-		}
 
-		const merged = JSON.parse(newJson);
-		await this.upsertCheckpoint(updateId, row.stackId, merged);
+			const newJson = applyTextEdits(baseJson, edits as TextEdit[]);
+
+			const expectedHash = (request as { checkpointHash?: string }).checkpointHash;
+			if (expectedHash) {
+				const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(newJson));
+				const actualHash = Array.from(new Uint8Array(hashBuffer))
+					.map((b) => b.toString(16).padStart(2, "0"))
+					.join("");
+				if (actualHash !== expectedHash) {
+					throw new BadRequestError(
+						`Checkpoint hash mismatch: expected ${expectedHash}, got ${actualHash}`,
+					);
+				}
+			}
+
+			const merged = JSON.parse(newJson);
+			await this.upsertCheckpoint(updateId, row.stackId, merged);
+		});
 	}
 
 	async appendJournalEntries(updateId: string, batch: JournalEntries): Promise<void> {
@@ -443,6 +461,7 @@ export class PostgresUpdatesService implements UpdatesService {
 			});
 
 			await this.db.insert(journalEntries).values(rows).onConflictDoNothing();
+			journalEntriesCount().add(entries.length, { "update.id": updateId });
 
 			const hasNonElided = entries.some((e: JournalEntry) => !e.elideWrite);
 			if (hasNonElided) {
@@ -485,68 +504,72 @@ export class PostgresUpdatesService implements UpdatesService {
 		updateId: string,
 		continuationToken?: string,
 	): Promise<GetUpdateEventsResponse> {
-		const lastSeq = continuationToken ? Number.parseInt(continuationToken, 10) : 0;
+		return withDbSpan("getUpdateEvents", { "update.id": updateId }, async () => {
+			const lastSeq = continuationToken ? Number.parseInt(continuationToken, 10) : 0;
 
-		const rows = await this.db
-			.select()
-			.from(updateEvents)
-			.where(and(eq(updateEvents.updateId, updateId), gt(updateEvents.sequence, lastSeq)))
-			.orderBy(updateEvents.sequence);
+			const rows = await this.db
+				.select()
+				.from(updateEvents)
+				.where(and(eq(updateEvents.updateId, updateId), gt(updateEvents.sequence, lastSeq)))
+				.orderBy(updateEvents.sequence);
 
-		const eventsList = rows.map((row) => row.fields as EngineEvent);
+			const eventsList = rows.map((row) => row.fields as EngineEvent);
 
-		// Check if update is still running
-		const [update] = await this.db
-			.select({ status: updates.status })
-			.from(updates)
-			.where(eq(updates.id, updateId));
+			// Check if update is still running
+			const [update] = await this.db
+				.select({ status: updates.status })
+				.from(updates)
+				.where(eq(updates.id, updateId));
 
-		const isTerminal =
-			update?.status === "succeeded" ||
-			update?.status === "failed" ||
-			update?.status === "cancelled";
+			const isTerminal =
+				update?.status === "succeeded" ||
+				update?.status === "failed" ||
+				update?.status === "cancelled";
 
-		let nextToken: string | undefined;
-		if (rows.length > 0 && !isTerminal) {
-			nextToken = String(rows[rows.length - 1].sequence);
-		}
+			let nextToken: string | undefined;
+			if (rows.length > 0 && !isTerminal) {
+				nextToken = String(rows[rows.length - 1].sequence);
+			}
 
-		return {
-			events: eventsList,
-			continuationToken: nextToken,
-		} as unknown as GetUpdateEventsResponse;
+			return {
+				events: eventsList,
+				continuationToken: nextToken,
+			} as unknown as GetUpdateEventsResponse;
+		});
 	}
 
 	async renewLease(
 		updateId: string,
 		request: RenewUpdateLeaseRequest,
 	): Promise<RenewUpdateLeaseResponse> {
-		const [row] = await this.db.select().from(updates).where(eq(updates.id, updateId));
+		return withDbSpan("renewLease", { "update.id": updateId }, async () => {
+			const [row] = await this.db.select().from(updates).where(eq(updates.id, updateId));
 
-		if (!row) {
-			throw new UpdateNotFoundError(updateId);
-		}
+			if (!row) {
+				throw new UpdateNotFoundError(updateId);
+			}
 
-		if (!row.leaseToken) {
-			throw new LeaseExpiredError();
-		}
+			if (!row.leaseToken) {
+				throw new LeaseExpiredError();
+			}
 
-		if (row.leaseExpiresAt && row.leaseExpiresAt.getTime() < Date.now()) {
-			throw new LeaseExpiredError();
-		}
+			if (row.leaseExpiresAt && row.leaseExpiresAt.getTime() < Date.now()) {
+				throw new LeaseExpiredError();
+			}
 
-		const duration = (request as { duration?: number }).duration ?? LEASE_DURATION_SECONDS;
-		const newExpiry = leaseExpiresAt(duration);
+			const duration = (request as { duration?: number }).duration ?? LEASE_DURATION_SECONDS;
+			const newExpiry = leaseExpiresAt(duration);
 
-		await this.db
-			.update(updates)
-			.set({ leaseExpiresAt: newExpiry, updatedAt: sql`now()` })
-			.where(eq(updates.id, updateId));
+			await this.db
+				.update(updates)
+				.set({ leaseExpiresAt: newExpiry, updatedAt: sql`now()` })
+				.where(eq(updates.id, updateId));
 
-		return {
-			token: row.leaseToken,
-			tokenExpiration: Math.floor(newExpiry.getTime() / 1000),
-		} as RenewUpdateLeaseResponse;
+			return {
+				token: row.leaseToken,
+				tokenExpiration: Math.floor(newExpiry.getTime() / 1000),
+			} as RenewUpdateLeaseResponse;
+		});
 	}
 
 	// ========================================================================
@@ -554,64 +577,67 @@ export class PostgresUpdatesService implements UpdatesService {
 	// ========================================================================
 
 	async exportStack(stackId: string, version?: number): Promise<UntypedDeployment> {
-		let checkpoint: typeof checkpoints.$inferSelect | undefined;
+		return withDbSpan("exportStack", { "stack.id": stackId }, async () => {
+			let checkpoint: typeof checkpoints.$inferSelect | undefined;
 
-		if (version !== undefined) {
-			const rows = await this.db
-				.select()
-				.from(checkpoints)
-				.where(and(eq(checkpoints.stackId, stackId), eq(checkpoints.version, version)))
-				.orderBy(desc(checkpoints.version))
-				.limit(1);
-			checkpoint = rows[0];
-			if (!checkpoint) {
-				throw new CheckpointNotFoundError("", "", `version ${version}`);
+			if (version !== undefined) {
+				const rows = await this.db
+					.select()
+					.from(checkpoints)
+					.where(and(eq(checkpoints.stackId, stackId), eq(checkpoints.version, version)))
+					.orderBy(desc(checkpoints.version))
+					.limit(1);
+				checkpoint = rows[0];
+				if (!checkpoint) {
+					throw new CheckpointNotFoundError("", "", `version ${version}`);
+				}
+			} else {
+				const rows = await this.db
+					.select()
+					.from(checkpoints)
+					.where(and(eq(checkpoints.stackId, stackId), eq(checkpoints.isDelta, false)))
+					.orderBy(desc(checkpoints.createdAt))
+					.limit(1);
+				checkpoint = rows[0];
+				if (!checkpoint) {
+					return emptyDeployment();
+				}
 			}
-		} else {
-			const rows = await this.db
-				.select()
-				.from(checkpoints)
-				.where(and(eq(checkpoints.stackId, stackId), eq(checkpoints.isDelta, false)))
-				.orderBy(desc(checkpoints.createdAt))
-				.limit(1);
-			checkpoint = rows[0];
-			if (!checkpoint) {
-				return emptyDeployment();
-			}
-		}
 
-		let deploymentData: unknown;
-		if (checkpoint.blobKey) {
-			const data = await this.storage.get(checkpoint.blobKey);
-			if (!data) {
-				throw new Error("Checkpoint blob data missing from storage");
+			let deploymentData: unknown;
+			if (checkpoint.blobKey) {
+				const data = await this.storage.get(checkpoint.blobKey);
+				if (!data) {
+					throw new Error("Checkpoint blob data missing from storage");
+				}
+				deploymentData = JSON.parse(new TextDecoder().decode(data));
+			} else {
+				deploymentData = checkpoint.data;
 			}
-			deploymentData = JSON.parse(new TextDecoder().decode(data));
-		} else {
-			deploymentData = checkpoint.data;
-		}
 
-		return {
-			version: 3,
-			deployment: deploymentData,
-		} as UntypedDeployment;
+			return {
+				version: 3,
+				deployment: deploymentData,
+			} as UntypedDeployment;
+		});
 	}
 
 	async importStack(stackId: string, deployment: UntypedDeployment): Promise<ImportStackResponse> {
-		// Single-shot import (no create→start→complete lifecycle)
-		const [updateRow] = await this.db
-			.insert(updates)
-			.values({
-				stackId,
-				kind: "import",
-				status: "succeeded",
-				completedAt: sql`now()`,
-			})
-			.returning();
+		return withDbSpan("importStack", { "stack.id": stackId }, async () => {
+			const [updateRow] = await this.db
+				.insert(updates)
+				.values({
+					stackId,
+					kind: "import",
+					status: "succeeded",
+					completedAt: sql`now()`,
+				})
+				.returning();
 
-		await this.upsertCheckpoint(updateRow.id, stackId, deployment.deployment);
+			await this.upsertCheckpoint(updateRow.id, stackId, deployment.deployment);
 
-		return { updateId: updateRow.id } satisfies ImportStackResponse;
+			return { updateId: updateRow.id } satisfies ImportStackResponse;
+		});
 	}
 
 	async encryptValue(stackFQN: string, plaintext: Uint8Array): Promise<Uint8Array> {
@@ -703,6 +729,9 @@ export class PostgresUpdatesService implements UpdatesService {
 					return;
 				}
 
+				checkpointSizeHistogram().record(Buffer.byteLength(serialized, "utf8"), {
+					"stack.id": stackId,
+				});
 				const version = await this.nextCheckpointVersion(updateId);
 
 				let blobKey: string | null = null;
