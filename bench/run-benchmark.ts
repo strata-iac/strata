@@ -37,6 +37,9 @@ const BENCH_TRIALS = (() => {
   return Math.floor(raw);
 })();
 
+const IS_CI = !!process.env.GITHUB_ACTIONS;
+const STEP_SUMMARY_PATH = process.env.GITHUB_STEP_SUMMARY;
+
 const BENCH_MODES: Mode[] = (() => {
   const raw = process.env.BENCH_MODES;
   if (!raw) return ["journal"] as Mode[];
@@ -337,6 +340,56 @@ function average(values: number[]): number | null {
   return sum / values.length;
 }
 
+async function writeStepSummary(results: BenchmarkResults): Promise<void> {
+  if (!STEP_SUMMARY_PATH) return;
+
+  const modes = [...new Set(results.results.map((r) => r.mode))];
+  const variants = [...new Set(results.results.map((r) => r.variant))];
+  const lines: string[] = [];
+
+  lines.push("### 📊 Benchmark Results");
+  lines.push("");
+  lines.push(`> ${results.trialsPerSize} trials per combo · modes: ${modes.join(", ")} · sizes: ${results.benchSizes.join(", ")}`);
+  lines.push("");
+  lines.push("| N | Mode | Variant | up p50 | up min | up max | preview p50 | destroy p50 |");
+  lines.push("|---:|------|---------|-------:|-------:|-------:|------------:|------------:|");
+
+  for (const n of results.benchSizes) {
+    for (const mode of modes) {
+      for (const variant of variants) {
+        const rows = results.results.filter((r) => r.n === n && r.mode === mode && r.variant === variant);
+        const successful = rows.filter((r) => r.upExitCode === 0);
+        if (successful.length === 0) {
+          lines.push(`| ${n} | ${mode} | ${variant} | ❌ FAIL | — | — | — | — |`);
+          continue;
+        }
+        const upVals = successful.map((r) => r.upMs).filter((v): v is number => typeof v === "number");
+        const preVals = successful.map((r) => r.previewMs).filter((v): v is number => typeof v === "number");
+        const desVals = successful.map((r) => r.destroyMs).filter((v): v is number => typeof v === "number");
+        lines.push(
+          `| ${n} | ${mode} | ${variant} | ${formatMs(median(upVals))} | ${formatMs(upVals.length > 0 ? Math.min(...upVals) : null)} | ${formatMs(upVals.length > 0 ? Math.max(...upVals) : null)} | ${formatMs(median(preVals))} | ${formatMs(median(desVals))} |`,
+        );
+      }
+    }
+  }
+
+  lines.push("");
+  lines.push("<details><summary>Per-trial breakdown</summary>");
+  lines.push("");
+  lines.push("| N | Mode | Variant | Trial | up | preview | destroy |");
+  lines.push("|---:|------|---------|------:|---:|--------:|--------:|");
+  for (const r of results.results) {
+    const status = r.upExitCode === 0 ? "" : " ❌";
+    lines.push(
+      `| ${r.n} | ${r.mode} | ${r.variant} | ${r.trial} | ${formatMs(r.upMs)}${status} | ${formatMs(r.previewMs)} | ${formatMs(r.destroyMs)} |`,
+    );
+  }
+  lines.push("");
+  lines.push("</details>");
+
+  await Bun.write(STEP_SUMMARY_PATH, `${lines.join("\n")}\n`);
+}
+
 function pad(s: string, width: number): string {
   return s.length >= width ? s : `${s}${" ".repeat(width - s.length)}`;
 }
@@ -443,6 +496,7 @@ async function main(): Promise<void> {
       for (const mode of BENCH_MODES) {
         for (const variant of variants) {
           for (const n of BENCH_SIZES) {
+            if (IS_CI) console.log(`::group::${mode}/${variant} N=${n}`);
             for (let trial = 1; trial <= BENCH_TRIALS; trial += 1) {
               const label = `  [${mode}/${variant}] N=${n} trial=${trial}`;
               process.stdout.write(`${label} ...`);
@@ -457,6 +511,7 @@ async function main(): Promise<void> {
                 console.log(` ${[up, preview, destroy].filter(Boolean).join("  ")}`);
               }
             }
+            if (IS_CI) console.log("::endgroup::");
           }
         }
       }
@@ -477,6 +532,7 @@ async function main(): Promise<void> {
     await Bun.write(path.join(import.meta.dir, "results.json"), JSON.stringify(payload, null, 2));
 
     console.log(renderSummary(payload));
+    await writeStepSummary(payload);
   } finally {
     await rm(pulumiHome, { recursive: true, force: true });
   }

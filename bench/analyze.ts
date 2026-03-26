@@ -1,3 +1,4 @@
+import { appendFile } from "node:fs/promises";
 import path from "node:path";
 import type { BaselineConfig, BenchmarkResults, Mode, TrialResult, Variant } from "./types";
 
@@ -140,6 +141,27 @@ async function main(): Promise<void> {
 
 	console.log("━".repeat(68));
 	console.log("");
+
+	const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+	if (summaryPath) {
+		const md: string[] = [];
+		md.push("### 🎯 Threshold Check");
+		md.push("");
+		md.push("| N | Mode | Variant | p50 | Limit | Status |");
+		md.push("|---:|------|---------|----:|------:|--------|");
+		for (const s of summaries) {
+			const p50Text = s.p50 === null ? "N/A" : formatMs(s.p50);
+			const status = s.pass ? "✅ PASS" : "❌ FAIL";
+			md.push(`| ${s.n} | ${s.mode} | ${s.variant} | ${p50Text} | ${formatMs(s.limit)} | ${status} |`);
+		}
+		if (errors.length > 0) {
+			md.push("");
+			md.push("**Failures:**");
+			for (const e of errors) md.push(`- ${e}`);
+		}
+		md.push("");
+		await appendFile(summaryPath, `${md.join("\n")}\n`);
+	}
 
 	if (errors.length > 0) {
 		console.error("Benchmark regression check failed:");
