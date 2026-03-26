@@ -7,7 +7,9 @@ DECLARE
   tag_text text;
 BEGIN
   SELECT p.name, p.tenant_id INTO proj_name, org_name FROM projects p WHERE p.id = NEW.project_id;
-  SELECT string_agg(value, ' ') INTO tag_text FROM jsonb_each_text(COALESCE(NEW.tags, '{}'::jsonb));
+  IF jsonb_typeof(COALESCE(NEW.tags, '{}'::jsonb)) = 'object' THEN
+    SELECT string_agg(value, ' ') INTO tag_text FROM jsonb_each_text(NEW.tags);
+  END IF;
   NEW.search_vector = to_tsvector('simple',
     coalesce(NEW.name, '') || ' ' ||
     coalesce(proj_name, '') || ' ' ||

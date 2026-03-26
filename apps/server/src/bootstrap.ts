@@ -3,9 +3,8 @@
 // Creates all services and the Hono app. Called once at module load time
 // in both entry points (index.ts for local dev, vercel.ts for production).
 
-import DescopeSdk from "@descope/node-sdk";
 import { DescopeAuditService, NoopAuditService } from "@procella/audit";
-import { type AuthService, createAuthService, DescopeAuthService } from "@procella/auth";
+import { createAuthService, DescopeAuthService } from "@procella/auth";
 import { loadConfig } from "@procella/config";
 import { AesCryptoService, devMasterKey } from "@procella/crypto";
 import { createDb } from "@procella/db";
@@ -38,16 +37,7 @@ export async function bootstrap() {
 					projectId: config.descopeProjectId as string,
 					managementKey: config.descopeManagementKey,
 				};
-	const auth: AuthService =
-		authConfig.mode === "descope"
-			? new DescopeAuthService({
-					sdk: DescopeSdk({
-						projectId: authConfig.projectId,
-						managementKey: authConfig.managementKey,
-					}),
-					config: authConfig,
-				})
-			: createAuthService(authConfig);
+	const auth = createAuthService(authConfig);
 
 	const storage = createBlobStorage(
 		config.blobBackend === "local"
