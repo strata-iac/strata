@@ -2,7 +2,7 @@ name: Preview Environment
 
 on:
   pull_request:
-    types: [opened, reopened, synchronize, closed]
+    types: [opened, reopened, synchronize]
     branches: [main]
 
 permissions:
@@ -16,7 +16,6 @@ jobs:
   # ── Detect what changed (dependency-aware) ────────────────────────────────
   changes:
     name: Detect Changes
-    if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     outputs:
       server: ${{ steps.affected.outputs.server }}
@@ -253,20 +252,6 @@ jobs:
           URL=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --meta githubCommitRef="$GIT_BRANCH")
           echo "url=$URL" >> $GITHUB_OUTPUT
 
-  # ── Cleanup on PR close ─────────────────────────────────────────────────
-  cleanup:
-    name: Cleanup Preview
-    if: github.event.action == 'closed'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Delete Neon branch
-        uses: neondatabase/delete-branch-action@v3
-        continue-on-error: true
-        with:
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          branch: preview/pr-${{ github.event.number }}
-          api_key: ${{ secrets.NEON_API_KEY }}
-
   bench-preview:
     name: Preview Benchmark
     needs: [deploy-app, neon]
@@ -432,7 +417,7 @@ jobs:
   # ── Comment on PR with preview URLs ────────────────────────────────────
   comment:
     name: PR Comment
-    needs: [changes, deploy-app, deploy-docs, infra, neon, bench-preview]
+    needs: [changes, deploy-app, deploy-docs, infra, neon]
     if: always() && (needs.deploy-app.result == 'success' || needs.deploy-docs.result == 'success')
     runs-on: ubuntu-latest
     permissions:
