@@ -128,12 +128,10 @@ async function main(): Promise<void> {
 	console.log("  THRESHOLD CHECK");
 	console.log("━".repeat(68));
 
-	let anyFail = false;
 	for (const s of summaries) {
 		const p50Text = s.p50 === null ? "N/A" : formatMs(s.p50);
 		const icon = s.pass ? "✓" : "✗";
 		const status = s.pass ? "PASS" : "FAIL";
-		if (!s.pass) anyFail = true;
 		console.log(
 			`  ${icon} ${s.mode}/${s.variant} N=${String(s.n).padStart(4)}  p50=${padLeft(p50Text, 10)}  limit=${padLeft(formatMs(s.limit), 10)}  ${status}`,
 		);

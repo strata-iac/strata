@@ -407,10 +407,6 @@ async function writeStepSummary(results: BenchmarkResults): Promise<void> {
   await Bun.write(STEP_SUMMARY_PATH, `${lines.join("\n")}\n`);
 }
 
-function pad(s: string, width: number): string {
-  return s.length >= width ? s : `${s}${" ".repeat(width - s.length)}`;
-}
-
 function padLeft(s: string, width: number): string {
   return s.length >= width ? s : `${" ".repeat(width - s.length)}${s}`;
 }
