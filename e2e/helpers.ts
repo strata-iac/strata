@@ -157,9 +157,12 @@ export async function startServer(): Promise<Subprocess> {
 			PROCELLA_DEV_AUTH_TOKEN: TEST_TOKEN,
 			PROCELLA_BLOB_BACKEND: "local",
 			PROCELLA_BLOB_LOCAL_PATH: "./data/e2e-blobs",
+			...(process.env.PROCELLA_OTEL_ENABLED
+				? { PROCELLA_OTEL_ENABLED: process.env.PROCELLA_OTEL_ENABLED }
+				: {}),
 		},
 		stdout: "ignore",
-		stderr: "ignore",
+		stderr: "inherit",
 	});
 
 	await waitForHealth(`${BACKEND_URL}/healthz`, 30_000);
