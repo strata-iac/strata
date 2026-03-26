@@ -111,6 +111,7 @@ async function writeTokenOutput(token: string): Promise<void> {
     process.stdout.write(`${token}\n`);
     return;
   }
+  process.stdout.write(`::add-mask::${token}\n`);
   await appendFile(outputPath, `bench_token=${token}\n`, "utf8");
 }
 
