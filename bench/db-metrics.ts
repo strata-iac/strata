@@ -1,6 +1,7 @@
 import { SQL } from "bun";
 
 const DB_URL =
+  process.env.BENCH_DATABASE_URL ||
   process.env.PROCELLA_DATABASE_URL ||
   "postgres://procella:procella@localhost:5432/procella?sslmode=disable";
 
