@@ -64,7 +64,7 @@ async function main(): Promise<void> {
   const summaries: ComboSummary[] = [];
   const errors: string[] = [];
 
-  for (const [key, rows] of grouped.entries()) {
+  for (const rows of grouped.values()) {
     const sample = rows[0];
     if (!sample) continue;
 
