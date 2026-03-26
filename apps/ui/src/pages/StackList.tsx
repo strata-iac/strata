@@ -1,7 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { StackCard, type UpdateStatus } from "../components/ui";
 import { apiBase } from "../config";
 import { trpc } from "../trpc";
@@ -61,7 +60,7 @@ export function StackList() {
 	const [isLoadingMore, setIsLoadingMore] = useState(false);
 	const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
 
-	const searchKey = useMemo(
+	const _searchKey = useMemo(
 		() =>
 			JSON.stringify({
 				query: debouncedSearch || "",
@@ -80,7 +79,7 @@ export function StackList() {
 		setNextPageToken(undefined);
 		setIsLoadingMore(false);
 		setHasLoadedMore(false);
-	}, [searchKey]);
+	}, []);
 
 	useEffect(() => {
 		if (!stacks) return;

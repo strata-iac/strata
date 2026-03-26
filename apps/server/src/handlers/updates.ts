@@ -144,8 +144,18 @@ export function updateHandlers(
 				webhooks &&
 				(body.status === "succeeded" || body.status === "failed" || body.status === "cancelled")
 			) {
-				const stackInfo = await stacks.getStackByNames(org, project, stack).catch((): null => null);
-				const tenantId = stackInfo?.tenantId ?? org;
+				let tenantId = org;
+				try {
+					const stackInfo = await stacks.getStackByNames(org, project, stack);
+					tenantId = stackInfo.tenantId;
+				} catch (lookupErr) {
+					console.error("[updates] getStackByNames failed, falling back to org param:", {
+						org,
+						project,
+						stack,
+						error: String(lookupErr),
+					});
+				}
 				await webhooks
 					.emitAndWait({
 						tenantId,
