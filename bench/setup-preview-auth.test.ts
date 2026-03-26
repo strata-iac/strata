@@ -129,6 +129,17 @@ describe("setup-preview-auth", () => {
     expect(result.keyId).toBe("key-123");
   });
 
+  test("setupAuth tolerates tenant duplicate name errors", async () => {
+    mockCreateWithId.mockResolvedValueOnce({
+      ok: false,
+      error: { errorMessage: "Failed creating tenant because tenant name is duplicate" },
+    });
+
+    const result = await setupAuth("project-id", "mgmt-key");
+    expect(result.token).toBe("token-abc");
+    expect(result.keyId).toBe("key-123");
+  });
+
   test("setupAuth throws on non-idempotent tenant create errors", async () => {
     mockCreateWithId.mockRejectedValueOnce(new Error("permission denied"));
 

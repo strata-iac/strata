@@ -30,8 +30,8 @@ function getResponseErrorMessage(error?: DescopeError, fallback = "Descope reque
   return error?.errorMessage ?? error?.errorDescription ?? fallback;
 }
 
-function isAlreadyExistsMessage(message: string): boolean {
-  return /already\s+exists?|exists?/i.test(message);
+function isDuplicateError(message: string): boolean {
+  return /already\s+exists?|duplicate|conflict/i.test(message);
 }
 
 async function deleteAllTestUsers(client: ReturnType<typeof createClient>): Promise<void> {
@@ -45,13 +45,13 @@ async function ensureTenant(client: ReturnType<typeof createClient>): Promise<vo
       | undefined;
     if (response?.ok === false) {
       const message = getResponseErrorMessage(response.error, "Failed creating tenant");
-      if (!isAlreadyExistsMessage(message)) {
+      if (!isDuplicateError(message)) {
         throw new Error(message);
       }
     }
   } catch (error) {
     const message = getErrorMessage(error);
-    if (!isAlreadyExistsMessage(message)) {
+    if (!isDuplicateError(message)) {
       throw error;
     }
   }
@@ -112,7 +112,8 @@ async function writeTokenOutput(token: string): Promise<void> {
     return;
   }
   process.stdout.write(`::add-mask::${token}\n`);
-  await appendFile(outputPath, `bench_token=${token}\n`, "utf8");
+  const delimiter = `ghadelim_${Date.now()}`;
+  await appendFile(outputPath, `bench_token<<${delimiter}\n${token}\n${delimiter}\n`, "utf8");
 }
 
 async function main(): Promise<void> {
