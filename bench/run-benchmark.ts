@@ -230,6 +230,7 @@ async function runPulumi(
 interface TimedResult {
   ms: number | null;
   exitCode: number;
+  stdout: string;
   stderr: string;
 }
 
@@ -240,6 +241,7 @@ async function timed(fn: () => Promise<CommandResult>): Promise<TimedResult> {
   return {
     ms: result.exitCode === 0 ? elapsed : null,
     exitCode: result.exitCode,
+    stdout: result.stdout,
     stderr: result.stderr,
   };
 }
@@ -282,7 +284,7 @@ async function runTrial(
     const up = await timed(() => runPulumi(["up", "--yes"], projectDir, pulumiHome, mode));
 
     if (up.exitCode !== 0) {
-      console.error(`[${mode}/${variant}] N=${n} trial=${trial} up failed:\n${up.stderr}`);
+      console.error(`[${mode}/${variant}] N=${n} trial=${trial} up failed (exit ${up.exitCode}):\n  stdout: ${up.stdout.slice(0, 500)}\n  stderr: ${up.stderr.slice(0, 500)}`);
       return {
         n, mode, variant, trial,
         upMs: null, previewMs: null, destroyMs: null,
