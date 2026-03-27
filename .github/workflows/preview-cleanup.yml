@@ -41,10 +41,10 @@ jobs:
         continue-on-error: true
         run: |
           STAGE=pr-${{ github.event.number }}
-          DB_NAME="procella_${STAGE//-/_}"
-          CLUSTER_ARN=$(npx sst output clusterArn --stage production 2>/dev/null || npx sst output clusterArn --stage "$STAGE" 2>/dev/null)
-          SECRET_ARN=$(npx sst output secretArn --stage production 2>/dev/null || npx sst output secretArn --stage "$STAGE" 2>/dev/null)
-          if [ -n "$CLUSTER_ARN" ] && [ -n "$SECRET_ARN" ]; then
+          DB_NAME=$(npx sst output databaseName --stage "$STAGE" 2>/dev/null)
+          CLUSTER_ARN=$(npx sst output clusterArn --stage "$STAGE" 2>/dev/null)
+          SECRET_ARN=$(npx sst output secretArn --stage "$STAGE" 2>/dev/null)
+          if [ -n "$DB_NAME" ] && [ -n "$CLUSTER_ARN" ] && [ -n "$SECRET_ARN" ]; then
             aws rds-data execute-statement \
               --resource-arn "$CLUSTER_ARN" \
               --secret-arn "$SECRET_ARN" \
