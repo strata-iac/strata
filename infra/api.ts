@@ -4,9 +4,9 @@ import {
 	allSecrets,
 	encryptionKey,
 	devAuthToken,
-	descopeProjectId,
 	descopeManagementKey,
 } from "./secrets";
+import { projectId as descopeProjectId } from "./descope";
 
 const isProd = $app.stage === "production";
 const stage = $app.stage;
@@ -37,7 +37,7 @@ export const api = new sst.aws.Function("ProcellaApi", {
 		...(!isProd ? { PROCELLA_DEV_AUTH_TOKEN: devAuthToken.value } : {}),
 		...(isProd
 			? {
-					PROCELLA_DESCOPE_PROJECT_ID: descopeProjectId.value,
+					PROCELLA_DESCOPE_PROJECT_ID: descopeProjectId,
 					PROCELLA_DESCOPE_MANAGEMENT_KEY: descopeManagementKey.value,
 				}
 			: {}),
