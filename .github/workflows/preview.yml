@@ -97,9 +97,6 @@ jobs:
           echo "api=https://api.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
           echo "app=https://app.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
           echo "docs=https://docs.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
-          echo "api=$API" >> $GITHUB_OUTPUT
-          echo "app=$APP" >> $GITHUB_OUTPUT
-          echo "docs=$DOCS" >> $GITHUB_OUTPUT
 
   comment:
     name: PR Comment
