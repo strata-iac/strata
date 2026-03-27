@@ -9,6 +9,7 @@ import {
 } from "./secrets";
 
 const isProd = $app.stage === "production";
+const stage = $app.stage;
 
 const dbEnv = $dev
 	? {
@@ -45,5 +46,12 @@ export const api = new sst.aws.Function("ProcellaApi", {
 		esbuild: {
 			external: ["bun"],
 		},
+	},
+});
+
+export const router = new sst.aws.Router("ProcellaRouter", {
+	domain: isProd ? "api.procella.sh" : `api.${stage}.procella.sh`,
+	routes: {
+		"/*": api.url,
 	},
 });

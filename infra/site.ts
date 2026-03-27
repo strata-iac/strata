@@ -1,4 +1,7 @@
-import { api } from "./api";
+import { router } from "./api";
+
+const isProd = $app.stage === "production";
+const stage = $app.stage;
 
 export const site = new sst.aws.StaticSite("ProcellaSite", {
 	path: "apps/ui",
@@ -6,7 +9,22 @@ export const site = new sst.aws.StaticSite("ProcellaSite", {
 		command: "bun run build",
 		output: "dist",
 	},
+	domain: isProd
+		? {
+				name: "app.procella.sh",
+				redirects: ["www.procella.sh", "procella.sh"],
+			}
+		: `app.${stage}.procella.sh`,
 	environment: {
-		VITE_API_URL: api.url,
+		VITE_API_URL: router.url,
+		VITE_APP_URL: isProd ? "https://app.procella.sh" : `https://app.${stage}.procella.sh`,
+	},
+	transform: {
+		cdn: (args) => {
+			args.customErrorResponses = [
+				{ errorCode: 403, responsePagePath: "/index.html", responseCode: 200 },
+				{ errorCode: 404, responsePagePath: "/index.html", responseCode: 200 },
+			];
+		},
 	},
 });

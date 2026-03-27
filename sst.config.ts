@@ -8,6 +8,7 @@ export default $config({
 			protect: input.stage === "production",
 			home: "aws",
 			providers: {
+				aws: { region: "us-east-1", version: "7.20.0" },
 				"@descope/pulumi-descope": "0.3.4",
 			},
 		};
@@ -16,13 +17,15 @@ export default $config({
 		await import("./infra/secrets");
 		await import("./infra/database");
 		await import("./infra/storage");
-		const { api } = await import("./infra/api");
+		const { router } = await import("./infra/api");
 		await import("./infra/gc");
 		const { site } = await import("./infra/site");
+		const { docs } = await import("./infra/docs");
 
 		return {
-			api: api.url,
-			site: site.url,
+			api: router.url,
+			app: site.url,
+			docs: docs.url,
 		};
 	},
 });

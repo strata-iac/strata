@@ -35,6 +35,8 @@ const accessKeyJwtTemplate = JSON.stringify({
 const project = new descope.Project(
 	"Procella",
 	{
+		name: `procella-${$app.stage}`,
+
 		// ── Project-level settings ──────────────────────────────────────────
 		projectSettings: {
 			userJwtTemplate: "Procella User",
