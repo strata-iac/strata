@@ -35,11 +35,14 @@ bench/auth-debug/
 .dolt/
 *.db
 .vercel
+.sst/
 .sisyphus/
 .agents/
 skills-lock.json
 plan.md
 $PULUMI_HOME/
+bunx-*/
+sst-*.log
 
 # Node compile cache
 node-compile-cache/

@@ -26,12 +26,17 @@
 		"bench:check": "bun run bench/analyze.ts"
 	},
 	"devDependencies": {
+		"@aws-sdk/client-rds-data": "^3.1018.0",
 		"@biomejs/biome": "^2.4.6",
 		"@descope/node-sdk": "^2.2.1",
+		"@descope/pulumi-descope": "^0.3.4",
+		"@pulumi/pulumi": "^3.228.0",
+		"@types/aws-lambda": "^8.10.161",
 		"@types/bun": "^1.3.10",
 		"drizzle-kit": "catalog:",
 		"husky": "^9.1.7",
 		"lint-staged": "^16.4.0",
+		"sst": "^4.5.11",
 		"typescript": "catalog:"
 	},
 	"lint-staged": {
