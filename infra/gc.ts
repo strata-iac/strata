@@ -13,27 +13,25 @@ const dbEnv = $dev
 			PROCELLA_DATABASE_NAME: databaseName,
 		};
 
-const gcFunction = new sst.aws.Function("ProcellaGc", {
-	handler: "apps/server/src/gc-handler.handler",
-	timeout: "60 seconds",
-	memory: "256 MB",
-	link: [database, bucket, ...allSecrets],
-	environment: {
-		...dbEnv,
-		PROCELLA_BLOB_BACKEND: "s3",
-		PROCELLA_BLOB_S3_BUCKET: bucket.name,
-		PROCELLA_AUTH_MODE: "dev",
-		PROCELLA_DEV_AUTH_TOKEN: devAuthToken.value,
-		PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
-	},
-	nodejs: {
-		esbuild: {
-			external: ["bun"],
-		},
-	},
-});
-
 export const gc = new sst.aws.Cron("ProcellaGcCron", {
 	schedule: "rate(1 minute)",
-	job: gcFunction,
+	job: {
+		handler: "apps/server/src/gc-handler.handler",
+		timeout: "60 seconds",
+		memory: "256 MB",
+		link: [database, bucket, ...allSecrets],
+		environment: {
+			...dbEnv,
+			PROCELLA_BLOB_BACKEND: "s3",
+			PROCELLA_BLOB_S3_BUCKET: bucket.name,
+			PROCELLA_AUTH_MODE: "dev",
+			PROCELLA_DEV_AUTH_TOKEN: devAuthToken.value,
+			PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
+		},
+		nodejs: {
+			esbuild: {
+				external: ["bun"],
+			},
+		},
+	},
 });
