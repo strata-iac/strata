@@ -30,7 +30,7 @@ export const gc = new sst.aws.Cron("ProcellaGcCron", {
 		},
 		nodejs: {
 			esbuild: {
-				external: ["bun"],
+				external: ["bun", "drizzle-orm/bun-sql", "drizzle-orm/bun-sql/migrator"],
 			},
 		},
 	},

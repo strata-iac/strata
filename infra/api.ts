@@ -47,7 +47,7 @@ export const api = new sst.aws.Function("ProcellaApi", {
 	},
 	nodejs: {
 		esbuild: {
-			external: ["bun"],
+			external: ["bun", "drizzle-orm/bun-sql", "drizzle-orm/bun-sql/migrator"],
 		},
 	},
 });
