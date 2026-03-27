@@ -24,9 +24,9 @@ const gcFunction = new sst.aws.Function("ProcellaGc", {
 		...dbEnv,
 		PROCELLA_BLOB_BACKEND: "s3",
 		PROCELLA_BLOB_S3_BUCKET: bucket.name,
-		PROCELLA_AUTH_MODE: isProd ? "descope" : "dev",
+		PROCELLA_AUTH_MODE: "dev",
+		PROCELLA_DEV_AUTH_TOKEN: devAuthToken.value,
 		PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
-		...(!isProd ? { PROCELLA_DEV_AUTH_TOKEN: devAuthToken.value } : {}),
 	},
 	nodejs: {
 		esbuild: {

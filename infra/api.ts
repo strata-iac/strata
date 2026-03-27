@@ -6,10 +6,13 @@ import {
 	devAuthToken,
 	descopeManagementKey,
 } from "./secrets";
-import { projectId as descopeProjectId } from "./descope";
 
 const isProd = $app.stage === "production";
 const stage = $app.stage;
+
+const descopeProjectId = isProd
+	? (await import("./descope")).projectId
+	: undefined;
 
 const dbEnv = $dev
 	? {

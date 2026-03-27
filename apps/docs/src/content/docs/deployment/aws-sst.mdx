@@ -49,10 +49,9 @@ npx sst secret set ProcellaEncryptionKey "$(openssl rand -hex 32)"
 npx sst secret set ProcellaDevAuthToken "your-token-here"
 ```
 
-For Descope authentication mode:
+For Descope authentication mode (production only — the Descope project ID is provisioned automatically via `infra/descope.ts`):
 
 ```bash
-npx sst secret set ProcellaDescopeProjectId "P..."
 npx sst secret set ProcellaDescopeManagementKey "..."
 ```
 

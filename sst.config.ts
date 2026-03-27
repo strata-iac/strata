@@ -14,10 +14,12 @@ export default $config({
 		};
 	},
 	async run() {
+		const isProd = $app.stage === "production";
+
 		await import("./infra/secrets");
 		await import("./infra/database");
 		await import("./infra/storage");
-		await import("./infra/descope");
+		if (isProd) await import("./infra/descope");
 		const { router } = await import("./infra/api");
 		await import("./infra/gc");
 		const { site } = await import("./infra/site");
