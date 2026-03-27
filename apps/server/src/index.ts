@@ -25,6 +25,9 @@ if (process.argv.includes("--healthz")) {
 		const nextArg = process.argv[process.argv.indexOf("--migrate") + 1];
 		const migrationsFolder = nextArg && !nextArg.startsWith("-") ? nextArg : "./migrations";
 		logger.info({ migrationsFolder }, "Running migrations...");
+		if (!config.databaseUrl) {
+			throw new Error("PROCELLA_DATABASE_URL is required for --migrate in Bun mode");
+		}
 		await runMigrations(config.databaseUrl, migrationsFolder);
 		logger.info("Migrations complete.");
 		logger.flush();
