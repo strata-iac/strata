@@ -5,7 +5,7 @@ import { allSecrets, encryptionKey, devAuthToken } from "./secrets";
 export const gc = new sst.aws.Cron("ProcellaGcCron", {
 	schedule: "rate(1 minute)",
 	job: {
-		handler: "apps/server/src/gc-bootstrap.handler",
+		handler: "apps/server/src/lambda-stub.handler",
 		timeout: "60 seconds",
 		memory: "256 MB",
 		vpc,

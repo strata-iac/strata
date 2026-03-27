@@ -15,7 +15,7 @@ const descopeProjectId = isProd
 	: undefined;
 
 export const api = new sst.aws.Function("ProcellaApi", {
-	handler: "apps/server/src/lambda-bootstrap.handler",
+	handler: "apps/server/src/lambda-stub.handler",
 	url: true,
 	timeout: "60 seconds",
 	memory: "512 MB",
