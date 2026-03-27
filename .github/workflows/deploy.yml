@@ -3,8 +3,10 @@ name: Deploy Production
 on:
   push:
     branches: [main]
+  workflow_dispatch: {}
 
 permissions:
+  id-token: write
   contents: read
 
 concurrency:
@@ -12,42 +14,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ── Detect what changed (dependency-aware) ────────────────────────────────
-  changes:
-    name: Detect Changes
+  deploy:
+    name: Deploy to AWS
     runs-on: ubuntu-latest
-    outputs:
-      server: ${{ steps.affected.outputs.server }}
-      ui: ${{ steps.affected.outputs.ui }}
-      docs: ${{ steps.affected.outputs.docs }}
-      infra: ${{ steps.affected.outputs.infra }}
-      migrate: ${{ steps.affected.outputs.migrate }}
-      affected: ${{ steps.affected.outputs.affected }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - uses: jdx/mise-action@v4
-      - name: Detect affected packages
-        id: affected
-        run: |
-          RESULT=$(bun run scripts/affected.ts --base=${{ github.event.before }})
-          echo "server=$(echo "$RESULT" | jq -r .server)" >> $GITHUB_OUTPUT
-          echo "ui=$(echo "$RESULT" | jq -r .ui)" >> $GITHUB_OUTPUT
-          echo "docs=$(echo "$RESULT" | jq -r .docs)" >> $GITHUB_OUTPUT
-          echo "infra=$(echo "$RESULT" | jq -r .infra)" >> $GITHUB_OUTPUT
-          echo "migrate=$(echo "$RESULT" | jq -r .migrate)" >> $GITHUB_OUTPUT
-          echo "affected=$(echo "$RESULT" | jq -c .affected)" >> $GITHUB_OUTPUT
-          echo "::group::Change detection result"
-          echo "$RESULT" | jq .
-          echo "::endgroup::"
-
-  # ── Run database migrations on production ─────────────────────────────────
-  migrate:
-    name: Migrate Production DB
-    needs: [changes]
-    if: needs.changes.outputs.migrate == 'true'
-    runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment: production
     steps:
       - uses: actions/checkout@v6
@@ -60,156 +30,37 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
-      - name: Run migrations
-        env:
-          PROCELLA_DATABASE_URL: ${{ secrets.PROCELLA_DATABASE_URL }}
-        run: |
-          mise set PROCELLA_DATABASE_URL="${PROCELLA_DATABASE_URL}"
-          bun run scripts/migrate.ts
-          mise unset PROCELLA_DATABASE_URL
 
-  # ── Deploy Descope infra (production stack) ──────────────────────────────
-  infra:
-    name: Pulumi Production
-    needs: [changes]
-    if: needs.changes.outputs.infra == 'true'
-    runs-on: ubuntu-latest
-    environment: production
-    env:
-      PULUMI_BACKEND_URL: s3://${{ vars.PROCELLA_BLOB_S3_BUCKET }}?endpoint=${{ vars.R2_ENDPOINT }}&region=auto
-    steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
-      - uses: pulumi/setup-pulumi@v2
-      - uses: actions/cache@v5
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          path: |
-            node_modules
-            ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-      - run: bun install --frozen-lockfile
-      - run: bun install --frozen-lockfile
-        working-directory: infra
-      - uses: pulumi/actions@v6
-        with:
-          command: up
-          stack-name: prod
-          work-dir: infra
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-          DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: GitHubActions-Deploy-${{ github.run_id }}
 
-  # ── Deploy Procella to Vercel (production) ───────────────────────────────
-  deploy-app:
-    name: Deploy App Production
-    needs: [changes, migrate, infra]
-    if: |
-      always() &&
-      (needs.changes.outputs.server == 'true' || needs.changes.outputs.ui == 'true') &&
-      (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
-      (needs.infra.result == 'success' || needs.infra.result == 'skipped')
-    runs-on: ubuntu-latest
-    environment: production
-    env:
-      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      PULUMI_BACKEND_URL: s3://${{ vars.PROCELLA_BLOB_S3_BUCKET }}?endpoint=${{ vars.R2_ENDPOINT }}&region=auto
-    steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
-      - uses: pulumi/setup-pulumi@v2
-      - uses: actions/cache@v5
-        with:
-          path: |
-            node_modules
-            ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-      - run: bun install --frozen-lockfile
-      - run: bun install --frozen-lockfile
-        working-directory: infra
-      - name: Get Descope project ID from Pulumi stack
-        id: descope
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-        run: |
-          DESCOPE_ID=$(cd infra && pulumi stack output projectId --stack prod)
-          echo "project_id=$DESCOPE_ID" >> $GITHUB_OUTPUT
-      - run: npm install --global vercel@latest
-      - name: Build & Deploy
-        env:
-          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
-          PROCELLA_DATABASE_URL: ${{ secrets.PROCELLA_DATABASE_URL }}
-          PROCELLA_DESCOPE_PROJECT_ID: ${{ steps.descope.outputs.project_id }}
-          PROCELLA_AUTH_MODE: descope
-          PROCELLA_BLOB_BACKEND: s3
-          PROCELLA_BLOB_S3_BUCKET: ${{ vars.PROCELLA_BLOB_S3_BUCKET }}
-          PROCELLA_BLOB_S3_ENDPOINT: ${{ vars.PROCELLA_BLOB_S3_ENDPOINT }}
-          PROCELLA_BLOB_S3_REGION: ${{ vars.PROCELLA_BLOB_S3_REGION }}
-          PROCELLA_ENCRYPTION_KEY: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
-          PROCELLA_DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          SKIP_MIGRATIONS: "1"
-          VITE_API_URL: https://api.procella.sh
-          VITE_APP_URL: https://app.procella.sh
-          PROCELLA_CORS_ORIGINS: https://app.procella.sh,https://procella.sh
-          PROCELLA_OTEL_ENABLED: "true"
-          OTEL_SERVICE_NAME: procella-prod
-          OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
-          OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
-        run: |
-          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-          vercel build --prod --token="$VERCEL_TOKEN"
-          vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" \
-            --env PROCELLA_DATABASE_URL="$PROCELLA_DATABASE_URL" \
-            --env PROCELLA_DESCOPE_PROJECT_ID="$PROCELLA_DESCOPE_PROJECT_ID" \
-            --env PROCELLA_AUTH_MODE="$PROCELLA_AUTH_MODE" \
-            --env PROCELLA_BLOB_BACKEND="$PROCELLA_BLOB_BACKEND" \
-            --env PROCELLA_BLOB_S3_BUCKET="$PROCELLA_BLOB_S3_BUCKET" \
-            --env PROCELLA_BLOB_S3_ENDPOINT="$PROCELLA_BLOB_S3_ENDPOINT" \
-            --env PROCELLA_BLOB_S3_REGION="$PROCELLA_BLOB_S3_REGION" \
-            --env PROCELLA_ENCRYPTION_KEY="$PROCELLA_ENCRYPTION_KEY" \
-            --env PROCELLA_DESCOPE_MANAGEMENT_KEY="$PROCELLA_DESCOPE_MANAGEMENT_KEY" \
-            --env AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
-            --env AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
-            --env PROCELLA_CORS_ORIGINS="$PROCELLA_CORS_ORIGINS" \
-            --env PROCELLA_OTEL_ENABLED="$PROCELLA_OTEL_ENABLED" \
-            --env OTEL_SERVICE_NAME="$OTEL_SERVICE_NAME" \
-            --env OTEL_EXPORTER_OTLP_ENDPOINT="$OTEL_EXPORTER_OTLP_ENDPOINT" \
-            --env OTEL_EXPORTER_OTLP_HEADERS="$OTEL_EXPORTER_OTLP_HEADERS"
+      # SST secrets for production must be set once manually:
+      #   npx sst secret set ProcellaEncryptionKey "..." --stage production
+      #   npx sst secret set ProcellaDevAuthToken "..." --stage production
+      #   npx sst secret set ProcellaDescopeProjectId "..." --stage production
+      #   npx sst secret set ProcellaDescopeManagementKey "..." --stage production
 
-  # ── Deploy Docs to Vercel (production) ───────────────────────────────────
-  deploy-docs:
-    name: Deploy Docs Production
-    needs: [changes]
-    if: needs.changes.outputs.docs == 'true'
-    runs-on: ubuntu-latest
-    environment: production
-    env:
-      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
-        with:
-          path: |
-            node_modules
-            ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-      - run: bun install --frozen-lockfile
-      - run: npm install --global vercel@latest
-      - name: Build & Deploy
-        env:
-          VERCEL_PROJECT_ID: ${{ vars.VERCEL_DOCS_PROJECT_ID }}
+      - name: Deploy
+        run: npx sst deploy --stage production
+
+      - name: Deployment summary
+        if: always()
         run: |
-          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-          vercel build --prod --token="$VERCEL_TOKEN"
-          vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | \`production\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | \`${{ job.status }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Region | \`us-east-1\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Triggered by | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**URLs:**" >> $GITHUB_STEP_SUMMARY
+          echo "- API: https://api.procella.sh" >> $GITHUB_STEP_SUMMARY
+          echo "- App: https://app.procella.sh" >> $GITHUB_STEP_SUMMARY
+          echo "- Docs: https://docs.procella.sh" >> $GITHUB_STEP_SUMMARY
