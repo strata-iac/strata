@@ -11,12 +11,9 @@ PROCELLA_DEV_AUTH_TOKEN = "devtoken123"
 PROCELLA_BLOB_BACKEND = "s3"
 PROCELLA_BLOB_S3_BUCKET = "procella-checkpoints"
 PROCELLA_BLOB_S3_ENDPOINT = "http://localhost:9000"
-AWS_ACCESS_KEY_ID = "minio"
-AWS_SECRET_ACCESS_KEY = "minio"
 CADDY_GO_UPSTREAM = "localhost:8081"
 CADDY_UI_UPSTREAM = "localhost:5173"
 CADDY_DOCS_UPSTREAM = "localhost:4321"
-# Enables `pulumi login` browser-based auth flow. The Pulumi CLI opens this host's /cli-login page.
 PULUMI_CONSOLE_DOMAIN = "localhost:9090"
 _.file = ".env"
 
