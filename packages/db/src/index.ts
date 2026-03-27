@@ -31,8 +31,8 @@ export {
 // biome-ignore lint/suspicious/noExplicitAny: PgDatabase requires QueryResultHKT generic which differs per driver
 export type Database = import("drizzle-orm/pg-core").PgDatabase<any, typeof schema>;
 
-/** Options for creating a database connection. */
-export interface CreateDbOptions {
+/** Options for creating a database connection via URL (Bun.sql or Neon). */
+export interface CreateDbUrlOptions {
 	/** PostgreSQL connection URL. */
 	url: string;
 	/** Maximum number of connections in the pool. Defaults to 20. */
@@ -40,6 +40,16 @@ export interface CreateDbOptions {
 	/** Idle connection timeout in milliseconds. Defaults to 30_000. */
 	idleTimeout?: number;
 }
+
+/** Options for creating a database connection via AWS RDS Data API. */
+export interface CreateDbDataApiOptions {
+	driver: "data-api";
+	secretArn: string;
+	resourceArn: string;
+	database: string;
+}
+
+export type CreateDbOptions = CreateDbUrlOptions | CreateDbDataApiOptions;
 
 /** Wrapper around the connection pool for lifecycle management. */
 export interface DbClient {
@@ -70,6 +80,7 @@ function isNeonHost(url: string): boolean {
 /**
  * Create a Drizzle database instance with automatic driver selection.
  *
+ * - Data API driver: AWS RDS Data API (HTTP, no persistent connections)
  * - Neon hosts (*.neon.tech) → @neondatabase/serverless (WebSocket)
  * - All other hosts → Bun.sql (native TCP, fastest)
  *
@@ -79,13 +90,28 @@ function isNeonHost(url: string): boolean {
 export async function createDb(
 	options: CreateDbOptions,
 ): Promise<{ db: Database; client: DbClient }> {
-	if (!isNeonHost(options.url)) {
+	if ("driver" in options && options.driver === "data-api") {
+		const { RDSDataClient } = await import("@aws-sdk/client-rds-data");
+		const { drizzle } = await import("drizzle-orm/aws-data-api/pg");
+		const rdsClient = new RDSDataClient({});
+		const db = drizzle(rdsClient, {
+			schema,
+			database: options.database,
+			secretArn: options.secretArn,
+			resourceArn: options.resourceArn,
+		});
+		return { db: db as Database, client: { close: async () => rdsClient.destroy() } };
+	}
+
+	const urlOpts = options as CreateDbUrlOptions;
+
+	if (!isNeonHost(urlOpts.url)) {
 		const { SQL } = require("bun") as typeof import("bun");
 		const { drizzle } = await import("drizzle-orm/bun-sql");
 		const client = new SQL({
-			url: options.url,
-			max: options.max ?? 20,
-			idleTimeout: Math.max(1, Math.ceil((options.idleTimeout ?? 30_000) / 1000)),
+			url: urlOpts.url,
+			max: urlOpts.max ?? 20,
+			idleTimeout: Math.max(1, Math.ceil((urlOpts.idleTimeout ?? 30_000) / 1000)),
 		});
 		const db = drizzle({ client, schema });
 		return { db: db as Database, client: { close: () => client.close() } };
@@ -100,9 +126,9 @@ export async function createDb(
 	}
 
 	const pool = new Pool({
-		connectionString: options.url,
-		max: options.max ?? 20,
-		idleTimeoutMillis: options.idleTimeout ?? 30_000,
+		connectionString: urlOpts.url,
+		max: urlOpts.max ?? 20,
+		idleTimeoutMillis: urlOpts.idleTimeout ?? 30_000,
 	});
 	const db = drizzle({ client: pool, schema });
 	return { db: db as Database, client: { close: () => pool.end() } };
@@ -114,14 +140,40 @@ export async function createDb(
 export async function createDbFromUrl(
 	databaseUrl: string,
 ): Promise<{ db: Database; client: DbClient }> {
-	return createDb({ url: databaseUrl });
+	return createDb({ url: databaseUrl } as CreateDbUrlOptions);
 }
 
 // ============================================================================
 // Migrations
 // ============================================================================
 
-export async function runMigrations(url: string, migrationsFolder: string): Promise<void> {
+export async function runMigrations(
+	options: CreateDbOptions | string,
+	migrationsFolder: string,
+): Promise<void> {
+	const resolved: CreateDbOptions =
+		typeof options === "string" ? ({ url: options } as CreateDbUrlOptions) : options;
+
+	if ("driver" in resolved && resolved.driver === "data-api") {
+		const { RDSDataClient } = await import("@aws-sdk/client-rds-data");
+		const { drizzle } = await import("drizzle-orm/aws-data-api/pg");
+		const { migrate } = await import("drizzle-orm/aws-data-api/pg/migrator");
+		const rdsClient = new RDSDataClient({});
+		try {
+			const db = drizzle(rdsClient, {
+				database: resolved.database,
+				secretArn: resolved.secretArn,
+				resourceArn: resolved.resourceArn,
+			});
+			await migrate(db, { migrationsFolder });
+		} finally {
+			rdsClient.destroy();
+		}
+		return;
+	}
+
+	const urlOpts = resolved as CreateDbUrlOptions;
+	const url = urlOpts.url;
 	if (!isNeonHost(url)) {
 		const { SQL } = require("bun") as typeof import("bun");
 		const { drizzle } = await import("drizzle-orm/bun-sql");

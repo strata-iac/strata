@@ -12,6 +12,7 @@ import { z } from "zod";
 
 const authModeSchema = z.enum(["dev", "descope"]);
 const blobBackendSchema = z.enum(["local", "s3"]);
+const databaseDriverSchema = z.enum(["auto", "data-api"]);
 
 const configSchema = z
 	.object({
@@ -19,8 +20,12 @@ const configSchema = z
 		listenAddr: z.string().default(":9090"),
 
 		// Database
-		databaseUrl: z.string().url(),
+		databaseDriver: databaseDriverSchema.default("auto"),
+		databaseUrl: z.string().url().optional(),
 		databasePoolMax: z.coerce.number().int().min(1).max(100).default(10),
+		databaseSecretArn: z.string().optional(),
+		databaseClusterArn: z.string().optional(),
+		databaseName: z.string().optional(),
 
 		// Auth
 		authMode: authModeSchema.default("dev"),
@@ -56,6 +61,36 @@ const configSchema = z
 			.optional(),
 	})
 	.superRefine((data, ctx) => {
+		if (data.databaseDriver === "auto" && !data.databaseUrl) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Required when PROCELLA_DATABASE_DRIVER=auto",
+				path: ["databaseUrl"],
+			});
+		}
+		if (data.databaseDriver === "data-api") {
+			if (!data.databaseSecretArn) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Required when PROCELLA_DATABASE_DRIVER=data-api",
+					path: ["databaseSecretArn"],
+				});
+			}
+			if (!data.databaseClusterArn) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Required when PROCELLA_DATABASE_DRIVER=data-api",
+					path: ["databaseClusterArn"],
+				});
+			}
+			if (!data.databaseName) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Required when PROCELLA_DATABASE_DRIVER=data-api",
+					path: ["databaseName"],
+				});
+			}
+		}
 		if (data.authMode === "dev" && !data.devAuthToken) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
@@ -93,6 +128,7 @@ const configSchema = z
 export type Config = z.infer<typeof configSchema>;
 export type AuthMode = z.infer<typeof authModeSchema>;
 export type BlobBackend = z.infer<typeof blobBackendSchema>;
+export type DatabaseDriver = z.infer<typeof databaseDriverSchema>;
 
 // ============================================================================
 // Loader
@@ -100,8 +136,12 @@ export type BlobBackend = z.infer<typeof blobBackendSchema>;
 
 const envMapping = {
 	listenAddr: "PROCELLA_LISTEN_ADDR",
+	databaseDriver: "PROCELLA_DATABASE_DRIVER",
 	databaseUrl: "PROCELLA_DATABASE_URL",
 	databasePoolMax: "PROCELLA_DATABASE_POOL_MAX",
+	databaseSecretArn: "PROCELLA_DATABASE_SECRET_ARN",
+	databaseClusterArn: "PROCELLA_DATABASE_CLUSTER_ARN",
+	databaseName: "PROCELLA_DATABASE_NAME",
 	authMode: "PROCELLA_AUTH_MODE",
 	devAuthToken: "PROCELLA_DEV_AUTH_TOKEN",
 	devUserLogin: "PROCELLA_DEV_USER_LOGIN",
