@@ -46,7 +46,7 @@ jobs:
           SST_SECRET_ProcellaDescopeManagementKey: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
 
       - name: Run database migrations
-        run: npx sst shell --stage production -- bun run scripts/migrate.ts
+        run: npx sst shell --stage production -- bun apps/server/src/index.ts --migrate
 
       - name: Deployment summary
         if: always()

@@ -17,15 +17,13 @@ export default $config({
 		const isProd = $app.stage === "production";
 
 		await import("./infra/secrets");
-		await import("./infra/database");
+		const { database, databaseName } = await import("./infra/database");
 		await import("./infra/storage");
 		if (isProd) await import("./infra/descope");
 		const { router } = await import("./infra/api");
 		await import("./infra/gc");
 		const { site } = await import("./infra/site");
 		const { docs } = await import("./infra/docs");
-
-		const { database, databaseName } = await import("./infra/database");
 
 		return {
 			api: router.url,

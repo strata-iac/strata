@@ -71,7 +71,7 @@ jobs:
       - name: Run migrations
         run: |
           STAGE=pr-${{ github.event.number }}
-          npx sst shell --stage "$STAGE" -- bun run scripts/migrate.ts
+          npx sst shell --stage "$STAGE" -- bun apps/server/src/index.ts --migrate
 
       - name: Get stack outputs
         id: outputs
