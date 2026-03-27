@@ -1,7 +1,7 @@
 import { createAuthService } from "@procella/auth";
 import { loadConfig } from "@procella/config";
 import { AesCryptoService, devMasterKey } from "@procella/crypto";
-import { type CreateDbOptions, createDb } from "@procella/db";
+import { createDb } from "@procella/db";
 import { PostgresStacksService } from "@procella/stacks";
 import { createBlobStorage } from "@procella/storage";
 import { initTelemetry } from "@procella/telemetry";
@@ -13,17 +13,7 @@ export async function bootstrap() {
 
 	initTelemetry({ enabled: config.otelEnabled, serviceName: "procella" });
 
-	const dbOptions: CreateDbOptions =
-		config.databaseDriver === "data-api"
-			? {
-					driver: "data-api" as const,
-					secretArn: config.databaseSecretArn as string,
-					resourceArn: config.databaseClusterArn as string,
-					database: config.databaseName as string,
-				}
-			: { url: config.databaseUrl as string, max: config.databasePoolMax };
-
-	const { db, client } = await createDb(dbOptions);
+	const { db, client } = await createDb({ url: config.databaseUrl, max: config.databasePoolMax });
 
 	const authConfig =
 		config.authMode === "dev"

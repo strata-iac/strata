@@ -22,7 +22,7 @@ export const database = await aws.rds
 		}
 		return new sst.aws.Aurora("ProcellaDatabase", {
 			engine: "postgres",
-			dataApi: true,
+			proxy: true,
 			scaling: { min: "0.5 ACU", max: "16 ACU" },
 			vpc,
 			dev: {
@@ -40,3 +40,7 @@ export const databaseName = $dev
 	: stage === "production"
 		? "procella"
 		: `procella_${stage.replace(/-/g, "_")}`;
+
+export const databaseUrl = $dev
+	? $interpolate`postgresql://${database.username}:${database.password}@${database.host}:${database.port}/${databaseName}`
+	: $interpolate`postgresql://${database.username}:${database.password}@${database.host}:${database.port}/${databaseName}`;

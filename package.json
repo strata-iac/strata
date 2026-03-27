@@ -26,7 +26,6 @@
 		"bench:check": "bun run bench/analyze.ts"
 	},
 	"devDependencies": {
-		"@aws-sdk/client-rds-data": "^3.1018.0",
 		"@biomejs/biome": "^2.4.6",
 		"@descope/node-sdk": "^2.2.1",
 		"@descope/pulumi-descope": "^0.3.4",

@@ -126,37 +126,6 @@ describe("@procella/config", () => {
 			const config = loadConfig();
 			expect(config.encryptionKey).toBeUndefined();
 		});
-
-		test("loads data-api driver config without databaseUrl", () => {
-			clearProcellaEnv();
-			Bun.env.PROCELLA_DATABASE_DRIVER = "data-api";
-			Bun.env.PROCELLA_DATABASE_SECRET_ARN = "arn:aws:secretsmanager:us-east-1:123:secret:test";
-			Bun.env.PROCELLA_DATABASE_CLUSTER_ARN = "arn:aws:rds:us-east-1:123:cluster:test";
-			Bun.env.PROCELLA_DATABASE_NAME = "procella";
-			Bun.env.PROCELLA_AUTH_MODE = "dev";
-			Bun.env.PROCELLA_DEV_AUTH_TOKEN = "devtoken123";
-			const config = loadConfig();
-			expect(config.databaseDriver).toBe("data-api");
-			expect(config.databaseUrl).toBeUndefined();
-			expect(config.databaseSecretArn).toBe("arn:aws:secretsmanager:us-east-1:123:secret:test");
-			expect(config.databaseClusterArn).toBe("arn:aws:rds:us-east-1:123:cluster:test");
-			expect(config.databaseName).toBe("procella");
-		});
-
-		test("throws when data-api driver lacks required ARN fields", () => {
-			clearProcellaEnv();
-			Bun.env.PROCELLA_DATABASE_DRIVER = "data-api";
-			Bun.env.PROCELLA_AUTH_MODE = "dev";
-			Bun.env.PROCELLA_DEV_AUTH_TOKEN = "devtoken123";
-			expect(() => loadConfig()).toThrow();
-		});
-
-		test("throws when auto driver lacks databaseUrl", () => {
-			clearProcellaEnv();
-			Bun.env.PROCELLA_AUTH_MODE = "dev";
-			Bun.env.PROCELLA_DEV_AUTH_TOKEN = "devtoken123";
-			expect(() => loadConfig()).toThrow();
-		});
 	});
 
 	describe("tryLoadConfig", () => {

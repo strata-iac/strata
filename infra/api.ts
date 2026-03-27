@@ -1,4 +1,4 @@
-import { database, databaseName } from "./database";
+import { vpc, database, databaseUrl } from "./database";
 import { bucket } from "./storage";
 import {
 	allSecrets,
@@ -14,25 +14,17 @@ const descopeProjectId = isProd
 	? (await import("./descope")).projectId
 	: undefined;
 
-const dbEnv = $dev
-	? {
-			PROCELLA_DATABASE_URL: $interpolate`postgresql://${database.username}:${database.password}@${database.host}:${database.port}/${database.database}`,
-		}
-	: {
-			PROCELLA_DATABASE_DRIVER: "data-api",
-			PROCELLA_DATABASE_SECRET_ARN: database.secretArn,
-			PROCELLA_DATABASE_CLUSTER_ARN: database.clusterArn,
-			PROCELLA_DATABASE_NAME: databaseName,
-		};
-
 export const api = new sst.aws.Function("ProcellaApi", {
-	handler: "apps/server/src/lambda.handler",
+	runtime: "provided.al2023",
+	architecture: "x86_64",
+	handler: "bootstrap",
 	url: true,
 	timeout: "60 seconds",
 	memory: "512 MB",
+	vpc,
 	link: [database, bucket, ...allSecrets],
 	environment: {
-		...dbEnv,
+		PROCELLA_DATABASE_URL: databaseUrl,
 		PROCELLA_BLOB_BACKEND: "s3",
 		PROCELLA_BLOB_S3_BUCKET: bucket.name,
 		PROCELLA_AUTH_MODE: isProd ? "descope" : "dev",
@@ -45,9 +37,9 @@ export const api = new sst.aws.Function("ProcellaApi", {
 				}
 			: {}),
 	},
-	nodejs: {
-		esbuild: {
-			external: ["bun", "drizzle-orm/bun-sql", "drizzle-orm/bun-sql/migrator"],
+	transform: {
+		function: {
+			code: new $util.asset.FileArchive(".build/api"),
 		},
 	},
 });

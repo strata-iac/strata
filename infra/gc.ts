@@ -1,36 +1,28 @@
-import { database, databaseName } from "./database";
+import { vpc, database, databaseUrl } from "./database";
 import { bucket } from "./storage";
 import { allSecrets, encryptionKey, devAuthToken } from "./secrets";
-
-const dbEnv = $dev
-	? {
-			PROCELLA_DATABASE_URL: $interpolate`postgresql://${database.username}:${database.password}@${database.host}:${database.port}/${database.database}`,
-		}
-	: {
-			PROCELLA_DATABASE_DRIVER: "data-api",
-			PROCELLA_DATABASE_SECRET_ARN: database.secretArn,
-			PROCELLA_DATABASE_CLUSTER_ARN: database.clusterArn,
-			PROCELLA_DATABASE_NAME: databaseName,
-		};
 
 export const gc = new sst.aws.Cron("ProcellaGcCron", {
 	schedule: "rate(1 minute)",
 	job: {
-		handler: "apps/server/src/gc-handler.handler",
+		runtime: "provided.al2023",
+		architecture: "x86_64",
+		handler: "bootstrap",
 		timeout: "60 seconds",
 		memory: "256 MB",
+		vpc,
 		link: [database, bucket, ...allSecrets],
 		environment: {
-			...dbEnv,
+			PROCELLA_DATABASE_URL: databaseUrl,
 			PROCELLA_BLOB_BACKEND: "s3",
 			PROCELLA_BLOB_S3_BUCKET: bucket.name,
 			PROCELLA_AUTH_MODE: "dev",
 			PROCELLA_DEV_AUTH_TOKEN: devAuthToken.value,
 			PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
 		},
-		nodejs: {
-			esbuild: {
-				external: ["bun", "drizzle-orm/bun-sql", "drizzle-orm/bun-sql/migrator"],
+		transform: {
+			function: {
+				code: new $util.asset.FileArchive(".build/gc"),
 			},
 		},
 	},
