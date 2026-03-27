@@ -53,7 +53,7 @@ export const api = new sst.aws.Function("ProcellaApi", {
 });
 
 export const router = new sst.aws.Router("ProcellaRouter", {
-	domain: isProd ? "api.procella.dev" : `api.${stage}.procella.dev`,
+	domain: isProd ? "api.procella.cloud" : `api.${stage}.procella.cloud`,
 	routes: {
 		"/*": api.url,
 	},
