@@ -5,9 +5,7 @@ import { allSecrets, encryptionKey, devAuthToken } from "./secrets";
 export const gc = new sst.aws.Cron("ProcellaGcCron", {
 	schedule: "rate(1 minute)",
 	job: {
-		runtime: "provided.al2023",
-		architecture: "x86_64",
-		handler: "bootstrap",
+		handler: "apps/server/src/gc-bootstrap.handler",
 		timeout: "60 seconds",
 		memory: "256 MB",
 		vpc,
@@ -22,6 +20,9 @@ export const gc = new sst.aws.Cron("ProcellaGcCron", {
 		},
 		transform: {
 			function: {
+				runtime: "provided.al2023",
+				architectures: ["x86_64"],
+				handler: "bootstrap",
 				code: new $util.asset.FileArchive(".build/gc"),
 			},
 		},
