@@ -198,7 +198,7 @@ The GC worker runs as a separate Lambda function triggered by an EventBridge cro
 - Not-started updates older than 1 hour
 - Requested updates that never started
 
-The GC worker is defined in `infra/gc.ts` and uses the handler at `apps/server/src/gc-handler.ts`. It runs independently from the API Lambda to ensure cleanup continues even if the API is under heavy load.
+The GC worker is defined in `infra/gc.ts` and uses the compiled Bun binary at `apps/server/src/gc-bootstrap.ts`. It runs independently from the API Lambda to ensure cleanup continues even if the API is under heavy load.
 
 ---
 
@@ -218,8 +218,8 @@ Production stages use `removal: "retain"` — Aurora databases and S3 buckets ar
 
 ## Additional Notes
 
-**esbuild externals:** The Lambda function configuration excludes `bun` from the bundle to prevent including the Bun runtime in the deployment package.
+**Compiled Bun binaries:** Lambda functions use `bun build --compile --bytecode --minify` to create self-contained executables deployed as `provided.al2023` custom runtimes. No Node.js, no esbuild, no runtime layers.
 
-**VPC configuration:** Aurora requires a VPC (AWS requirement), but Lambda functions do not need VPC access thanks to Data API. The VPC uses fck-nat for cost-effective NAT instead of AWS NAT Gateway.
+**VPC configuration:** Both Aurora and Lambda functions run inside the VPC. Lambda connects to Aurora through RDS Proxy for connection pooling. The VPC uses fck-nat for cost-effective NAT instead of AWS NAT Gateway.
 
 **Production protection:** The production stage has `protect: true` set, preventing accidental deletion via `sst remove`.
