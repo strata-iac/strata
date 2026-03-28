@@ -77,17 +77,31 @@ jobs:
           fi
           CLUSTER_ARN=$(aws rds describe-db-clusters --db-cluster-identifier "$CLUSTER_ID" \
             --query "DBClusters[0].DBClusterArn" --output text)
-          SECRET_ARN=$(aws rds describe-db-clusters --db-cluster-identifier "$CLUSTER_ID" \
-            --query "DBClusters[0].MasterUserSecret.SecretArn" --output text)
+          # Use the proxy's secret (SST creates a separate secret for the RDS Proxy)
+          PROXY_NAME=$(aws rds describe-db-proxies \
+            --query "DBProxies[?starts_with(DBProxyName, '${STAGE}') || starts_with(DBProxyName, 'procella-${STAGE}')].DBProxyName | [0]" \
+            --output text 2>/dev/null || echo "None")
+          if [ "$PROXY_NAME" = "None" ] || [ -z "$PROXY_NAME" ]; then
+            # Fallback: find proxy by VPC/cluster association
+            PROXY_NAME=$(aws rds describe-db-proxies \
+              --query "DBProxies[0].DBProxyName" --output text)
+          fi
+          SECRET_ARN=$(aws rds describe-db-proxies --db-proxy-name "$PROXY_NAME" \
+            --query "DBProxies[0].Auth[0].SecretArn" --output text 2>/dev/null || echo "None")
           echo "CLUSTER_ARN=$CLUSTER_ARN"
+          echo "PROXY_NAME=$PROXY_NAME"
           echo "SECRET_ARN=$SECRET_ARN"
           echo "DB_NAME=$DB_NAME"
-          aws rds-data execute-statement \
-            --resource-arn "$CLUSTER_ARN" \
-            --secret-arn "$SECRET_ARN" \
-            --database "postgres" \
-            --sql "CREATE DATABASE \"$DB_NAME\"" 2>&1 || echo "Database may already exist"
-          npx sst shell --stage "$STAGE" -- bun apps/server/src/index.ts --migrate
+          if [ "$SECRET_ARN" = "None" ] || [ -z "$SECRET_ARN" ]; then
+            echo "::warning::No proxy secret found — skipping database creation"
+          else
+            aws rds-data execute-statement \
+              --resource-arn "$CLUSTER_ARN" \
+              --secret-arn "$SECRET_ARN" \
+              --database "postgres" \
+              --sql "CREATE DATABASE \"$DB_NAME\"" 2>&1 || echo "Database may already exist"
+          fi
+          npx sst shell --stage "$STAGE" -- bun apps/server/src/index.ts --migrate packages/db/drizzle
 
       - name: Get stack outputs
         id: outputs
