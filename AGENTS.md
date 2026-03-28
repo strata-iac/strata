@@ -188,6 +188,15 @@ All state lives in PostgreSQL. No in-memory caches, no local-only state.
 - **Unique index** prevents multiple active updates per stack.
 - **pg advisory locks** ensure only one GC worker runs across the cluster.
 - **Local blob storage** is the only non-clusterable component — use S3 (`PROCELLA_BLOB_BACKEND=s3`) for multi-node.
+- **Railway runs 3 replicas** — any in-process state (Maps, caches, etc.) is NOT shared across instances. If you need something shared, it goes in PostgreSQL.
+
+### Auth
+
+- **Descope** is the auth provider in production. Session JWTs are issued as the `DS` httpOnly cookie by the Descope React SDK.
+- **`authenticate(request)`** in `packages/auth/src/index.ts` reads `Authorization: Bearer <jwt>` OR falls back to the `DS` cookie — so browser-initiated requests (including `EventSource`) are authenticated automatically via cookie without any extra steps.
+- **NEVER invent a separate auth mechanism** (tickets, tokens, query params) for browser-to-server communication. If `EventSource` or `fetch()` needs auth, it already has it via the `DS` cookie on same-origin requests.
+- **Dev mode** uses `Authorization: token <PROCELLA_DEV_AUTH_TOKEN>`. The cookie fallback is Descope-only.
+- **CLI** uses `Authorization: token <access-key>` (long-lived Descope access key, NOT a session JWT).
 
 ### Quality Gates
 

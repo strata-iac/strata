@@ -100,82 +100,13 @@ resources:
 	return updates[0].updateID;
 }
 
-test.describe("SSE ticket auth", () => {
-	test("POST stream-ticket returns a UUID", async ({ request }) => {
-		await truncate();
-		const createRes = await request.post(`${API_URL}/api/stacks/omer/pw-proj/pw-stack`, {
-			headers: AUTH_HEADER,
-			data: { tags: {} },
-		});
-		expect(createRes.ok()).toBeTruthy();
-
-		const stackRes = await request.get(`${API_URL}/api/stacks/omer/pw-proj/pw-stack`, {
-			headers: AUTH_HEADER,
-		});
-		expect(stackRes.ok()).toBeTruthy();
-
-		const createUpdateRes = await request.post(
-			`${API_URL}/api/stacks/omer/pw-proj/pw-stack/update`,
-			{ headers: AUTH_HEADER, data: {} },
-		);
-		expect(createUpdateRes.ok()).toBeTruthy();
-		const { updateID } = (await createUpdateRes.json()) as { updateID: string };
-
-		const ticketRes = await request.post(`${API_URL}/api/updates/${updateID}/stream-ticket`, {
-			headers: { Authorization: `token ${TOKEN}` },
-		});
-		expect(ticketRes.ok()).toBeTruthy();
-		const { ticket } = (await ticketRes.json()) as { ticket: string };
-		expect(ticket).toMatch(/^[0-9a-f-]{36}$/);
-	});
-
-	test("GET stream without ticket returns 401", async ({ request }) => {
+test.describe("SSE auth", () => {
+	test("GET stream without auth returns 401", async ({ request }) => {
 		const res = await request.get(`${API_URL}/api/updates/nonexistent-id/stream`);
 		expect(res.status()).toBe(401);
 	});
 
-	test("GET stream with invalid ticket returns 401", async ({ request }) => {
-		const res = await request.get(`${API_URL}/api/updates/nonexistent-id/stream?ticket=bad-ticket`);
-		expect(res.status()).toBe(401);
-	});
-
-	test("ticket is single-use — second use returns 401", async ({ request }) => {
-		await truncate();
-		const createRes = await request.post(`${API_URL}/api/stacks/omer/pw-proj2/pw-stack`, {
-			headers: AUTH_HEADER,
-			data: { tags: {} },
-		});
-		expect(createRes.ok()).toBeTruthy();
-
-		const createUpdateRes = await request.post(
-			`${API_URL}/api/stacks/omer/pw-proj2/pw-stack/update`,
-			{ headers: AUTH_HEADER, data: {} },
-		);
-		const { updateID } = (await createUpdateRes.json()) as { updateID: string };
-
-		const ticketRes = await request.post(`${API_URL}/api/updates/${updateID}/stream-ticket`, {
-			headers: { Authorization: `token ${TOKEN}` },
-		});
-		const { ticket } = (await ticketRes.json()) as { ticket: string };
-
-		const first = await request
-			.get(`${API_URL}/api/updates/${updateID}/stream?ticket=${ticket}`, {
-				headers: { Accept: "text/event-stream" },
-				timeout: 3_000,
-			})
-			.catch((e: Error) => {
-				if (/timeout|hang up|socket/i.test(e.message)) return null;
-				throw e;
-			});
-		if (first) expect(first.status()).toBe(200);
-
-		const second = await request.get(`${API_URL}/api/updates/${updateID}/stream?ticket=${ticket}`);
-		expect(second.status()).toBe(401);
-	});
-});
-
-test.describe("SSE streaming", () => {
-	test("SSE connection opens and sends heartbeat within 20s", async ({ request }) => {
+	test("GET stream with valid Authorization header connects", async ({ request }) => {
 		await truncate();
 		await request.post(`${API_URL}/api/stacks/omer/stream-proj/pw-stack`, {
 			headers: AUTH_HEADER,
@@ -187,14 +118,9 @@ test.describe("SSE streaming", () => {
 		);
 		const { updateID } = (await createUpdateRes.json()) as { updateID: string };
 
-		const ticketRes = await request.post(`${API_URL}/api/updates/${updateID}/stream-ticket`, {
-			headers: { Authorization: `token ${TOKEN}` },
-		});
-		const { ticket } = (await ticketRes.json()) as { ticket: string };
-
 		const streamRes = await request
-			.get(`${API_URL}/api/updates/${updateID}/stream?ticket=${ticket}`, {
-				headers: { Accept: "text/event-stream" },
+			.get(`${API_URL}/api/updates/${updateID}/stream`, {
+				headers: { ...AUTH_HEADER, Accept: "text/event-stream" },
 				timeout: 5_000,
 			})
 			.catch((e: Error) => {
@@ -204,8 +130,7 @@ test.describe("SSE streaming", () => {
 
 		if (streamRes) {
 			expect(streamRes.status()).toBe(200);
-			const ct = streamRes.headers()["content-type"];
-			expect(ct).toContain("text/event-stream");
+			expect(streamRes.headers()["content-type"]).toContain("text/event-stream");
 		}
 	});
 });

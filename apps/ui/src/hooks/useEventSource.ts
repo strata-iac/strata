@@ -1,4 +1,3 @@
-import { getSessionToken } from "@descope/react-sdk";
 import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -7,28 +6,12 @@ import { getAuthConfig } from "./useAuthConfig";
 
 export type ConnectionStatus = "connected" | "reconnecting" | "disconnected";
 
-function buildAuthHeader(): string {
+function devAuthHeader(): string {
 	const config = getAuthConfig();
-	if (config?.mode === "descope") {
-		const token = getSessionToken();
-		return token ? `Bearer ${token}` : "";
-	}
+	if (config?.mode === "descope") return "";
 	const token = localStorage.getItem("procella-token") ?? "";
 	return token ? `token ${token}` : "";
 }
-
-async function fetchStreamTicket(updateId: string): Promise<string> {
-	const auth = buildAuthHeader();
-	const res = await fetch(`/api/updates/${updateId}/stream-ticket`, {
-		method: "POST",
-		headers: auth ? { Authorization: auth } : {},
-	});
-	if (!res.ok) throw new Error(`ticket fetch failed: ${res.status}`);
-	const json = (await res.json()) as { ticket: string };
-	return json.ticket;
-}
-
-export type { ConnectionStatus };
 
 export function useEventSource(updateId: string | undefined) {
 	const [status, setStatus] = useState<ConnectionStatus>("disconnected");
@@ -43,44 +26,40 @@ export function useEventSource(updateId: string | undefined) {
 		let cancelled = false;
 
 		const connect = async () => {
-			try {
-				const ticket = await fetchStreamTicket(updateId);
-				if (cancelled) return;
+			const config = getAuthConfig();
+			let url = `/api/updates/${updateId}/stream`;
 
-				const url = `/api/updates/${updateId}/stream?ticket=${encodeURIComponent(ticket)}`;
-				const es = new EventSource(url);
-				esRef.current = es;
+			if (config?.mode !== "descope") {
+				const header = devAuthHeader();
+				if (header) url += `?token=${encodeURIComponent(header)}`;
+			}
 
-				es.onopen = () => {
-					setStatus("connected");
-					retryCount.current = 0;
-				};
+			const es = new EventSource(url, { withCredentials: true });
+			esRef.current = es;
 
-				es.onmessage = () => {
-					queryClient.invalidateQueries({
-						queryKey: getQueryKey(trpc.events.list, undefined, "query"),
-					});
-					queryClient.invalidateQueries({
-						queryKey: getQueryKey(trpc.updates.latest, undefined, "query"),
-					});
-				};
+			es.onopen = () => {
+				setStatus("connected");
+				retryCount.current = 0;
+			};
 
-				es.onerror = () => {
-					es.close();
-					esRef.current = null;
-					if (cancelled) return;
-					setStatus("reconnecting");
-					const delay = Math.min(1000 * 2 ** retryCount.current, 30000);
-					retryCount.current += 1;
-					timerRef.current = setTimeout(connect, delay);
-				};
-			} catch {
+			es.onmessage = () => {
+				queryClient.invalidateQueries({
+					queryKey: getQueryKey(trpc.events.list, undefined, "query"),
+				});
+				queryClient.invalidateQueries({
+					queryKey: getQueryKey(trpc.updates.latest, undefined, "query"),
+				});
+			};
+
+			es.onerror = () => {
+				es.close();
+				esRef.current = null;
 				if (cancelled) return;
 				setStatus("reconnecting");
 				const delay = Math.min(1000 * 2 ** retryCount.current, 30000);
 				retryCount.current += 1;
 				timerRef.current = setTimeout(connect, delay);
-			}
+			};
 		};
 
 		connect();
