@@ -44,6 +44,8 @@ import {
 	UpdateNotFoundError,
 } from "@procella/types";
 import { and, asc, desc, eq, gt, max, sql } from "drizzle-orm";
+import { checkpointDedup } from "./checkpoint-dedup.js";
+import { eventBus } from "./event-bus.js";
 import type { TextEdit } from "./helpers.js";
 import {
 	applyTextEdits,
@@ -197,6 +199,7 @@ export class PostgresUpdatesService implements UpdatesService {
 				}),
 		);
 
+		eventBus.clear(updateId);
 		this.clearUpdateCaches(updateId);
 	}
 
@@ -230,6 +233,7 @@ export class PostgresUpdatesService implements UpdatesService {
 				.where(eq(stacks.id, row.stackId));
 		});
 
+		eventBus.clear(updateId);
 		this.clearUpdateCaches(updateId);
 	}
 
@@ -436,6 +440,8 @@ export class PostgresUpdatesService implements UpdatesService {
 						target: [updateEvents.updateId, updateEvents.sequence],
 						set: { kind: sql`excluded.kind`, fields: sql`excluded.fields` },
 					});
+
+				eventBus.publish(updateId, events);
 			},
 		);
 	}
@@ -616,6 +622,7 @@ export class PostgresUpdatesService implements UpdatesService {
 	private clearUpdateCaches(updateId: string): void {
 		this.baseDeploymentCache.delete(updateId);
 		this.checkpointVersionCache.delete(updateId);
+		checkpointDedup.clear(updateId);
 	}
 
 	private evictStaleCaches(): void {
@@ -656,14 +663,35 @@ export class PostgresUpdatesService implements UpdatesService {
 			{ "update.id": updateId, "stack.id": stackId },
 			async () => {
 				const serialized = JSON.stringify(data);
+
+				if (await checkpointDedup.isDuplicate(updateId, serialized)) {
+					return;
+				}
+
 				const version = await this.nextCheckpointVersion(updateId);
 
 				let blobKey: string | null = null;
-				let checkpointData: unknown = data;
+				const checkpointData: unknown = data;
 				if (serialized.length > BLOB_THRESHOLD) {
 					blobKey = formatBlobKey(stackId, updateId, version);
-					await this.storage.put(blobKey, new TextEncoder().encode(serialized));
-					checkpointData = null;
+					await Promise.all([
+						this.storage.put(blobKey, new TextEncoder().encode(serialized)),
+						this.db
+							.insert(checkpoints)
+							.values({
+								updateId,
+								stackId,
+								version,
+								data: null,
+								blobKey,
+								isDelta: false,
+							})
+							.onConflictDoUpdate({
+								target: [checkpoints.updateId, checkpoints.version],
+								set: { data: null, blobKey, isDelta: false },
+							}),
+					]);
+					return;
 				}
 
 				await this.db
