@@ -727,19 +727,19 @@ export function StackDetail() {
 		data: detail,
 		isLoading: detailLoading,
 		error: detailError,
-	} = trpc.stacks.detail.useQuery(params, { enabled });
+	} = trpc.stacks.detail.useQuery(params, { enabled, refetchOnMount: true });
 	const {
 		data: resources,
 		isLoading: resourcesLoading,
 		error: resourcesError,
-	} = trpc.stacks.resources.useQuery(params, { enabled });
+	} = trpc.stacks.resources.useQuery(params, { enabled, refetchOnMount: true });
 	const {
 		data: updates,
 		isLoading: updatesLoading,
 		error: updatesError,
-	} = trpc.updates.list.useQuery(params, { enabled });
+	} = trpc.updates.list.useQuery(params, { enabled, refetchOnMount: true });
 
-	const isLoading = detailLoading || updatesLoading;
+	const isLoading = (detailLoading && !detail) || (updatesLoading && !updates);
 
 	// ── Loading State ──────────────────────────────────────────────────
 	if (isLoading) {

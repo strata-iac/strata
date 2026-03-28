@@ -1,12 +1,26 @@
-import { eventBus, type UpdatesService } from "@procella/updates";
+import { eventBus, mintTicket, redeemTicket, type UpdatesService } from "@procella/updates";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
 import { param } from "./params.js";
 
 export function sseHandlers(_updates: UpdatesService) {
 	return {
-		streamEvents: async (c: Context<Env>) => {
+		mintStreamTicket: async (c: Context<Env>) => {
 			const updateId = param(c, "updateId");
+			const ticket = mintTicket(updateId);
+			return c.json({ ticket });
+		},
+
+		streamEvents: async (c: Context<Env>) => {
+			const ticket = c.req.query("ticket");
+			if (!ticket) {
+				return c.json({ code: 401, message: "Missing stream ticket" }, 401);
+			}
+
+			const updateId = redeemTicket(ticket);
+			if (!updateId) {
+				return c.json({ code: 401, message: "Invalid or expired stream ticket" }, 401);
+			}
 
 			const stream = new ReadableStream({
 				start(controller) {
