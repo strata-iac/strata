@@ -198,6 +198,40 @@ All state lives in PostgreSQL. No in-memory caches, no local-only state.
 - **Dev mode** uses `Authorization: token <PROCELLA_DEV_AUTH_TOKEN>`. The cookie fallback is Descope-only.
 - **CLI** uses `Authorization: token <access-key>` (long-lived Descope access key, NOT a session JWT).
 
+### Cluster-Safety Checklist
+
+Before adding ANY new stateful thing, ask: "what happens when this runs on 3 replicas simultaneously?"
+- In-process Maps, caches, counters → NOT safe. Put it in PostgreSQL.
+- Background timers/workers → use `pg_try_advisory_lock` so only one replica runs it.
+- The `pg advisory lock` pattern is already used by `GCWorker` — follow that.
+
+### Pulumi API Path Is Sacred
+
+`/api/*` routes are the Pulumi Service API. Custom endpoints MUST NOT go there.
+- All dashboard/UI-only features go through tRPC (`/trpc/*`)
+- The only exceptions are the CLI protocol routes defined in `PulumiRoutes`
+- Adding custom REST endpoints to `/api/*` breaks the Pulumi CLI
+
+### Vite Dev Server Proxy
+
+`apps/ui/vite.config.ts` proxies `/trpc`, `/api`, `/healthz` to the backend.
+- Default port: `9090` (production/dev)
+- Override with `VITE_API_PORT` env var for tests (e.g. Playwright uses `18080`)
+- Playwright tests MUST set `VITE_API_PORT` to match `PLAYWRIGHT_API_URL` port
+
+### Playwright Tests Use Node, Not Bun
+
+Playwright runs in Node.js context — NOT Bun. This means:
+- `Bun.spawn`, `Bun.write`, `Bun.sleep`, `SQL from bun` are NOT available in test files or `global-setup.ts`
+- Use `node:child_process.spawn`, `node:fs/promises.writeFile`, `setTimeout` instead
+- Use `pg` npm package for direct DB access (not `bun:sql`)
+- `import.meta.dirname` may not work — use `__dirname` in CommonJS context
+- Keep a separate `tsconfig.playwright.json` with `"module": "CommonJS"` for Playwright files
+
+### Mocks Must Be Updated With Interfaces
+
+When a new method is added to an interface (e.g. `StacksService`, `UpdatesService`), ALL test mock objects implementing that interface must be updated too. CI catches this via `tsc --build` (project references) even when local typecheck passes.
+
 ### Quality Gates
 
 ```bash
