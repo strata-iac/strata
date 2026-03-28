@@ -75,35 +75,39 @@ export function createApp(deps: {
 	// ========================================================================
 
 	app.all("/trpc/*", async (c) => {
-		const caller = await deps.auth.authenticate(c.req.raw).catch(() => null);
+		let req = c.req.raw;
+
+		const cpRaw = c.req.query("connectionParams");
+		if (cpRaw && !req.headers.get("Authorization")) {
+			try {
+				const cp = JSON.parse(decodeURIComponent(cpRaw)) as Record<string, string>;
+				if (cp.authorization) {
+					const headers = new Headers(req.headers);
+					headers.set("Authorization", cp.authorization);
+					req = new Request(req, { headers });
+				}
+			} catch {}
+		}
+
+		const caller = await deps.auth.authenticate(req).catch(() => null);
 
 		if (!caller) {
 			return c.json({ code: 401, message: "Unauthorized" }, 401);
 		}
 
+		const ctx: TRPCContext = {
+			caller,
+			db: deps.db,
+			dbUrl: deps.dbUrl,
+			stacks: deps.stacks,
+			updates: deps.updates,
+		};
+
 		return fetchRequestHandler({
 			endpoint: "/trpc",
-			req: c.req.raw,
+			req,
 			router: appRouter,
-			createContext: async (opts) => {
-				const connectionParams = opts.info?.connectionParams as Record<string, string> | undefined;
-				let resolvedCaller = caller;
-
-				if (connectionParams?.authorization && !c.req.raw.headers.get("Authorization")) {
-					const headers = new Headers(c.req.raw.headers);
-					headers.set("Authorization", connectionParams.authorization);
-					const req = new Request(c.req.raw, { headers });
-					resolvedCaller = (await deps.auth.authenticate(req).catch(() => null)) ?? caller;
-				}
-
-				return {
-					caller: resolvedCaller,
-					db: deps.db,
-					dbUrl: deps.dbUrl,
-					stacks: deps.stacks,
-					updates: deps.updates,
-				} satisfies TRPCContext;
-			},
+			createContext: () => ctx,
 			onError({ error }) {
 				if (error.code !== "UNAUTHORIZED") {
 					console.error("[trpc]", error);

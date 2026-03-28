@@ -101,24 +101,21 @@ resources:
 	return updates[0].updateID;
 }
 
-test.describe("tRPC subscription auth", () => {
-	test("tRPC endpoint rejects unauthenticated requests with 401", async ({ request }) => {
+test.describe("tRPC connectivity", () => {
+	test("tRPC endpoint responds with valid JSON array payload", async ({ request }) => {
 		const res = await request.get(
 			`${API_URL}/trpc/updates.latest?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22org%22%3A%22x%22%2C%22project%22%3A%22x%22%2C%22stack%22%3A%22x%22%7D%7D%7D`,
-		);
-		expect(res.status()).toBe(401);
-	});
-
-	test("tRPC endpoint accepts valid token (returns 200 with tRPC payload)", async ({ request }) => {
-		const res = await request.get(
-			`${API_URL}/trpc/updates.latest?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22org%22%3A%22x%22%2C%22project%22%3A%22x%22%2C%22stack%22%3A%22x%22%7D%7D%7D`,
-			{
-				headers: { Authorization: `token ${TOKEN}` },
-			},
 		);
 		expect(res.status()).toBe(200);
 		const body = (await res.json()) as unknown[];
 		expect(Array.isArray(body)).toBe(true);
+	});
+
+	test("tRPC rejects requests with no Authorization header with 401", async () => {
+		const res = await fetch(
+			`${API_URL}/trpc/updates.latest?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22org%22%3A%22x%22%2C%22project%22%3A%22x%22%2C%22stack%22%3A%22x%22%7D%7D%7D`,
+		);
+		expect(res.status).toBe(401);
 	});
 });
 
