@@ -49,10 +49,10 @@ async function truncate() {
 
 async function setDevToken(page: Page) {
 	await page.goto(`${UI_URL}/`);
-	await page.evaluate((token) => localStorage.setItem("procella-token", token), TOKEN);
-	await page
-		.waitForResponse((r) => r.url().includes("/api/auth/config"), { timeout: 5_000 })
-		.catch(() => {});
+	await page.evaluate((token) => {
+		localStorage.setItem("procella-token", token);
+		sessionStorage.setItem("procella-auth-config", JSON.stringify({ mode: "dev" }));
+	}, TOKEN);
 }
 
 async function gotoUpdate(
@@ -62,13 +62,8 @@ async function gotoUpdate(
 	stack: string,
 	updateID: string,
 ) {
-	const responsePromise = page
-		.waitForResponse((r) => r.url().includes("/api/auth/config") && r.status() === 200, {
-			timeout: 10_000,
-		})
-		.catch(() => null);
 	await page.goto(`${UI_URL}/stacks/${org}/${project}/${stack}/updates/${updateID}`);
-	await responsePromise;
+	await page.waitForSelector("main", { timeout: 10_000 }).catch(() => {});
 }
 
 async function runPulumiUp(org: string, project: string, _stack: string): Promise<string> {
