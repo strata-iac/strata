@@ -56,13 +56,27 @@ import type { UpdatesService } from "./types.js";
 import { BLOB_THRESHOLD, LEASE_DURATION_SECONDS } from "./types.js";
 
 function pgErrorCode(err: unknown): string | undefined {
-	if (err && typeof err === "object" && "code" in err) {
-		return typeof (err as { code: unknown }).code === "string"
-			? (err as { code: string }).code
-			: undefined;
-	}
-	if (err && typeof err === "object" && "cause" in err) {
-		return pgErrorCode((err as { cause: unknown }).cause);
+	let current: unknown = err;
+	for (let i = 0; i < 10 && current != null; i++) {
+		if (typeof current === "object") {
+			const rec = current as Record<string, unknown>;
+			for (const key of ["code", "errno"] as const) {
+				const val = rec[key];
+				const str = typeof val === "number" ? String(val) : val;
+				if (typeof str === "string" && /^[0-9A-Z]{5}$/i.test(str)) return str;
+			}
+			if (Array.isArray(rec.errors)) {
+				for (const inner of rec.errors) {
+					const found = pgErrorCode(inner);
+					if (found) return found;
+				}
+			}
+			if ("cause" in rec) {
+				current = rec.cause;
+				continue;
+			}
+		}
+		current = undefined;
 	}
 	return undefined;
 }
