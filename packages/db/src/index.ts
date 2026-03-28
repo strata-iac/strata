@@ -80,9 +80,9 @@ export async function createDb(
 	options: CreateDbOptions,
 ): Promise<{ db: Database; client: DbClient }> {
 	if (!isNeonHost(options.url)) {
-		const bunMod = await import("bun");
+		const { SQL } = require("bun") as typeof import("bun");
 		const { drizzle } = await import("drizzle-orm/bun-sql");
-		const client = new bunMod.SQL({
+		const client = new SQL({
 			url: options.url,
 			max: options.max ?? 20,
 			idleTimeout: Math.max(1, Math.ceil((options.idleTimeout ?? 30_000) / 1000)),
@@ -128,10 +128,10 @@ export async function runMigrations(
 	const resolved: CreateDbOptions = typeof options === "string" ? { url: options } : options;
 	const url = resolved.url;
 	if (!isNeonHost(url)) {
-		const bunMod = await import("bun");
+		const { SQL } = require("bun") as typeof import("bun");
 		const { drizzle } = await import("drizzle-orm/bun-sql");
 		const { migrate } = await import("drizzle-orm/bun-sql/migrator");
-		const client = new bunMod.SQL({ url });
+		const client = new SQL({ url });
 		try {
 			const db = drizzle({ client });
 			await migrate(db, { migrationsFolder });
