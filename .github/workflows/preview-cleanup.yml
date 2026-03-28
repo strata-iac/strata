@@ -6,37 +6,21 @@ on:
     branches: [main]
 
 permissions:
+  id-token: write
   contents: read
 
 concurrency:
   group: preview-${{ github.event.number }}
 
 jobs:
-  # ── Delete Neon branch ────────────────────────────────────────────────────
-  neon:
-    name: Delete Neon Branch
+  cleanup:
+    name: Remove Preview Stack
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: preview
-    continue-on-error: true
-    steps:
-      - uses: neondatabase/delete-branch-action@v3
-        with:
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          branch: preview/pr-${{ github.event.number }}
-          api_key: ${{ secrets.NEON_API_KEY }}
-
-  # ── Destroy Pulumi preview stack ─────────────────────────────────────────
-  infra:
-    name: Destroy Pulumi Stack
-    runs-on: ubuntu-latest
-    environment: preview
-    continue-on-error: true
-    env:
-      PULUMI_BACKEND_URL: s3://${{ vars.PROCELLA_BLOB_S3_BUCKET }}?endpoint=${{ vars.R2_ENDPOINT }}&region=auto
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
-      - uses: pulumi/setup-pulumi@v2
       - uses: actions/cache@v5
         with:
           path: |
@@ -45,74 +29,49 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
-      - run: bun install --frozen-lockfile
-        working-directory: infra
-      - uses: pulumi/actions@v6
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          command: destroy
-          stack-name: preview-pr-${{ github.event.number }}
-          work-dir: infra
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-      - name: Remove stack
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: GitHubActions-Cleanup-${{ github.run_id }}
+
+      - name: Drop stage database
         continue-on-error: true
-        run: cd infra && pulumi stack rm preview-pr-${{ github.event.number }} --yes
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-
-  # ── Remove Vercel preview deployments ────────────────────────────────────
-  vercel-app:
-    name: Remove App Preview
-    runs-on: ubuntu-latest
-    environment: preview
-    continue-on-error: true
-    env:
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-    steps:
-      - name: Remove PR deployments
-        env:
-          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
-          GIT_BRANCH: ${{ github.head_ref }}
+        shell: bash {0}
         run: |
-          # Find deployments for this PR's branch via Vercel API
-          RESPONSE=$(curl -sf -H "Authorization: Bearer $VERCEL_TOKEN" \
-            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&meta-githubCommitRef=$GIT_BRANCH&limit=100") || {
-            echo "::warning::Failed to list Vercel deployments for cleanup"
+          set -x
+          STAGE="pr-${{ github.event.number }}"
+          DB_NAME="procella_${STAGE//-/_}"
+          CLUSTER_ID=$(aws rds describe-db-clusters \
+            --query "DBClusters[?starts_with(DBClusterIdentifier, 'procella')].DBClusterIdentifier | [0]" \
+            --output text)
+          if [ -z "$CLUSTER_ID" ] || [ "$CLUSTER_ID" = "None" ]; then
+            echo "No Aurora cluster found — skipping cleanup"
             exit 0
-          }
-          DEPLOYS=$(echo "$RESPONSE" | jq -r '.deployments[].uid // empty')
-          for uid in $DEPLOYS; do
-            echo "Removing deployment $uid"
-            curl -s -X DELETE -H "Authorization: Bearer $VERCEL_TOKEN" \
-              "https://api.vercel.com/v13/deployments/$uid" || true
-          done
+          fi
+          CLUSTER_ARN=$(aws rds describe-db-clusters --db-cluster-identifier "$CLUSTER_ID" \
+            --query "DBClusters[0].DBClusterArn" --output text)
+          SECRET_ARN=$(aws rds describe-db-clusters --db-cluster-identifier "$CLUSTER_ID" \
+            --query "DBClusters[0].MasterUserSecret.SecretArn" --output text)
+          aws rds-data execute-statement \
+            --resource-arn "$CLUSTER_ARN" \
+            --secret-arn "$SECRET_ARN" \
+            --database "postgres" \
+            --sql "DROP DATABASE IF EXISTS \"$DB_NAME\"" 2>&1 || true
 
-  vercel-docs:
-    name: Remove Docs Preview
-    runs-on: ubuntu-latest
-    environment: preview
-    continue-on-error: true
-    env:
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-    steps:
-      - name: Remove PR deployments
-        env:
-          VERCEL_PROJECT_ID: ${{ vars.VERCEL_DOCS_PROJECT_ID }}
-          GIT_BRANCH: ${{ github.head_ref }}
+      - name: Remove SST stack
+        run: npx sst remove --stage pr-${{ github.event.number }}
+        continue-on-error: true
+
+      - name: Cleanup summary
+        if: always()
         run: |
-          # Find deployments for this PR's branch via Vercel API
-          RESPONSE=$(curl -sf -H "Authorization: Bearer $VERCEL_TOKEN" \
-            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&meta-githubCommitRef=$GIT_BRANCH&limit=100") || {
-            echo "::warning::Failed to list Vercel deployments for cleanup"
-            exit 0
-          }
-          DEPLOYS=$(echo "$RESPONSE" | jq -r '.deployments[].uid // empty')
-          for uid in $DEPLOYS; do
-            echo "Removing deployment $uid"
-            curl -s -X DELETE -H "Authorization: Bearer $VERCEL_TOKEN" \
-              "https://api.vercel.com/v13/deployments/$uid" || true
-          done
+          echo "## Preview Cleanup" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | \`pr-${{ github.event.number }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | \`${{ job.status }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| PR | #${{ github.event.number }} |" >> $GITHUB_STEP_SUMMARY

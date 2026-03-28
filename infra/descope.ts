@@ -1,20 +1,14 @@
 import * as descope from "@descope/pulumi-descope";
-
 import signUpOrInFlowJson from "./flows/sign-up-or-in.json" with { type: "json" };
 import stylesJson from "./flows/styles.json" with { type: "json" };
+import { descopeManagementKey } from "./secrets";
 
 const signUpOrInFlow = JSON.stringify(signUpOrInFlowJson);
 const stylesData = JSON.stringify(stylesJson);
 
-// ── Config ──────────────────────────────────────────────────────────────────
-const managementKey = process.env.DESCOPE_MANAGEMENT_KEY;
-if (!managementKey) {
-	throw new Error("DESCOPE_MANAGEMENT_KEY environment variable is required");
-}
-
 // ── Provider ────────────────────────────────────────────────────────────────
 const provider = new descope.Provider("DescopeProvider", {
-	managementKey,
+	managementKey: descopeManagementKey.value,
 });
 
 // ── JWT Templates ───────────────────────────────────────────────────────
@@ -40,6 +34,8 @@ const accessKeyJwtTemplate = JSON.stringify({
 const project = new descope.Project(
 	"Procella",
 	{
+		name: `procella-${$app.stage}`,
+
 		// ── Project-level settings ──────────────────────────────────────────
 		projectSettings: {
 			userJwtTemplate: "Procella User",
@@ -64,7 +60,8 @@ const project = new descope.Project(
 			accessKeyTemplates: [
 				{
 					name: "Procella Access Key",
-					description: "Default JWT template for Procella access keys — includes tenant and role claims",
+					description:
+						"Default JWT template for Procella access keys — includes tenant and role claims",
 					template: accessKeyJwtTemplate,
 					authSchema: "default",
 					autoTenantClaim: true,
@@ -139,4 +136,5 @@ const project = new descope.Project(
 );
 
 // ── Outputs ─────────────────────────────────────────────────────────────────
-export const projectId = project.id;
+const projectId = project.id;
+export { project, projectId };

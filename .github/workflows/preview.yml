@@ -6,465 +6,107 @@ on:
     branches: [main]
 
 permissions:
+  id-token: write
   contents: read
+  pull-requests: write
 
 concurrency:
   group: preview-${{ github.event.number }}
   cancel-in-progress: true
 
 jobs:
-  # ── Detect what changed (dependency-aware) ────────────────────────────────
-  changes:
-    name: Detect Changes
+  deploy:
+    name: Deploy Preview
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: preview
     outputs:
-      server: ${{ steps.affected.outputs.server }}
-      ui: ${{ steps.affected.outputs.ui }}
-      docs: ${{ steps.affected.outputs.docs }}
-      infra: ${{ steps.affected.outputs.infra }}
-      migrate: ${{ steps.affected.outputs.migrate }}
-      affected: ${{ steps.affected.outputs.affected }}
+      api_url: ${{ steps.outputs.outputs.api }}
+      app_url: ${{ steps.outputs.outputs.app }}
+      docs_url: ${{ steps.outputs.outputs.docs }}
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
       - uses: jdx/mise-action@v4
-      - name: Detect affected packages
-        id: affected
-        run: |
-          RESULT=$(bun run scripts/affected.ts)
-          echo "server=$(echo "$RESULT" | jq -r .server)" >> $GITHUB_OUTPUT
-          echo "ui=$(echo "$RESULT" | jq -r .ui)" >> $GITHUB_OUTPUT
-          echo "docs=$(echo "$RESULT" | jq -r .docs)" >> $GITHUB_OUTPUT
-          echo "infra=$(echo "$RESULT" | jq -r .infra)" >> $GITHUB_OUTPUT
-          echo "migrate=$(echo "$RESULT" | jq -r .migrate)" >> $GITHUB_OUTPUT
-          echo "affected=$(echo "$RESULT" | jq -c .affected)" >> $GITHUB_OUTPUT
-          echo "::group::Change detection result"
-          echo "$RESULT" | jq .
-          echo "::endgroup::"
+      - uses: actions/cache@v5
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
 
-  # ── Create Neon database branch & run migrations ────────────────────────
-  neon:
-    name: Neon Branch & Migrate
-    needs: [changes]
-    if: needs.changes.outputs.server == 'true' || needs.changes.outputs.ui == 'true'
-    runs-on: ubuntu-latest
-    environment: preview
-    env:
-      NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
-    outputs:
-      branch_id: ${{ steps.branch.outputs.branch_id }}
-      db_host_pooled: ${{ steps.branch.outputs.db_host_pooled }}
-      db_password: ${{ steps.branch.outputs.password }}
-    steps:
-      - name: Delete existing Neon branch (if suspended)
-        uses: neondatabase/delete-branch-action@v3
+      - name: Build Lambda binaries
+        run: |
+          mkdir -p .build/api .build/gc .build/migrate
+          bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/lambda-bootstrap.ts --outfile .build/api/bootstrap
+          bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/gc-bootstrap.ts --outfile .build/gc/bootstrap
+          bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/migrate-bootstrap.ts --outfile .build/migrate/bootstrap
+          cp -rf packages/db/drizzle .build/migrate/drizzle
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: GitHubActions-Preview-${{ github.run_id }}
+
+      - name: Unlock stale state
+        run: npx sst unlock --stage pr-${{ github.event.number }}
         continue-on-error: true
-        with:
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          branch: preview/pr-${{ github.event.number }}
-          api_key: ${{ secrets.NEON_API_KEY }}
-      - name: Set branch expiration (14 days)
-        run: echo "NEON_BRANCH_EXPIRES=$(date -u --date '+14 days' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
-      - uses: neondatabase/create-branch-action@v6
-        id: branch
-        with:
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          branch_name: preview/pr-${{ github.event.number }}
-          parent_branch: main
-          api_key: ${{ secrets.NEON_API_KEY }}
-          database: neondb
-          expires_at: ${{ env.NEON_BRANCH_EXPIRES }}
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
-        with:
-          path: |
-            node_modules
-            ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-      - run: bun install --frozen-lockfile
-      - name: Run migrations
-        if: needs.changes.outputs.migrate == 'true'
+
+      - name: Deploy
+        run: npx sst deploy --stage pr-${{ github.event.number }}
         env:
-          NEON_DB_HOST: ${{ steps.branch.outputs.db_host }}
-          NEON_DB_PASSWORD: ${{ steps.branch.outputs.password }}
+          SST_SECRET_ProcellaEncryptionKey: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
+          SST_SECRET_ProcellaDevAuthToken: ${{ secrets.PROCELLA_DEV_AUTH_TOKEN }}
+          SST_SECRET_ProcellaDescopeManagementKey: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
+
+      - name: Get stack outputs
+        id: outputs
+        shell: bash {0}
         run: |
-          PROCELLA_DATABASE_URL="postgres://neondb_owner:${NEON_DB_PASSWORD}@${NEON_DB_HOST}/neondb?sslmode=require"
-          mise set PROCELLA_DATABASE_URL="$PROCELLA_DATABASE_URL"
-          bun run scripts/migrate.ts
-          mise unset PROCELLA_DATABASE_URL
+          STAGE="pr-${{ github.event.number }}"
+          echo "api=https://api.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
+          echo "app=https://app.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
+          echo "docs=https://docs.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
 
-  # ── Deploy Descope infra (Pulumi preview stack) ────────────────────────
-  infra:
-    name: Pulumi Preview Stack
-    needs: [changes]
-    if: needs.changes.outputs.infra == 'true' || needs.changes.outputs.server == 'true' || needs.changes.outputs.ui == 'true'
-    runs-on: ubuntu-latest
-    environment: preview
-    env:
-      PULUMI_BACKEND_URL: s3://${{ vars.PROCELLA_BLOB_S3_BUCKET }}?endpoint=${{ vars.R2_ENDPOINT }}&region=auto
-    steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
-      - uses: pulumi/setup-pulumi@v2
-      - uses: actions/cache@v5
-        with:
-          path: |
-            node_modules
-            ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-      - run: bun install --frozen-lockfile
-      - run: bun install --frozen-lockfile
-        working-directory: infra
-      - name: Init preview stack
-        working-directory: infra
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-        run: |
-          pulumi stack select --create preview-pr-${{ github.event.number }} 2>/dev/null || true
-      - uses: pulumi/actions@v6
-        id: pulumi
-        with:
-          command: up
-          stack-name: preview-pr-${{ github.event.number }}
-          work-dir: infra
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-          DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
-
-  # ── Deploy Procella to Vercel (preview) ─────────────────────────────────
-  deploy-app:
-    name: Deploy App Preview
-    needs: [changes, neon, infra]
-    if: |
-      always() &&
-      (needs.changes.outputs.server == 'true' || needs.changes.outputs.ui == 'true') &&
-      (needs.neon.result == 'success' || needs.neon.result == 'skipped') &&
-      (needs.infra.result == 'success' || needs.infra.result == 'skipped')
-    runs-on: ubuntu-latest
-    environment: preview
-    env:
-      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      PULUMI_BACKEND_URL: s3://${{ vars.PROCELLA_BLOB_S3_BUCKET }}?endpoint=${{ vars.R2_ENDPOINT }}&region=auto
-    outputs:
-      url: ${{ steps.deploy.outputs.url }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
-      - uses: pulumi/setup-pulumi@v2
-      - uses: actions/cache@v5
-        with:
-          path: |
-            node_modules
-            ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-      - run: bun install --frozen-lockfile
-      - run: bun install --frozen-lockfile
-        working-directory: infra
-      - name: Get Descope project ID from Pulumi stack
-        id: descope
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-        run: |
-          DESCOPE_ID=$(cd infra && pulumi stack output projectId --stack preview-pr-${{ github.event.number }})
-          echo "project_id=$DESCOPE_ID" >> $GITHUB_OUTPUT
-      - run: npm install --global vercel@latest
-      - name: Build & Deploy
-        id: deploy
-        env:
-          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
-          NEON_DB_HOST_POOLED: ${{ needs.neon.outputs.db_host_pooled }}
-          NEON_DB_PASSWORD: ${{ needs.neon.outputs.db_password }}
-          PROCELLA_DESCOPE_PROJECT_ID: ${{ steps.descope.outputs.project_id }}
-          PROCELLA_AUTH_MODE: descope
-          PROCELLA_BLOB_BACKEND: s3
-          PROCELLA_BLOB_S3_BUCKET: ${{ vars.PROCELLA_BLOB_S3_BUCKET }}
-          PROCELLA_BLOB_S3_ENDPOINT: ${{ vars.PROCELLA_BLOB_S3_ENDPOINT }}
-          PROCELLA_BLOB_S3_REGION: ${{ vars.PROCELLA_BLOB_S3_REGION }}
-          PROCELLA_ENCRYPTION_KEY: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
-          PROCELLA_DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          SKIP_MIGRATIONS: "1"
-          GIT_BRANCH: ${{ github.head_ref }}
-        run: |
-          PROCELLA_DATABASE_URL="postgres://neondb_owner:${NEON_DB_PASSWORD}@${NEON_DB_HOST_POOLED}/neondb?sslmode=require"
-          vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
-          vercel build --token="$VERCEL_TOKEN"
-          URL=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" \
-            --meta githubCommitRef="$GIT_BRANCH" \
-            --env PROCELLA_DATABASE_URL="$PROCELLA_DATABASE_URL" \
-            --env PROCELLA_DESCOPE_PROJECT_ID="$PROCELLA_DESCOPE_PROJECT_ID" \
-            --env PROCELLA_AUTH_MODE="$PROCELLA_AUTH_MODE" \
-            --env PROCELLA_BLOB_BACKEND="$PROCELLA_BLOB_BACKEND" \
-            --env PROCELLA_BLOB_S3_BUCKET="$PROCELLA_BLOB_S3_BUCKET" \
-            --env PROCELLA_BLOB_S3_ENDPOINT="$PROCELLA_BLOB_S3_ENDPOINT" \
-            --env PROCELLA_BLOB_S3_REGION="$PROCELLA_BLOB_S3_REGION" \
-            --env PROCELLA_ENCRYPTION_KEY="$PROCELLA_ENCRYPTION_KEY" \
-            --env PROCELLA_DESCOPE_MANAGEMENT_KEY="$PROCELLA_DESCOPE_MANAGEMENT_KEY" \
-            --env AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
-            --env AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY")
-          echo "url=$URL" >> $GITHUB_OUTPUT
-
-  # ── Deploy Docs to Vercel (preview) ────────────────────────────────────
-  deploy-docs:
-    name: Deploy Docs Preview
-    needs: [changes]
-    if: needs.changes.outputs.docs == 'true'
-    runs-on: ubuntu-latest
-    environment: preview
-    env:
-      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-    outputs:
-      url: ${{ steps.deploy.outputs.url }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
-        with:
-          path: |
-            node_modules
-            ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-      - run: bun install --frozen-lockfile
-      - run: npm install --global vercel@latest
-      - name: Build & Deploy
-        id: deploy
-        env:
-          VERCEL_PROJECT_ID: ${{ vars.VERCEL_DOCS_PROJECT_ID }}
-          GIT_BRANCH: ${{ github.head_ref }}
-        run: |
-          vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
-          vercel build --token="$VERCEL_TOKEN"
-          URL=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --meta githubCommitRef="$GIT_BRANCH")
-          echo "url=$URL" >> $GITHUB_OUTPUT
-
-  bench-preview:
-    name: Preview Benchmark
-    needs: [deploy-app, neon]
-    if: needs.deploy-app.result == 'success' && needs.deploy-app.outputs.url
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    environment: preview
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      summary: ${{ steps.bench.outputs.summary }}
-    env:
-      PULUMI_BACKEND_URL: s3://${{ vars.PROCELLA_BLOB_S3_BUCKET }}?endpoint=${{ vars.R2_ENDPOINT }}&region=auto
-    steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
-      - uses: pulumi/setup-pulumi@v2
-      - uses: actions/cache@v5
-        with:
-          path: |
-            node_modules
-            ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-      - run: bun install --frozen-lockfile
-      - run: bun install --frozen-lockfile
-        working-directory: infra
-      - name: Get Descope project ID
-        id: descope
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-        run: |
-          DESCOPE_ID=$(cd infra && pulumi stack output projectId --stack preview-pr-${{ github.event.number }})
-          echo "project_id=$DESCOPE_ID" >> $GITHUB_OUTPUT
-      - name: Setup Descope auth
-        id: auth
-        env:
-          DESCOPE_PROJECT_ID: ${{ steps.descope.outputs.project_id }}
-          DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
-        run: bun run bench/setup-preview-auth.ts
-      - name: Build DB URL
-        id: dburl
-        run: |
-          DB_URL="postgres://neondb_owner:${{ needs.neon.outputs.db_password }}@${{ needs.neon.outputs.db_host_pooled }}/neondb?sslmode=require"
-          echo "::add-mask::${DB_URL}"
-          echo "url=${DB_URL}" >> "$GITHUB_OUTPUT"
-      - name: Run benchmark
-        id: bench
-        timeout-minutes: 15
-        env:
-          BENCH_URL: ${{ needs.deploy-app.outputs.url }}
-          BENCH_TOKEN: ${{ steps.auth.outputs.bench_token }}
-          BENCH_DATABASE_URL: ${{ steps.dburl.outputs.url }}
-          BENCH_MODES: journal
-          BENCH_VARIANTS: secrets
-          BENCH_SIZES: "10"
-          BENCH_TRIALS: "3"
-        run: bun run bench
-      - name: Check benchmark thresholds
-        if: always() && hashFiles('bench/results.json')
-        env:
-          BENCH_BASELINE: bench/baseline-preview.json
-        run: bun run bench:check
-      - name: Cleanup Descope auth
-        if: always()
-        env:
-          DESCOPE_PROJECT_ID: ${{ steps.descope.outputs.project_id }}
-          DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
-        run: bun run bench/setup-preview-auth.ts --cleanup
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: preview-benchmark-results
-          path: bench/results.json
-          if-no-files-found: ignore
-      - name: Comment benchmark results
-        if: always() && hashFiles('bench/results.json')
-        uses: actions/github-script@v8
-        env:
-          BENCH_BASELINE_PATH: bench/baseline-preview.json
-        with:
-          script: |
-            const fs = require('node:fs');
-            const marker = '## 📊 Preview Benchmark';
-            const payload = JSON.parse(fs.readFileSync('bench/results.json', 'utf8'));
-            const baseline = JSON.parse(fs.readFileSync(process.env.BENCH_BASELINE_PATH, 'utf8'));
-            const rows = Array.isArray(payload.results) ? payload.results : [];
-            const groups = new Map();
-            for (const row of rows) {
-              const key = `${row.n}|${row.mode}|${row.variant}`;
-              if (!groups.has(key)) groups.set(key, []);
-              groups.get(key).push(row);
-            }
-            const median = (arr) => {
-              if (!arr.length) return null;
-              const s = [...arr].sort((a, b) => a - b);
-              const m = Math.floor(s.length / 2);
-              return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-            };
-            const fmt = (n) => (n === null ? '—' : `${n.toFixed(1)}ms`);
-            const tol = baseline.tolerancePct ?? 30;
-
-            const lines = [marker, ''];
-
-            for (const [key, values] of groups.entries()) {
-              const [n, mode, variant] = key.split('|');
-              const ok = values.filter((v) => v.upExitCode === 0);
-              const upVals = ok.map((v) => v.upMs).filter((v) => typeof v === 'number');
-              const preVals = ok.map((v) => v.previewMs).filter((v) => typeof v === 'number');
-              const desVals = ok.map((v) => v.destroyMs).filter((v) => typeof v === 'number');
-              const up50 = median(upVals);
-              const pre50 = median(preVals);
-              const des50 = median(desVals);
-              const jrnl = ok[0]?.journalEntryCount;
-              const thresh = baseline.thresholds?.[n]?.[`${mode}/${variant}`]?.maxUpP50Ms;
-              const limit = thresh ? thresh * (1 + tol / 100) : null;
-              const status = up50 !== null && limit !== null ? (up50 <= limit ? '✅' : '❌') : '—';
-
-              lines.push(`**${mode}/${variant} N=${n}** ${status}`);
-              lines.push('');
-              lines.push('| Metric | Value |');
-              lines.push('|--------|------:|');
-              lines.push(`| up p50 | ${fmt(up50)} |`);
-              if (thresh) lines.push(`| threshold | ${fmt(thresh)} (limit ${fmt(limit)}) |`);
-              lines.push(`| preview p50 | ${fmt(pre50)} |`);
-              lines.push(`| destroy p50 | ${fmt(des50)} |`);
-              if (jrnl) lines.push(`| journal entries | ${jrnl} |`);
-              lines.push('');
-
-              lines.push('<details><summary>Per-trial</summary>', '');
-              lines.push('| Trial | up | preview | destroy |');
-              lines.push('|------:|---:|--------:|--------:|');
-              for (const r of values) {
-                const s = r.upExitCode === 0 ? '' : ' ❌';
-                lines.push(`| ${r.trial} | ${fmt(r.upMs)}${s} | ${fmt(r.previewMs)} | ${fmt(r.destroyMs)} |`);
-              }
-              lines.push('', '</details>', '');
-            }
-            lines.push(`_Run at ${payload.runAt ?? 'unknown'}_`);
-
-            const body = lines.join('\n');
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner, repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const existing = comments.find((c) => c.body?.startsWith(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner, repo: context.repo.repo,
-                comment_id: existing.id, body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner, repo: context.repo.repo,
-                issue_number: context.issue.number, body,
-              });
-            }
-
-  # ── Comment on PR with preview URLs ────────────────────────────────────
   comment:
     name: PR Comment
-    needs: [changes, deploy-app, deploy-docs, infra, neon]
-    if: always() && (needs.deploy-app.result == 'success' || needs.deploy-docs.result == 'success')
+    needs: [deploy]
+    if: always() && needs.deploy.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+      issues: write
     steps:
       - uses: actions/github-script@v8
         env:
-          APP_URL: ${{ needs.deploy-app.outputs.url }}
-          DOCS_URL: ${{ needs.deploy-docs.outputs.url }}
-          NEON_BRANCH_ID: ${{ needs.neon.outputs.branch_id }}
-          AFFECTED: ${{ needs.changes.outputs.affected }}
-          PR_NUMBER: ${{ github.event.number }}
+          API_URL: ${{ needs.deploy.outputs.api_url }}
+          APP_URL: ${{ needs.deploy.outputs.app_url }}
+          DOCS_URL: ${{ needs.deploy.outputs.docs_url }}
+          STAGE: pr-${{ github.event.number }}
         with:
           script: |
-            const lines = ['## 🚀 Preview Environment\n', '| Resource | URL |', '|---|---|'];
+            const stage = process.env.STAGE;
+            const lines = [
+              '## Preview Environment\n',
+              `**Stage:** \`${stage}\`\n`,
+              '| Resource | URL |',
+              '|---|---|',
+            ];
+            if (process.env.API_URL) lines.push(`| API | ${process.env.API_URL} |`);
+            if (process.env.APP_URL) lines.push(`| App | ${process.env.APP_URL} |`);
+            if (process.env.DOCS_URL) lines.push(`| Docs | ${process.env.DOCS_URL} |`);
+            lines.push('');
+            lines.push(`_Deployed via SST to \`us-east-1\`. Domains: \`*.${stage}.procella.cloud\`_`);
 
-            const appUrl = process.env.APP_URL;
-            const docsUrl = process.env.DOCS_URL;
-            const neonBranch = process.env.NEON_BRANCH_ID;
-            const affected = process.env.AFFECTED;
-            const prNumber = process.env.PR_NUMBER;
-            if (appUrl) {
-              lines.push(`| App | [${appUrl}](${appUrl}) |`);
-            }
-            if (docsUrl) {
-              lines.push(`| Docs | [${docsUrl}](${docsUrl}) |`);
-            }
-            if (neonBranch) {
-              lines.push(`| Neon Branch | \`preview/pr-${prNumber}\` (\`${neonBranch}\`) |`);
-            }
-            if (affected) {
-              lines.push('');
-              lines.push(`<details><summary>Affected packages</summary>\n`);
-              try {
-                const pkgs = JSON.parse(affected);
-                for (const pkg of pkgs) lines.push(`- \`${pkg}\``);
-              } catch { lines.push(`\`${affected}\``); }
-              lines.push(`\n</details>`);
-            }
-
-            // Find and update existing comment or create new
+            const marker = '## Preview Environment';
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
             });
-            const marker = '## 🚀 Preview Environment';
             const existing = comments.find(c => c.body?.startsWith(marker));
             const body = lines.join('\n');
 

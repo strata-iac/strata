@@ -31,7 +31,7 @@ export {
 // biome-ignore lint/suspicious/noExplicitAny: PgDatabase requires QueryResultHKT generic which differs per driver
 export type Database = import("drizzle-orm/pg-core").PgDatabase<any, typeof schema>;
 
-/** Options for creating a database connection. */
+/** Options for creating a database connection via URL (Bun.sql or Neon). */
 export interface CreateDbOptions {
 	/** PostgreSQL connection URL. */
 	url: string;
@@ -121,7 +121,12 @@ export async function createDbFromUrl(
 // Migrations
 // ============================================================================
 
-export async function runMigrations(url: string, migrationsFolder: string): Promise<void> {
+export async function runMigrations(
+	options: CreateDbOptions | string,
+	migrationsFolder: string,
+): Promise<void> {
+	const resolved: CreateDbOptions = typeof options === "string" ? { url: options } : options;
+	const url = resolved.url;
 	if (!isNeonHost(url)) {
 		const { SQL } = require("bun") as typeof import("bun");
 		const { drizzle } = await import("drizzle-orm/bun-sql");
