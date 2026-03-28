@@ -42,6 +42,9 @@ export function useEventSource(updateId: string | undefined) {
 				queryClient.invalidateQueries({
 					queryKey: getQueryKey(trpc.events.list, undefined, "query"),
 				});
+				queryClient.invalidateQueries({
+					queryKey: getQueryKey(trpc.updates.latest, undefined, "query"),
+				});
 			};
 
 			es.onerror = () => {

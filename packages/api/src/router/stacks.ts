@@ -196,6 +196,57 @@ export const stacksRouter = router({
 		};
 	}),
 
+	updateTags: publicProcedure
+		.input(stackInput.extend({ tags: z.record(z.string(), z.string()) }))
+		.mutation(async ({ ctx, input }) => {
+			await ctx.stacks.replaceStackTags(
+				ctx.caller.tenantId,
+				input.org,
+				input.project,
+				input.stack,
+				input.tags,
+			);
+		}),
+
+	rename: publicProcedure
+		.input(stackInput.extend({ newStack: z.string().min(1) }))
+		.mutation(async ({ ctx, input }) => {
+			await ctx.stacks.renameStack(
+				ctx.caller.tenantId,
+				input.org,
+				input.project,
+				input.stack,
+				input.newStack,
+			);
+		}),
+
+	delete: publicProcedure.input(stackInput).mutation(async ({ ctx, input }) => {
+		await ctx.stacks.deleteStack(ctx.caller.tenantId, input.org, input.project, input.stack);
+	}),
+
+	export: publicProcedure.input(stackInput).query(async ({ ctx, input }) => {
+		const stackInfo = await ctx.stacks.getStack(
+			ctx.caller.tenantId,
+			input.org,
+			input.project,
+			input.stack,
+		);
+		return ctx.updates.exportStack(stackInfo.id);
+	}),
+
+	import: publicProcedure
+		.input(stackInput.extend({ deployment: z.record(z.string(), z.unknown()) }))
+		.mutation(async ({ ctx, input }) => {
+			const stackInfo = await ctx.stacks.getStack(
+				ctx.caller.tenantId,
+				input.org,
+				input.project,
+				input.stack,
+			);
+			const deployment = input.deployment as import("@procella/types").UntypedDeployment;
+			return ctx.updates.importStack(stackInfo.id, deployment);
+		}),
+
 	repair: publicProcedure.input(stackInput).mutation(async ({ ctx, input }) => {
 		const stackInfo = await ctx.stacks.getStack(
 			ctx.caller.tenantId,

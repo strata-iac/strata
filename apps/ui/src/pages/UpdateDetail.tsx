@@ -51,7 +51,7 @@ function formatRelative(ms: number, startMs: number): string {
 	return `+${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
-function mapUpdateStatus(result?: string, isPolling?: boolean): UpdateStatus {
+function mapUpdateStatus(result?: string, hasEvents?: boolean): UpdateStatus {
 	if (result === "succeeded") return "succeeded";
 	if (result === "failed") return "failed";
 	if (result === "cancelled") return "cancelled";
@@ -59,7 +59,7 @@ function mapUpdateStatus(result?: string, isPolling?: boolean): UpdateStatus {
 	if (result === "not-started") return "not-started";
 	if (result === "running") return "running";
 	if (result === "updating" || result === "in-progress") return "updating";
-	return isPolling ? "updating" : "not-started";
+	return hasEvents ? "updating" : "not-started";
 }
 
 function getResourceIcon(status: ResourceStatus): string {
@@ -145,7 +145,7 @@ export function UpdateDetail() {
 			continuationToken: continuationTokenRef.current,
 		},
 		{
-			enabled: Boolean(org && project && stack && updateID && isPolling),
+			enabled: Boolean(org && project && stack && updateID),
 			refetchInterval: isPolling ? 2000 : false,
 		},
 	);
@@ -153,7 +153,7 @@ export function UpdateDetail() {
 	const error = queryError?.message ?? null;
 	const { grouped, completed, total } = useResourceTracker(events);
 
-	const updateStatus = mapUpdateStatus(updateInfo?.result, isPolling);
+	const updateStatus = mapUpdateStatus(updateInfo?.result, events.length > 0);
 	const isRunning = updateStatus === "running" || updateStatus === "updating";
 
 	const firstEventTimestampMs = useMemo(
