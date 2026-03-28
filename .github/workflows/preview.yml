@@ -61,22 +61,6 @@ jobs:
           SST_SECRET_ProcellaDevAuthToken: ${{ secrets.PROCELLA_DEV_AUTH_TOKEN }}
           SST_SECRET_ProcellaDescopeManagementKey: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
 
-      - name: Run migrations
-        continue-on-error: true
-        shell: bash {0}
-        run: |
-          STAGE="pr-${{ github.event.number }}"
-          MIGRATE_FN=$(aws lambda list-functions \
-            --query "Functions[?starts_with(FunctionName, 'procella-${STAGE}-ProcellaMigrate')].FunctionName | [0]" \
-            --output text)
-          echo "Invoking: $MIGRATE_FN"
-          aws lambda invoke \
-            --function-name "$MIGRATE_FN" \
-            --payload '{}' \
-            --cli-binary-format raw-in-base64-out \
-            --cli-read-timeout 360 \
-            /tmp/migrate-response.json && cat /tmp/migrate-response.json || echo "Non-fatal: migration timed out or failed"
-
       - name: Get stack outputs
         id: outputs
         shell: bash {0}

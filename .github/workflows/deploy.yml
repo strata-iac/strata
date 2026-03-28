@@ -56,20 +56,6 @@ jobs:
           SST_SECRET_ProcellaDevAuthToken: ${{ secrets.PROCELLA_DEV_AUTH_TOKEN }}
           SST_SECRET_ProcellaDescopeManagementKey: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
 
-      - name: Run database migrations
-        shell: bash {0}
-        run: |
-          MIGRATE_FN=$(aws lambda list-functions \
-            --query "Functions[?starts_with(FunctionName, 'procella-production-ProcellaMigrate')].FunctionName | [0]" \
-            --output text)
-          echo "Invoking migration Lambda: $MIGRATE_FN"
-          aws lambda invoke \
-            --function-name "$MIGRATE_FN" \
-            --payload '{}' \
-            --cli-binary-format raw-in-base64-out \
-            /tmp/migrate-response.json
-          cat /tmp/migrate-response.json
-
       - name: Deployment summary
         if: always()
         run: |

@@ -52,6 +52,19 @@ export const router = new sst.aws.Router("ProcellaRouter", {
 	},
 });
 
+import * as fs from "node:fs";
+import * as crypto from "node:crypto";
+import * as command from "@pulumi/command";
+
+const migrationHash = crypto
+	.createHash("sha256")
+	.update(
+		["0000_medical_fabian_cortez.sql", "0001_add_journal_entries.sql", "0002_extend_journal_entries.sql"]
+			.map((f) => fs.readFileSync(`packages/db/drizzle/${f}`, "utf8"))
+			.join("\n"),
+	)
+	.digest("hex");
+
 export const migrateFn = new sst.aws.Function("ProcellaMigrate", {
 	runtime: "provided.al2023",
 	architecture: "x86_64",
@@ -69,4 +82,9 @@ export const migrateFn = new sst.aws.Function("ProcellaMigrate", {
 		PROCELLA_BLOB_BACKEND: "s3",
 		PROCELLA_BLOB_S3_BUCKET: bucket.name,
 	},
+});
+
+new command.local.Command("ProcellaMigrateRun", {
+	create: $interpolate`aws lambda invoke --function-name ${migrateFn.name} --payload '{}' --cli-binary-format raw-in-base64-out --cli-read-timeout 360 /tmp/migrate-out-${stage}.json && cat /tmp/migrate-out-${stage}.json`,
+	triggers: [migrationHash],
 });
