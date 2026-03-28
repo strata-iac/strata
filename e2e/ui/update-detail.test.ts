@@ -141,8 +141,13 @@ test.describe("UpdateDetail page — completed update", () => {
 	});
 
 	test("page loads and shows resource tracker", async ({ page }) => {
+		page.on("console", (msg) => {
+			if (msg.type() === "error") console.log(`[browser-error] ${msg.text()}`);
+		});
+		page.on("pageerror", (err) => console.log(`[page-error] ${err.message}`));
 		await setDevToken(page);
 		await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
+		console.log(`[E2E] url=${page.url()} updateID=${updateID}`);
 
 		await expect(page.locator("text=Resource Tracker")).toBeVisible({ timeout: 20_000 });
 		await expect(page.locator("text=Event Log")).toBeVisible();
