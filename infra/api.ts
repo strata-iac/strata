@@ -15,7 +15,10 @@ const descopeProjectId = isProd
 	: undefined;
 
 export const api = new sst.aws.Function("ProcellaApi", {
-	handler: "apps/server/src/lambda-stub.handler",
+	runtime: "provided.al2023",
+	architecture: "x86_64",
+	bundle: ".build/api",
+	handler: "bootstrap",
 	url: true,
 	timeout: "60 seconds",
 	memory: "512 MB",
@@ -34,14 +37,6 @@ export const api = new sst.aws.Function("ProcellaApi", {
 					PROCELLA_DESCOPE_MANAGEMENT_KEY: descopeManagementKey.value,
 				}
 			: {}),
-	},
-	transform: {
-		function: {
-			runtime: "provided.al2023",
-			architectures: ["x86_64"],
-			handler: "bootstrap",
-			code: new $util.asset.FileArchive(".build/api"),
-		},
 	},
 });
 

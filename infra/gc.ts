@@ -5,7 +5,10 @@ import { allSecrets, encryptionKey, devAuthToken } from "./secrets";
 export const gc = new sst.aws.Cron("ProcellaGcCron", {
 	schedule: "rate(1 minute)",
 	job: {
-		handler: "apps/server/src/lambda-stub.handler",
+		runtime: "provided.al2023",
+		architecture: "x86_64",
+		bundle: ".build/gc",
+		handler: "bootstrap",
 		timeout: "60 seconds",
 		memory: "256 MB",
 		vpc,
@@ -17,14 +20,6 @@ export const gc = new sst.aws.Cron("ProcellaGcCron", {
 			PROCELLA_AUTH_MODE: "dev",
 			PROCELLA_DEV_AUTH_TOKEN: devAuthToken.value,
 			PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
-		},
-		transform: {
-			function: {
-				runtime: "provided.al2023",
-				architectures: ["x86_64"],
-				handler: "bootstrap",
-				code: new $util.asset.FileArchive(".build/gc"),
-			},
 		},
 	},
 });
