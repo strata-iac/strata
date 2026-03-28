@@ -78,13 +78,11 @@ export function repairCheckpoint(resources: PulumiResource[]): {
 	const hasValidEdges = resources.some((r) => r.parent && urns.has(r.parent));
 
 	if (hasValidEdges) {
-		let stable = false;
-		while (!stable) {
+		while (true) {
 			const reachable = reachableFrom(patched, originalRoots);
 			const orphans = new Set(patched.filter((r) => !reachable.has(r.urn)).map((r) => r.urn));
 
 			if (orphans.size === 0) {
-				stable = true;
 				break;
 			}
 
