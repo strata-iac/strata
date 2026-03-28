@@ -63,9 +63,7 @@ async function gotoUpdate(
 	updateID: string,
 ) {
 	await page.goto(`${UI_URL}/stacks/${org}/${project}/${stack}/updates/${updateID}`);
-	await page
-		.waitForSelector(".animate-spin", { state: "detached", timeout: 8_000 })
-		.catch(() => {});
+	await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => {});
 }
 
 async function runPulumiUp(org: string, project: string, _stack: string): Promise<string> {
@@ -145,6 +143,7 @@ test.describe("UpdateDetail page — completed update", () => {
 	test("page loads and shows resource tracker", async ({ page }) => {
 		await setDevToken(page);
 		await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
+		console.log(`[E2E] navigated to updateID=${updateID} url=${page.url()}`);
 
 		await expect(page.locator("text=Resource Tracker")).toBeVisible({ timeout: 15_000 });
 		await expect(page.locator("text=Event Log")).toBeVisible();
