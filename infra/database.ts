@@ -23,6 +23,7 @@ export const database = await aws.rds
 		return new sst.aws.Aurora("ProcellaDatabase", {
 			engine: "postgres",
 			proxy: true,
+			dataApi: true,
 			scaling: { min: "0.5 ACU", max: "16 ACU" },
 			vpc,
 			dev: {
