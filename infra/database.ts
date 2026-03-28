@@ -10,20 +10,8 @@ export const vpc = await aws.ec2
 		return new sst.aws.Vpc("ProcellaVpc", { nat: "ec2" });
 	});
 
-export const database = await aws.rds
-	.getClusters({
-		// tag: filters are not supported by DescribeDBClusters — use engine filter instead,
-		// then match the production cluster by name prefix.
-		filters: [{ name: "engine", values: ["aurora-postgresql"] }],
-	})
-	.catch(() => undefined)
-	.then(async (result) => {
-		const clusterId = result?.clusterIdentifiers?.find((id) =>
-			id.startsWith(`${$app.name}-production-`),
-		);
-		if (!$dev && clusterId) {
-			return sst.aws.Aurora.get("ProcellaDatabase", clusterId);
-		}
+export const database = await (async () => {
+	if ($dev || stage === "production") {
 		return new sst.aws.Aurora("ProcellaDatabase", {
 			engine: "postgres",
 			proxy: true,
@@ -38,7 +26,24 @@ export const database = await aws.rds
 				port: 5432,
 			},
 		});
+	}
+
+	const result = await aws.rds.getClusters({}).catch((err) => {
+		throw new Error(
+			`Preview stage ${stage} cannot deploy without a production Aurora cluster. getClusters failed: ${err}`,
+		);
 	});
+	const clusterId = result.clusterIdentifiers.find((id) =>
+		id.startsWith(`${$app.name}-production-`),
+	);
+	if (!clusterId) {
+		throw new Error(
+			`Preview stage ${stage}: no production Aurora cluster found (expected name starting with "${$app.name}-production-"). ` +
+				`Available clusters: ${result.clusterIdentifiers.join(", ") || "none"}`,
+		);
+	}
+	return sst.aws.Aurora.get("ProcellaDatabase", clusterId);
+})();
 
 export const databaseName = $dev
 	? "procella"
