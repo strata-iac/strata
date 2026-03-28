@@ -50,7 +50,27 @@ async function truncate() {
 async function setDevToken(page: Page) {
 	await page.goto(`${UI_URL}/`);
 	await page.evaluate((token) => localStorage.setItem("procella-token", token), TOKEN);
-	await page.waitForResponse(`${API_URL}/api/auth/config`, { timeout: 5_000 }).catch(() => {});
+	await page
+		.waitForResponse((r) => r.url().includes("/api/auth/config"), { timeout: 5_000 })
+		.catch(() => {});
+}
+
+async function gotoUpdate(
+	page: Page,
+	org: string,
+	project: string,
+	stack: string,
+	updateID: string,
+) {
+	const [, response] = await Promise.all([
+		page.goto(`${UI_URL}/stacks/${org}/${project}/${stack}/updates/${updateID}`),
+		page
+			.waitForResponse((r) => r.url().includes("/api/auth/config"), { timeout: 8_000 })
+			.catch(() => null),
+	]);
+	if (!response) {
+		await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
+	}
 }
 
 async function runPulumiUp(org: string, project: string, _stack: string): Promise<string> {
@@ -129,7 +149,7 @@ test.describe("UpdateDetail page — completed update", () => {
 
 	test("page loads and shows resource tracker", async ({ page }) => {
 		await setDevToken(page);
-		await page.goto(`${UI_URL}/stacks/dev-org/pw-test/pw-stack/updates/${updateID}`);
+		await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
 
 		await expect(page.locator("text=Resource Tracker")).toBeVisible({ timeout: 15_000 });
 		await expect(page.locator("text=Event Log")).toBeVisible();
@@ -137,7 +157,7 @@ test.describe("UpdateDetail page — completed update", () => {
 
 	test("event log shows at least one event", async ({ page }) => {
 		await setDevToken(page);
-		await page.goto(`${UI_URL}/stacks/dev-org/pw-test/pw-stack/updates/${updateID}`);
+		await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
 
 		await expect(page.locator("text=Event Log")).toBeVisible({ timeout: 15_000 });
 		await expect(page.locator("[data-testid=event-log], .font-mono").first()).toBeVisible();
@@ -145,7 +165,7 @@ test.describe("UpdateDetail page — completed update", () => {
 
 	test("progress bar is visible and non-zero for completed update", async ({ page }) => {
 		await setDevToken(page);
-		await page.goto(`${UI_URL}/stacks/dev-org/pw-test/pw-stack/updates/${updateID}`);
+		await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
 
 		await expect(page.locator("text=Resource Tracker")).toBeVisible({ timeout: 15_000 });
 
@@ -157,7 +177,7 @@ test.describe("UpdateDetail page — completed update", () => {
 
 	test("status badge shows succeeded", async ({ page }) => {
 		await setDevToken(page);
-		await page.goto(`${UI_URL}/stacks/dev-org/pw-test/pw-stack/updates/${updateID}`);
+		await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
 
 		await expect(page.locator("text=succeeded, text=Succeeded").first()).toBeVisible({
 			timeout: 15_000,
@@ -166,7 +186,7 @@ test.describe("UpdateDetail page — completed update", () => {
 
 	test("back link navigates to stack detail", async ({ page }) => {
 		await setDevToken(page);
-		await page.goto(`${UI_URL}/stacks/dev-org/pw-test/pw-stack/updates/${updateID}`);
+		await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
 
 		await expect(page.locator("text=Resource Tracker")).toBeVisible({ timeout: 15_000 });
 		await page.locator("a", { hasText: "pw-test/pw-stack" }).click();
@@ -177,7 +197,7 @@ test.describe("UpdateDetail page — completed update", () => {
 
 	test("filter buttons work — Errors and Warnings tabs", async ({ page }) => {
 		await setDevToken(page);
-		await page.goto(`${UI_URL}/stacks/dev-org/pw-test/pw-stack/updates/${updateID}`);
+		await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
 
 		await expect(page.locator("text=Event Log")).toBeVisible({ timeout: 15_000 });
 
@@ -194,7 +214,7 @@ test.describe("UpdateDetail page — completed update", () => {
 
 	test("resource groups are collapsible", async ({ page }) => {
 		await setDevToken(page);
-		await page.goto(`${UI_URL}/stacks/dev-org/pw-test/pw-stack/updates/${updateID}`);
+		await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
 
 		await expect(page.locator("text=Resource Tracker")).toBeVisible({ timeout: 15_000 });
 
@@ -263,7 +283,7 @@ resources:
 
 		if (history.updates?.length) {
 			const liveUpdateID = history.updates[0].updateID;
-			await page.goto(`${UI_URL}/stacks/dev-org/live-test/dev/updates/${liveUpdateID}`);
+			await gotoUpdate(page, "dev-org", "live-test", "dev", liveUpdateID);
 
 			await expect(page.locator("text=Event Log")).toBeVisible({ timeout: 20_000 });
 
