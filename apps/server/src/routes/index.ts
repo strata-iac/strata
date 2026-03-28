@@ -40,6 +40,7 @@ export function createApp(deps: {
 	authConfig: AuthConfig;
 	corsOrigins?: string[];
 	db: Database;
+	dbUrl: string;
 	stacks: StacksService;
 	updates: UpdatesService;
 }): Hono<Env> {
@@ -83,6 +84,7 @@ export function createApp(deps: {
 		const ctx: TRPCContext = {
 			caller,
 			db: deps.db,
+			dbUrl: deps.dbUrl,
 			stacks: deps.stacks,
 			updates: deps.updates,
 		};

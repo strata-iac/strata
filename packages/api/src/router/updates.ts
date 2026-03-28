@@ -1,8 +1,9 @@
 // @procella/api — updates.list + updates.latest tRPC procedures.
 
 import { updateEvents, updates } from "@procella/db";
-import { eventBus, on } from "@procella/updates";
-import { and, desc, eq, inArray } from "drizzle-orm";
+
+import { and, asc, desc, eq, gt, inArray } from "drizzle-orm";
+import { Client } from "pg";
 import { z } from "zod/v4";
 import { publicProcedure, router } from "../trpc.js";
 
@@ -122,10 +123,71 @@ export const updatesRouter = router({
 	}),
 
 	onEvents: publicProcedure
-		.input(z.object({ updateId: z.string() }))
+		.input(
+			z.object({
+				updateId: z.string(),
+				lastEventId: z.coerce.number().nullish(),
+			}),
+		)
 		.subscription(async function* (opts) {
-			for await (const _ of on(eventBus, opts.input.updateId, { signal: opts.signal })) {
-				yield { ts: Date.now() };
+			const { updateId, lastEventId } = opts.input;
+			let lastSeq = lastEventId ?? 0;
+
+			const pg = new Client({ connectionString: opts.ctx.dbUrl });
+			await pg.connect();
+			await pg.query("LISTEN update_events");
+
+			const notify = new EventTarget();
+			pg.on("notification", (msg) => {
+				if (msg.payload === updateId) notify.dispatchEvent(new Event("ping"));
+			});
+			pg.on("error", () => {});
+
+			try {
+				const replay = await opts.ctx.db
+					.select({ sequence: updateEvents.sequence })
+					.from(updateEvents)
+					.where(and(eq(updateEvents.updateId, updateId), gt(updateEvents.sequence, lastSeq)))
+					.orderBy(asc(updateEvents.sequence));
+
+				for (const row of replay) {
+					lastSeq = row.sequence;
+					yield { ts: Date.now() };
+				}
+
+				const signal = opts.signal!;
+				while (!signal.aborted) {
+					await new Promise<void>((resolve, reject) => {
+						const done = () => {
+							notify.removeEventListener("ping", done);
+							signal.removeEventListener("abort", abort);
+							resolve();
+						};
+						const abort = () => {
+							notify.removeEventListener("ping", done);
+							signal.removeEventListener("abort", abort);
+							reject(new DOMException("Aborted", "AbortError"));
+						};
+						notify.addEventListener("ping", done, { once: true });
+						signal.addEventListener("abort", abort, { once: true });
+					});
+
+					const newRows = await opts.ctx.db
+						.select({ sequence: updateEvents.sequence })
+						.from(updateEvents)
+						.where(and(eq(updateEvents.updateId, updateId), gt(updateEvents.sequence, lastSeq)))
+						.orderBy(asc(updateEvents.sequence));
+
+					for (const row of newRows) {
+						lastSeq = row.sequence;
+						yield { ts: Date.now() };
+					}
+				}
+			} catch (e) {
+				if (e instanceof DOMException && e.name === "AbortError") return;
+				throw e;
+			} finally {
+				await pg.end().catch(() => {});
 			}
 		}),
 });

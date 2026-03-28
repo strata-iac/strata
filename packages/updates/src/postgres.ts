@@ -45,7 +45,6 @@ import {
 } from "@procella/types";
 import { and, asc, desc, eq, gt, max, sql } from "drizzle-orm";
 import { checkpointDedup } from "./checkpoint-dedup.js";
-import { eventBus } from "./event-bus.js";
 import type { TextEdit } from "./helpers.js";
 import {
 	applyTextEdits,
@@ -199,7 +198,6 @@ export class PostgresUpdatesService implements UpdatesService {
 				}),
 		);
 
-		eventBus.clear(updateId);
 		this.clearUpdateCaches(updateId);
 	}
 
@@ -233,7 +231,6 @@ export class PostgresUpdatesService implements UpdatesService {
 				.where(eq(stacks.id, row.stackId));
 		});
 
-		eventBus.clear(updateId);
 		this.clearUpdateCaches(updateId);
 	}
 
@@ -441,7 +438,6 @@ export class PostgresUpdatesService implements UpdatesService {
 						set: { kind: sql`excluded.kind`, fields: sql`excluded.fields` },
 					});
 
-				eventBus.publish(updateId, events);
 				await this.db.execute(sql`SELECT pg_notify('update_events', ${updateId})`);
 			},
 		);

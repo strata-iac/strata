@@ -5,7 +5,7 @@ import { createDb } from "@procella/db";
 import { PostgresStacksService } from "@procella/stacks";
 import { createBlobStorage } from "@procella/storage";
 import { initTelemetry } from "@procella/telemetry";
-import { PgListener, PostgresUpdatesService } from "@procella/updates";
+import { PostgresUpdatesService } from "@procella/updates";
 import { createApp } from "./routes/index.js";
 
 export async function bootstrap() {
@@ -54,16 +54,16 @@ export async function bootstrap() {
 
 	const stacksService = new PostgresStacksService({ db });
 	const updatesService = new PostgresUpdatesService({ db, storage, crypto });
-	const pgListener = new PgListener(config.databaseUrl);
 
 	const app = createApp({
 		auth,
 		authConfig,
 		corsOrigins: config.corsOrigins,
 		db,
+		dbUrl: config.databaseUrl,
 		stacks: stacksService,
 		updates: updatesService,
 	});
 
-	return { app, auth, config, db, client, pgListener };
+	return { app, auth, config, db, client };
 }
