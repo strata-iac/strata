@@ -95,6 +95,17 @@ const MIGRATIONS: string[] = [
 
 	try {
 		const { SQL } = require("bun") as typeof import("bun");
+
+		const dbUrl = new URL(config.databaseUrl as string);
+		const dbName = dbUrl.pathname.slice(1);
+
+		const pgDb = new SQL({ url: dbUrl.href.replace(`/${dbName}`, "/postgres") });
+		await pgDb.unsafe(`CREATE DATABASE "${dbName}"`).catch((err: unknown) => {
+			const msg = err instanceof Error ? err.message : String(err);
+			if (!msg.includes("already exists")) throw err;
+		});
+		await pgDb.close();
+
 		const db = new SQL({ url: config.databaseUrl as string });
 
 		const applied: string[] = [];
