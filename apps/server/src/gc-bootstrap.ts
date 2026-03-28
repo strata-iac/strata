@@ -15,7 +15,7 @@ import type { ScheduledEvent } from "aws-lambda";
 	while (true) {
 		const res = await fetch(`${BASE_URL}/invocation/next`);
 		const requestId = res.headers.get("Lambda-Runtime-Aws-Request-Id")!;
-		void ((await res.clone().json()) as ScheduledEvent);
+		void ((await res.json()) as ScheduledEvent);
 
 		try {
 			await gcWorker.runOnce();
