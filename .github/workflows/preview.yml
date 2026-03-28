@@ -101,7 +101,12 @@ jobs:
               --database "postgres" \
               --sql "CREATE DATABASE \"$DB_NAME\"" 2>&1 || echo "Database may already exist"
           fi
-          npx sst shell --stage "$STAGE" -- bun apps/server/src/index.ts --migrate packages/db/drizzle
+          LAMBDA_NAME=$(aws lambda list-functions \
+            --query "Functions[?starts_with(FunctionName, 'procella-${STAGE}-ProcellaApi')].FunctionName | [0]" \
+            --output text)
+          DB_URL=$(aws lambda get-function-configuration --function-name "$LAMBDA_NAME" \
+            --query "Environment.Variables.PROCELLA_DATABASE_URL" --output text)
+          PROCELLA_DATABASE_URL="$DB_URL" bun apps/server/src/index.ts --migrate packages/db/drizzle
 
       - name: Get stack outputs
         id: outputs

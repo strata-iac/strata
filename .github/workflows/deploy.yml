@@ -56,7 +56,14 @@ jobs:
           SST_SECRET_ProcellaDescopeManagementKey: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
 
       - name: Run database migrations
-        run: npx sst shell --stage production -- bun apps/server/src/index.ts --migrate packages/db/drizzle
+        shell: bash {0}
+        run: |
+          LAMBDA_NAME=$(aws lambda list-functions \
+            --query "Functions[?starts_with(FunctionName, 'procella-production-ProcellaApi')].FunctionName | [0]" \
+            --output text)
+          DB_URL=$(aws lambda get-function-configuration --function-name "$LAMBDA_NAME" \
+            --query "Environment.Variables.PROCELLA_DATABASE_URL" --output text)
+          PROCELLA_DATABASE_URL="$DB_URL" bun apps/server/src/index.ts --migrate packages/db/drizzle
 
       - name: Deployment summary
         if: always()
