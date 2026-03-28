@@ -8,7 +8,6 @@ import type { StacksService } from "@procella/stacks";
 import { tracingMiddleware } from "@procella/telemetry";
 import { PulumiRoutes } from "@procella/types";
 import { GCWorker, type UpdatesService } from "@procella/updates";
-import { TRPCError } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -76,25 +75,29 @@ export function createApp(deps: {
 	// ========================================================================
 
 	app.all("/trpc/*", async (c) => {
+		const caller = await deps.auth.authenticate(c.req.raw).catch(() => null);
+
+		if (!caller) {
+			return c.json({ code: 401, message: "Unauthorized" }, 401);
+		}
+
 		return fetchRequestHandler({
 			endpoint: "/trpc",
 			req: c.req.raw,
 			router: appRouter,
 			createContext: async (opts) => {
 				const connectionParams = opts.info?.connectionParams as Record<string, string> | undefined;
+				let resolvedCaller = caller;
 
-				let req = c.req.raw;
-				if (connectionParams?.authorization && !req.headers.get("Authorization")) {
-					const headers = new Headers(req.headers);
+				if (connectionParams?.authorization && !c.req.raw.headers.get("Authorization")) {
+					const headers = new Headers(c.req.raw.headers);
 					headers.set("Authorization", connectionParams.authorization);
-					req = new Request(req, { headers });
+					const req = new Request(c.req.raw, { headers });
+					resolvedCaller = (await deps.auth.authenticate(req).catch(() => null)) ?? caller;
 				}
 
-				const caller = await deps.auth.authenticate(req).catch(() => null);
-				if (!caller) throw new TRPCError({ code: "UNAUTHORIZED" });
-
 				return {
-					caller,
+					caller: resolvedCaller,
 					db: deps.db,
 					dbUrl: deps.dbUrl,
 					stacks: deps.stacks,
