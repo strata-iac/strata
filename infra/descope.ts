@@ -1,8 +1,7 @@
 import * as descope from "@descope/pulumi-descope";
-import { descopeManagementKey } from "./secrets";
-
 import signUpOrInFlowJson from "./flows/sign-up-or-in.json" with { type: "json" };
 import stylesJson from "./flows/styles.json" with { type: "json" };
+import { descopeManagementKey } from "./secrets";
 
 const signUpOrInFlow = JSON.stringify(signUpOrInFlowJson);
 const stylesData = JSON.stringify(stylesJson);
@@ -61,7 +60,8 @@ const project = new descope.Project(
 			accessKeyTemplates: [
 				{
 					name: "Procella Access Key",
-					description: "Default JWT template for Procella access keys — includes tenant and role claims",
+					description:
+						"Default JWT template for Procella access keys — includes tenant and role claims",
 					template: accessKeyJwtTemplate,
 					authSchema: "default",
 					autoTenantClaim: true,

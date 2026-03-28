@@ -53,6 +53,8 @@
 			"apps/**/*.tsx",
 			"e2e/**/*.ts",
 			"scripts/**/*.ts",
+			"infra/**/*.ts",
+			"sst.config.ts",
 			"apps/**/*.css",
 			"!**/node_modules",
 			"!**/dist",
@@ -65,6 +67,18 @@
 			"includes": ["scripts/**"],
 			"linter": {
 				"rules": {
+					"suspicious": { "noConsole": "off" }
+				}
+			}
+		},
+		{
+			"includes": ["infra/**", "sst.config.ts"],
+			"linter": {
+				"rules": {
+					"correctness": {
+						"noUnusedImports": "error",
+						"noUnusedVariables": "error"
+					},
 					"suspicious": { "noConsole": "off" }
 				}
 			}

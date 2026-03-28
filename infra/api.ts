@@ -1,18 +1,11 @@
-import { vpc, database, databaseUrl } from "./database";
+import { database, databaseUrl, vpc } from "./database";
+import { allSecrets, descopeManagementKey, devAuthToken, encryptionKey } from "./secrets";
 import { bucket } from "./storage";
-import {
-	allSecrets,
-	encryptionKey,
-	devAuthToken,
-	descopeManagementKey,
-} from "./secrets";
 
 const isProd = $app.stage === "production";
 const stage = $app.stage;
 
-const descopeProjectId = !$dev
-	? (await import("./descope")).projectId
-	: undefined;
+const descopeProjectId = !$dev ? (await import("./descope")).projectId : undefined;
 
 const appOrigin = isProd ? "https://app.procella.cloud" : `https://app.${stage}.procella.cloud`;
 
@@ -52,14 +45,18 @@ export const router = new sst.aws.Router("ProcellaRouter", {
 	},
 });
 
-import * as fs from "node:fs";
 import * as crypto from "node:crypto";
+import * as fs from "node:fs";
 import * as command from "@pulumi/command";
 
 const migrationHash = crypto
 	.createHash("sha256")
 	.update(
-		["0000_medical_fabian_cortez.sql", "0001_add_journal_entries.sql", "0002_extend_journal_entries.sql"]
+		[
+			"0000_medical_fabian_cortez.sql",
+			"0001_add_journal_entries.sql",
+			"0002_extend_journal_entries.sql",
+		]
 			.map((f) => fs.readFileSync(`packages/db/drizzle/${f}`, "utf8"))
 			.join("\n"),
 	)
