@@ -14,12 +14,16 @@ const descopeProjectId = isProd
 	? (await import("./descope")).projectId
 	: undefined;
 
+const appOrigin = isProd ? "https://app.procella.cloud" : `https://app.${stage}.procella.cloud`;
+
 export const api = new sst.aws.Function("ProcellaApi", {
 	runtime: "provided.al2023",
 	architecture: "x86_64",
 	bundle: ".build/api",
 	handler: "bootstrap",
-	url: true,
+	url: {
+		cors: false,
+	},
 	timeout: "60 seconds",
 	memory: "512 MB",
 	vpc,
@@ -30,6 +34,7 @@ export const api = new sst.aws.Function("ProcellaApi", {
 		PROCELLA_BLOB_S3_BUCKET: bucket.name,
 		PROCELLA_AUTH_MODE: isProd ? "descope" : "dev",
 		PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
+		PROCELLA_CORS_ORIGINS: appOrigin,
 		...(!isProd ? { PROCELLA_DEV_AUTH_TOKEN: devAuthToken.value } : {}),
 		...(isProd
 			? {
