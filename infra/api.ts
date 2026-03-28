@@ -12,8 +12,9 @@ const appOrigin = isProd ? "https://app.procella.cloud" : `https://app.${stage}.
 export const api = new sst.aws.Function("ProcellaApi", {
 	runtime: "container",
 	image: {
-		dockerfile: "Dockerfile.lambda",
+		dockerfile: "Dockerfile",
 		context: ".",
+		target: "lambda",
 	},
 	architecture: "x86_64",
 	url: {
