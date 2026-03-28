@@ -55,6 +55,18 @@ import {
 import type { UpdatesService } from "./types.js";
 import { BLOB_THRESHOLD, LEASE_DURATION_SECONDS } from "./types.js";
 
+function pgErrorCode(err: unknown): string | undefined {
+	if (err && typeof err === "object" && "code" in err) {
+		return typeof (err as { code: unknown }).code === "string"
+			? (err as { code: string }).code
+			: undefined;
+	}
+	if (err && typeof err === "object" && "cause" in err) {
+		return pgErrorCode((err as { cause: unknown }).cause);
+	}
+	return undefined;
+}
+
 // ============================================================================
 // PostgresUpdatesService
 // ============================================================================
@@ -98,19 +110,28 @@ export class PostgresUpdatesService implements UpdatesService {
 
 			const version = (versionRow?.maxVersion ?? 0) + 1;
 
-			const [row] = await this.db
-				.insert(updates)
-				.values({
-					stackId,
-					kind,
-					status: "not started",
-					version,
-					config: config ?? null,
-					program: program ?? null,
-				})
-				.returning();
+			try {
+				const [row] = await this.db
+					.insert(updates)
+					.values({
+						stackId,
+						kind,
+						status: "not started",
+						version,
+						config: config ?? null,
+						program: program ?? null,
+					})
+					.returning();
 
-			return { updateID: row.id, version } as UpdateProgramResponse;
+				return { updateID: row.id, version } as UpdateProgramResponse;
+			} catch (err: unknown) {
+				if (pgErrorCode(err) === "23505") {
+					throw new UpdateConflictError(
+						"Another update is already in progress for this stack. Run `pulumi cancel` to cancel it first.",
+					);
+				}
+				throw err;
+			}
 		});
 	}
 
