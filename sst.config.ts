@@ -15,8 +15,6 @@ export default $config({
 		};
 	},
 	async run() {
-		const isProd = $app.stage === "production";
-
 		await import("./infra/secrets");
 		await import("./infra/database");
 		await import("./infra/storage");
