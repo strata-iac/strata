@@ -54,7 +54,9 @@ const migrationHash = crypto
 	.update(
 		fs
 			.readdirSync("packages/db/drizzle", { recursive: true })
-			.filter((f) => typeof f === "string")
+			.filter(
+				(f) => typeof f === "string" && !fs.statSync(`packages/db/drizzle/${f}`).isDirectory(),
+			)
 			.sort()
 			.map((f) => fs.readFileSync(`packages/db/drizzle/${f}`, "utf8"))
 			.join("\n"),
