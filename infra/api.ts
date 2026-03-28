@@ -10,7 +10,7 @@ import {
 const isProd = $app.stage === "production";
 const stage = $app.stage;
 
-const descopeProjectId = isProd
+const descopeProjectId = !$dev
 	? (await import("./descope")).projectId
 	: undefined;
 
@@ -32,11 +32,11 @@ export const api = new sst.aws.Function("ProcellaApi", {
 		PROCELLA_DATABASE_URL: databaseUrl,
 		PROCELLA_BLOB_BACKEND: "s3",
 		PROCELLA_BLOB_S3_BUCKET: bucket.name,
-		PROCELLA_AUTH_MODE: isProd ? "descope" : "dev",
+		PROCELLA_AUTH_MODE: $dev ? "dev" : "descope",
 		PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
 		PROCELLA_CORS_ORIGINS: appOrigin,
-		...(!isProd ? { PROCELLA_DEV_AUTH_TOKEN: devAuthToken.value } : {}),
-		...(isProd
+		...($dev ? { PROCELLA_DEV_AUTH_TOKEN: devAuthToken.value } : {}),
+		...(!$dev
 			? {
 					PROCELLA_DESCOPE_PROJECT_ID: descopeProjectId,
 					PROCELLA_DESCOPE_MANAGEMENT_KEY: descopeManagementKey.value,

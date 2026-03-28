@@ -20,7 +20,7 @@ export default $config({
 		await import("./infra/secrets");
 		await import("./infra/database");
 		await import("./infra/storage");
-		if (isProd) await import("./infra/descope");
+		if (!$dev) await import("./infra/descope");
 		const { router } = await import("./infra/api");
 		await import("./infra/gc");
 		const { site } = await import("./infra/site");
