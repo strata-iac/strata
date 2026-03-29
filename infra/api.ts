@@ -59,16 +59,26 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as command from "@pulumi/command";
 
+const migrationInputs = [
+	"packages/db/drizzle",
+	"packages/db/src",
+	"apps/server/src/migrate-bootstrap.ts",
+	"scripts/migrate.ts",
+];
 const migrationHash = crypto
 	.createHash("sha256")
 	.update(
-		fs
-			.readdirSync("packages/db/drizzle", { recursive: true })
-			.filter(
-				(f) => typeof f === "string" && !fs.statSync(`packages/db/drizzle/${f}`).isDirectory(),
-			)
-			.sort()
-			.map((f) => fs.readFileSync(`packages/db/drizzle/${f}`, "utf8"))
+		migrationInputs
+			.flatMap((dir) => {
+				const stat = fs.statSync(dir, { throwIfNoEntry: false });
+				if (!stat) return [];
+				if (stat.isFile()) return [[dir, fs.readFileSync(dir, "utf8")] as const];
+				return (fs.readdirSync(dir, { recursive: true }) as string[])
+					.filter((f) => !fs.statSync(`${dir}/${f}`).isDirectory())
+					.sort()
+					.map((f) => [`${dir}/${f}`, fs.readFileSync(`${dir}/${f}`, "utf8")] as const);
+			})
+			.map(([path, content]) => `${path}:${content}`)
 			.join("\n"),
 	)
 	.digest("hex");
