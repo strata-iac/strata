@@ -1,5 +1,12 @@
 import { database, databaseUrl, vpc } from "./database";
-import { allSecrets, descopeManagementKey, devAuthToken, encryptionKey } from "./secrets";
+import {
+	allSecrets,
+	descopeManagementKey,
+	devAuthToken,
+	encryptionKey,
+	otelEndpoint,
+	otelHeaders,
+} from "./secrets";
 import { bucket } from "./storage";
 
 const isProd = $app.stage === "production";
@@ -28,6 +35,9 @@ export const api = new sst.aws.Function("ProcellaApi", {
 		PROCELLA_AUTH_MODE: $dev ? "dev" : "descope",
 		PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
 		PROCELLA_CORS_ORIGINS: appOrigin,
+		PROCELLA_OTEL_ENABLED: "true",
+		OTEL_EXPORTER_OTLP_ENDPOINT: otelEndpoint.value,
+		OTEL_EXPORTER_OTLP_HEADERS: otelHeaders.value,
 		...($dev ? { PROCELLA_DEV_AUTH_TOKEN: devAuthToken.value } : {}),
 		...(!$dev
 			? {

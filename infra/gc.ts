@@ -1,5 +1,5 @@
 import { database, databaseUrl, vpc } from "./database";
-import { allSecrets, devAuthToken, encryptionKey } from "./secrets";
+import { allSecrets, devAuthToken, encryptionKey, otelEndpoint, otelHeaders } from "./secrets";
 import { bucket } from "./storage";
 
 export const gc = new sst.aws.Cron("ProcellaGcCron", {
@@ -20,6 +20,9 @@ export const gc = new sst.aws.Cron("ProcellaGcCron", {
 			PROCELLA_AUTH_MODE: "dev",
 			PROCELLA_DEV_AUTH_TOKEN: devAuthToken.value,
 			PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
+			PROCELLA_OTEL_ENABLED: "true",
+			OTEL_EXPORTER_OTLP_ENDPOINT: otelEndpoint.value,
+			OTEL_EXPORTER_OTLP_HEADERS: otelHeaders.value,
 		},
 	},
 });
