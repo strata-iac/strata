@@ -98,6 +98,11 @@ async function runWorker(example: string, workerId: number): Promise<WorkerResul
 			throw new Error(`stack init failed (exit ${init.exit}): ${init.stderr.slice(0, 300)}`);
 		}
 
+		const sel = await pulumi(["stack", "select", stackName], { cwd: isolatedDir });
+		if (sel.exit !== 0) {
+			throw new Error(`stack select failed (exit ${sel.exit}): ${sel.stderr.slice(0, 300)}`);
+		}
+
 		for (let c = 0; c < CYCLES; c++) {
 			let upMs = 0;
 			let destroyMs = 0;
