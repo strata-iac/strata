@@ -374,8 +374,9 @@ describe("@procella/updates helpers", () => {
 				batchEncrypt: noop,
 				batchDecrypt: noop,
 				verifyLeaseToken: noop,
+				verifyUpdateOwnership: noop,
 			};
-			expect(Object.keys(mock)).toHaveLength(20);
+			expect(Object.keys(mock)).toHaveLength(21);
 		});
 	});
 
