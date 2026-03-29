@@ -37,7 +37,17 @@ export async function resolveUpdateId(
 	stackId: string,
 	updateIdOrVersion: string,
 ): Promise<string> {
-	if (UUID_RE.test(updateIdOrVersion)) return updateIdOrVersion;
+	if (UUID_RE.test(updateIdOrVersion)) {
+		const [row] = await db
+			.select({ id: updates.id })
+			.from(updates)
+			.where(and(eq(updates.stackId, stackId), eq(updates.id, updateIdOrVersion)))
+			.limit(1);
+		if (!row) {
+			throw new TRPCError({ code: "NOT_FOUND", message: "Update not found" });
+		}
+		return row.id;
+	}
 
 	const version = Number(updateIdOrVersion);
 	if (!Number.isInteger(version) || version <= 0) {

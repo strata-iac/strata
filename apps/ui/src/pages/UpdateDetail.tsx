@@ -193,7 +193,7 @@ export function UpdateDetail() {
 				});
 				// Refresh update status only on events that signal completion/cancellation
 				if (data.summaryEvent || data.cancelEvent) {
-					utils.updates.latest.invalidate();
+					utils.updates.get.invalidate();
 				}
 			},
 		},
