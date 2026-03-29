@@ -2,6 +2,7 @@
 
 import type { Database } from "@procella/db";
 import { stacks, updates } from "@procella/db";
+import { activeUpdatesGauge, gcCycleCount, gcOrphansCleanedCount } from "@procella/telemetry";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { GC_ADVISORY_LOCK_ID, GC_INTERVAL_MS, GC_STALE_THRESHOLD_MS } from "./types.js";
 
@@ -44,6 +45,7 @@ export class GCWorker {
 	private async runCycle(): Promise<void> {
 		if (this.running) return;
 		this.running = true;
+		gcCycleCount().add(1);
 
 		try {
 			// Try to acquire advisory lock (cluster-safe — only one GC runs at a time)
@@ -79,8 +81,9 @@ export class GCWorker {
 					);
 
 				const allOrphans = [...expiredLeaseUpdates, ...staleUpdates];
+				const orphanCount = allOrphans.length;
 
-				if (allOrphans.length > 0) {
+				if (orphanCount > 0) {
 					const orphanIds = allOrphans.map((u) => u.id);
 					const affectedStackIds = [...new Set(allOrphans.map((u) => u.stackId))];
 
@@ -96,7 +99,10 @@ export class GCWorker {
 						})
 						.where(inArray(updates.id, orphanIds));
 
-					// Clear active update locks on affected stacks
+					if (expiredLeaseUpdates.length > 0) {
+						activeUpdatesGauge().add(-expiredLeaseUpdates.length);
+					}
+
 					for (const stackId of affectedStackIds) {
 						await this.db
 							.update(stacks)
@@ -104,6 +110,8 @@ export class GCWorker {
 							.where(and(eq(stacks.id, stackId), inArray(stacks.activeUpdateId, orphanIds)));
 					}
 				}
+
+				gcOrphansCleanedCount().add(orphanCount);
 			} finally {
 				// Always release the advisory lock
 				await this.db.execute(sql`SELECT pg_advisory_unlock(${GC_ADVISORY_LOCK_ID})`);

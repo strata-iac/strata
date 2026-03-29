@@ -13,6 +13,7 @@ import {
 	trace,
 } from "@opentelemetry/api";
 import type { MiddlewareHandler } from "hono";
+import { httpActiveRequestsGauge, httpRequestDuration } from "./metrics.js";
 
 /**
  * Hono middleware that wraps each request in an OTLP span.
@@ -20,16 +21,22 @@ import type { MiddlewareHandler } from "hono";
  */
 export function tracingMiddleware(): MiddlewareHandler {
 	const tracer = trace.getTracer("procella.http");
+	const durationHist = httpRequestDuration();
+	const activeGauge = httpActiveRequestsGauge();
+
 	return async (c, next) => {
 		const method = c.req.method;
 		const path = c.req.path;
 		const spanName = `${method} ${path}`;
+		const startTime = performance.now();
 
 		const headers: Record<string, string> = {};
 		c.req.raw.headers.forEach((value, key) => {
 			headers[key] = value;
 		});
 		const parentCtx = propagation.extract(context.active(), headers);
+
+		activeGauge.add(1);
 
 		await tracer.startActiveSpan(
 			spanName,
@@ -69,6 +76,16 @@ export function tracingMiddleware(): MiddlewareHandler {
 					span.recordException(err instanceof Error ? err : new Error(String(err)));
 					throw err;
 				} finally {
+					const durationMs = performance.now() - startTime;
+					const status = c.res?.status ?? 500;
+					const routePath = c.req.routePath;
+					const route = routePath && routePath !== "/*" ? routePath : path;
+					durationHist.record(durationMs, {
+						"http.method": method,
+						"http.route": route,
+						"http.status_code": status,
+					});
+					activeGauge.add(-1);
 					span.end();
 				}
 			},

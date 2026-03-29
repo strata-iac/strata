@@ -1,6 +1,7 @@
 // @procella/crypto — AES-256-GCM encryption with HKDF per-stack key derivation
 
 import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from "node:crypto";
+import { cryptoOperationCount } from "@procella/telemetry";
 
 // ============================================================================
 // CryptoService interface
@@ -39,6 +40,7 @@ export class AesCryptoService implements CryptoService {
 	}
 
 	async encrypt(plaintext: Uint8Array, stackFQN: string): Promise<Uint8Array> {
+		cryptoOperationCount().add(1, { operation: "encrypt" });
 		const key = this.deriveKey(stackFQN);
 		const nonce = randomBytes(NONCE_LENGTH);
 
@@ -55,6 +57,7 @@ export class AesCryptoService implements CryptoService {
 	}
 
 	async decrypt(ciphertext: Uint8Array, stackFQN: string): Promise<Uint8Array> {
+		cryptoOperationCount().add(1, { operation: "decrypt" });
 		if (ciphertext.length < NONCE_LENGTH + TAG_LENGTH) {
 			throw new Error(
 				`Ciphertext too short: expected at least ${NONCE_LENGTH + TAG_LENGTH} bytes, got ${ciphertext.length}`,

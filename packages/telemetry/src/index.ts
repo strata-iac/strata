@@ -1,9 +1,27 @@
 // @procella/telemetry — OpenTelemetry instrumentation for Procella.
 //
-// Provides OTLP trace export, Hono middleware, and span utilities.
-// All tracing is no-op when disabled — safe to leave wired in production.
+// Provides OTLP trace + metric export, Hono middleware, and span utilities.
+// All instrumentation is no-op when disabled — safe to leave wired in production.
 
 export { FetchOtlpTraceExporter } from "./fetch-exporter.js";
+export {
+	activeUpdatesGauge,
+	authAuthenticateDuration,
+	authFailureCount,
+	checkpointSizeHistogram,
+	cryptoOperationCount,
+	dbOperationCount,
+	dbOperationDuration,
+	gcCycleCount,
+	gcOrphansCleanedCount,
+	httpActiveRequestsGauge,
+	httpRequestDuration,
+	journalEntriesCount,
+	storageOperationDuration,
+	storageOperationSize,
+	trpcProcedureDuration,
+} from "./metrics.js";
+export { FetchOtlpMetricExporter } from "./metrics-exporter.js";
 export { activeContext, tracingMiddleware } from "./middleware.js";
 export { initTelemetry, shutdownTelemetry, type TelemetryConfig } from "./sdk.js";
 export { getTracer, withDbSpan, withSpan } from "./spans.js";

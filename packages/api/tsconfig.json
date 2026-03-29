@@ -9,6 +9,7 @@
 		{ "path": "../types" },
 		{ "path": "../db" },
 		{ "path": "../stacks" },
+		{ "path": "../telemetry" },
 		{ "path": "../updates" }
 	]
 }

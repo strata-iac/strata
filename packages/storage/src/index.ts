@@ -9,6 +9,7 @@ import {
 	PutObjectCommand,
 	S3Client,
 } from "@aws-sdk/client-s3";
+import { storageOperationDuration, storageOperationSize, withSpan } from "@procella/telemetry";
 
 // ============================================================================
 // Interface
@@ -63,47 +64,106 @@ export class LocalBlobStorage implements BlobStorage {
 	}
 
 	async get(key: string): Promise<Uint8Array | null> {
-		try {
-			const filePath = this.resolvePath(key);
-			const buffer = await readFile(filePath);
-			return new Uint8Array(buffer);
-		} catch (err: unknown) {
-			if (isNodeError(err) && err.code === "ENOENT") {
-				return null;
+		return withSpan("procella.storage", "storage.get", { "storage.backend": "local" }, async () => {
+			const startTime = performance.now();
+			try {
+				try {
+					const filePath = this.resolvePath(key);
+					const buffer = await readFile(filePath);
+					const result = new Uint8Array(buffer);
+					storageOperationSize().record(result.byteLength, {
+						"storage.operation": "get",
+						"storage.backend": "local",
+					});
+					return result;
+				} catch (err: unknown) {
+					if (isNodeError(err) && err.code === "ENOENT") {
+						return null;
+					}
+					throw err;
+				}
+			} finally {
+				storageOperationDuration().record(performance.now() - startTime, {
+					"storage.operation": "get",
+					"storage.backend": "local",
+				});
 			}
-			throw err;
-		}
+		});
 	}
 
 	async put(key: string, data: Uint8Array): Promise<void> {
-		const filePath = this.resolvePath(key);
-		await mkdir(dirname(filePath), { recursive: true });
-		await writeFile(filePath, data);
+		return withSpan("procella.storage", "storage.put", { "storage.backend": "local" }, async () => {
+			const startTime = performance.now();
+			try {
+				const filePath = this.resolvePath(key);
+				await mkdir(dirname(filePath), { recursive: true });
+				await writeFile(filePath, data);
+				storageOperationSize().record(data.byteLength, {
+					"storage.operation": "put",
+					"storage.backend": "local",
+				});
+			} finally {
+				storageOperationDuration().record(performance.now() - startTime, {
+					"storage.operation": "put",
+					"storage.backend": "local",
+				});
+			}
+		});
 	}
 
 	async delete(key: string): Promise<void> {
-		try {
-			const filePath = this.resolvePath(key);
-			await rm(filePath, { force: true });
-		} catch (err: unknown) {
-			if (isNodeError(err) && err.code === "ENOENT") {
-				return;
-			}
-			throw err;
-		}
+		return withSpan(
+			"procella.storage",
+			"storage.delete",
+			{ "storage.backend": "local" },
+			async () => {
+				const startTime = performance.now();
+				try {
+					try {
+						const filePath = this.resolvePath(key);
+						await rm(filePath, { force: true });
+					} catch (err: unknown) {
+						if (isNodeError(err) && err.code === "ENOENT") {
+							return;
+						}
+						throw err;
+					}
+				} finally {
+					storageOperationDuration().record(performance.now() - startTime, {
+						"storage.operation": "delete",
+						"storage.backend": "local",
+					});
+				}
+			},
+		);
 	}
 
 	async exists(key: string): Promise<boolean> {
-		try {
-			const filePath = this.resolvePath(key);
-			await stat(filePath);
-			return true;
-		} catch (err: unknown) {
-			if (isNodeError(err) && err.code === "ENOENT") {
-				return false;
-			}
-			throw err;
-		}
+		return withSpan(
+			"procella.storage",
+			"storage.exists",
+			{ "storage.backend": "local" },
+			async () => {
+				const startTime = performance.now();
+				try {
+					try {
+						const filePath = this.resolvePath(key);
+						await stat(filePath);
+						return true;
+					} catch (err: unknown) {
+						if (isNodeError(err) && err.code === "ENOENT") {
+							return false;
+						}
+						throw err;
+					}
+				} finally {
+					storageOperationDuration().record(performance.now() - startTime, {
+						"storage.operation": "exists",
+						"storage.backend": "local",
+					});
+				}
+			},
+		);
 	}
 }
 
@@ -142,70 +202,119 @@ export class S3BlobStorage implements BlobStorage {
 	}
 
 	async get(key: string): Promise<Uint8Array | null> {
-		try {
-			const response = await this.client.send(
-				new GetObjectCommand({
-					Bucket: this.bucket,
-					Key: key,
-				}),
-			);
+		return withSpan("procella.storage", "storage.get", { "storage.backend": "s3" }, async () => {
+			const startTime = performance.now();
+			try {
+				try {
+					const response = await this.client.send(
+						new GetObjectCommand({
+							Bucket: this.bucket,
+							Key: key,
+						}),
+					);
 
-			if (!response.Body) {
-				return null;
+					if (!response.Body) {
+						return null;
+					}
+
+					const result = await S3BlobStorage.bodyToUint8Array(response.Body);
+					storageOperationSize().record(result.byteLength, {
+						"storage.operation": "get",
+						"storage.backend": "s3",
+					});
+					return result;
+				} catch (err: unknown) {
+					if (
+						isS3ErrorName(err, "NoSuchKey") ||
+						isS3ErrorName(err, "NotFound") ||
+						(isS3Error(err) && err.$metadata?.httpStatusCode === 404)
+					) {
+						return null;
+					}
+
+					throw err;
+				}
+			} finally {
+				storageOperationDuration().record(performance.now() - startTime, {
+					"storage.operation": "get",
+					"storage.backend": "s3",
+				});
 			}
-
-			return await S3BlobStorage.bodyToUint8Array(response.Body);
-		} catch (err: unknown) {
-			if (
-				isS3ErrorName(err, "NoSuchKey") ||
-				isS3ErrorName(err, "NotFound") ||
-				(isS3Error(err) && err.$metadata?.httpStatusCode === 404)
-			) {
-				return null;
-			}
-
-			throw err;
-		}
+		});
 	}
 
 	async put(key: string, data: Uint8Array): Promise<void> {
-		await this.client.send(
-			new PutObjectCommand({
-				Bucket: this.bucket,
-				Key: key,
-				Body: data,
-			}),
-		);
+		return withSpan("procella.storage", "storage.put", { "storage.backend": "s3" }, async () => {
+			const startTime = performance.now();
+			try {
+				await this.client.send(
+					new PutObjectCommand({
+						Bucket: this.bucket,
+						Key: key,
+						Body: data,
+					}),
+				);
+				storageOperationSize().record(data.byteLength, {
+					"storage.operation": "put",
+					"storage.backend": "s3",
+				});
+			} finally {
+				storageOperationDuration().record(performance.now() - startTime, {
+					"storage.operation": "put",
+					"storage.backend": "s3",
+				});
+			}
+		});
 	}
 
 	async delete(key: string): Promise<void> {
-		await this.client.send(
-			new DeleteObjectCommand({
-				Bucket: this.bucket,
-				Key: key,
-			}),
-		);
+		return withSpan("procella.storage", "storage.delete", { "storage.backend": "s3" }, async () => {
+			const startTime = performance.now();
+			try {
+				await this.client.send(
+					new DeleteObjectCommand({
+						Bucket: this.bucket,
+						Key: key,
+					}),
+				);
+			} finally {
+				storageOperationDuration().record(performance.now() - startTime, {
+					"storage.operation": "delete",
+					"storage.backend": "s3",
+				});
+			}
+		});
 	}
 
 	async exists(key: string): Promise<boolean> {
-		try {
-			await this.client.send(
-				new HeadObjectCommand({
-					Bucket: this.bucket,
-					Key: key,
-				}),
-			);
-			return true;
-		} catch (err: unknown) {
-			if (
-				isS3ErrorName(err, "NotFound") ||
-				(isS3Error(err) && err.$metadata?.httpStatusCode === 404)
-			) {
-				return false;
-			}
+		return withSpan("procella.storage", "storage.exists", { "storage.backend": "s3" }, async () => {
+			const startTime = performance.now();
+			try {
+				try {
+					await this.client.send(
+						new HeadObjectCommand({
+							Bucket: this.bucket,
+							Key: key,
+						}),
+					);
+					return true;
+				} catch (err: unknown) {
+					if (
+						isS3ErrorName(err, "NotFound") ||
+						(isS3Error(err) && err.$metadata?.httpStatusCode === 404)
+					) {
+						return false;
+					}
 
-			throw err;
-		}
+					throw err;
+				}
+			} finally {
+				storageOperationDuration().record(performance.now() - startTime, {
+					"storage.operation": "exists",
+					"storage.backend": "s3",
+				});
+			}
+		});
 	}
 
 	private static async bodyToUint8Array(body: unknown): Promise<Uint8Array> {

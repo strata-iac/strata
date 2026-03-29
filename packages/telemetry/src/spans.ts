@@ -5,6 +5,7 @@
 // These are no-ops when telemetry is disabled (the tracer returns NoopSpans).
 
 import { SpanStatusCode, trace } from "@opentelemetry/api";
+import { dbOperationCount, dbOperationDuration } from "./metrics.js";
 
 /**
  * Wrap an async function in a named span. The span is automatically ended
@@ -44,16 +45,19 @@ export async function withDbSpan<T>(
 	attrs: Record<string, string | number | boolean>,
 	fn: () => Promise<T>,
 ): Promise<T> {
-	return withSpan(
-		"procella.db",
-		`db.${operation}`,
-		{
-			"db.system": "postgresql",
-			"db.operation": operation,
-			...attrs,
-		},
-		fn,
-	);
+	const startTime = performance.now();
+	const metricAttrs = { "db.operation": operation };
+	dbOperationCount().add(1, metricAttrs);
+	try {
+		return await withSpan(
+			"procella.db",
+			`db.${operation}`,
+			{ "db.system": "postgresql", "db.operation": operation, ...attrs },
+			fn,
+		);
+	} finally {
+		dbOperationDuration().record(performance.now() - startTime, metricAttrs);
+	}
 }
 
 export function getTracer(name: string) {
