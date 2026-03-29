@@ -64,68 +64,58 @@ export class LocalBlobStorage implements BlobStorage {
 	}
 
 	async get(key: string): Promise<Uint8Array | null> {
-		return withSpan(
-			"procella.storage",
-			"storage.get",
-			{ "storage.backend": "local", "storage.key": key },
-			async () => {
-				const startTime = performance.now();
+		return withSpan("procella.storage", "storage.get", { "storage.backend": "local" }, async () => {
+			const startTime = performance.now();
+			try {
 				try {
-					try {
-						const filePath = this.resolvePath(key);
-						const buffer = await readFile(filePath);
-						const result = new Uint8Array(buffer);
-						storageOperationSize().record(result.byteLength, {
-							"storage.operation": "get",
-							"storage.backend": "local",
-						});
-						return result;
-					} catch (err: unknown) {
-						if (isNodeError(err) && err.code === "ENOENT") {
-							return null;
-						}
-						throw err;
-					}
-				} finally {
-					storageOperationDuration().record(performance.now() - startTime, {
+					const filePath = this.resolvePath(key);
+					const buffer = await readFile(filePath);
+					const result = new Uint8Array(buffer);
+					storageOperationSize().record(result.byteLength, {
 						"storage.operation": "get",
 						"storage.backend": "local",
 					});
+					return result;
+				} catch (err: unknown) {
+					if (isNodeError(err) && err.code === "ENOENT") {
+						return null;
+					}
+					throw err;
 				}
-			},
-		);
+			} finally {
+				storageOperationDuration().record(performance.now() - startTime, {
+					"storage.operation": "get",
+					"storage.backend": "local",
+				});
+			}
+		});
 	}
 
 	async put(key: string, data: Uint8Array): Promise<void> {
-		return withSpan(
-			"procella.storage",
-			"storage.put",
-			{ "storage.backend": "local", "storage.key": key },
-			async () => {
-				const startTime = performance.now();
-				try {
-					const filePath = this.resolvePath(key);
-					await mkdir(dirname(filePath), { recursive: true });
-					await writeFile(filePath, data);
-					storageOperationSize().record(data.byteLength, {
-						"storage.operation": "put",
-						"storage.backend": "local",
-					});
-				} finally {
-					storageOperationDuration().record(performance.now() - startTime, {
-						"storage.operation": "put",
-						"storage.backend": "local",
-					});
-				}
-			},
-		);
+		return withSpan("procella.storage", "storage.put", { "storage.backend": "local" }, async () => {
+			const startTime = performance.now();
+			try {
+				const filePath = this.resolvePath(key);
+				await mkdir(dirname(filePath), { recursive: true });
+				await writeFile(filePath, data);
+				storageOperationSize().record(data.byteLength, {
+					"storage.operation": "put",
+					"storage.backend": "local",
+				});
+			} finally {
+				storageOperationDuration().record(performance.now() - startTime, {
+					"storage.operation": "put",
+					"storage.backend": "local",
+				});
+			}
+		});
 	}
 
 	async delete(key: string): Promise<void> {
 		return withSpan(
 			"procella.storage",
 			"storage.delete",
-			{ "storage.backend": "local", "storage.key": key },
+			{ "storage.backend": "local" },
 			async () => {
 				const startTime = performance.now();
 				try {
@@ -152,7 +142,7 @@ export class LocalBlobStorage implements BlobStorage {
 		return withSpan(
 			"procella.storage",
 			"storage.exists",
-			{ "storage.backend": "local", "storage.key": key },
+			{ "storage.backend": "local" },
 			async () => {
 				const startTime = performance.now();
 				try {
@@ -212,139 +202,119 @@ export class S3BlobStorage implements BlobStorage {
 	}
 
 	async get(key: string): Promise<Uint8Array | null> {
-		return withSpan(
-			"procella.storage",
-			"storage.get",
-			{ "storage.backend": "s3", "storage.key": key },
-			async () => {
-				const startTime = performance.now();
+		return withSpan("procella.storage", "storage.get", { "storage.backend": "s3" }, async () => {
+			const startTime = performance.now();
+			try {
 				try {
-					try {
-						const response = await this.client.send(
-							new GetObjectCommand({
-								Bucket: this.bucket,
-								Key: key,
-							}),
-						);
+					const response = await this.client.send(
+						new GetObjectCommand({
+							Bucket: this.bucket,
+							Key: key,
+						}),
+					);
 
-						if (!response.Body) {
-							return null;
-						}
-
-						const result = await S3BlobStorage.bodyToUint8Array(response.Body);
-						storageOperationSize().record(result.byteLength, {
-							"storage.operation": "get",
-							"storage.backend": "s3",
-						});
-						return result;
-					} catch (err: unknown) {
-						if (
-							isS3ErrorName(err, "NoSuchKey") ||
-							isS3ErrorName(err, "NotFound") ||
-							(isS3Error(err) && err.$metadata?.httpStatusCode === 404)
-						) {
-							return null;
-						}
-
-						throw err;
+					if (!response.Body) {
+						return null;
 					}
-				} finally {
-					storageOperationDuration().record(performance.now() - startTime, {
+
+					const result = await S3BlobStorage.bodyToUint8Array(response.Body);
+					storageOperationSize().record(result.byteLength, {
 						"storage.operation": "get",
 						"storage.backend": "s3",
 					});
+					return result;
+				} catch (err: unknown) {
+					if (
+						isS3ErrorName(err, "NoSuchKey") ||
+						isS3ErrorName(err, "NotFound") ||
+						(isS3Error(err) && err.$metadata?.httpStatusCode === 404)
+					) {
+						return null;
+					}
+
+					throw err;
 				}
-			},
-		);
+			} finally {
+				storageOperationDuration().record(performance.now() - startTime, {
+					"storage.operation": "get",
+					"storage.backend": "s3",
+				});
+			}
+		});
 	}
 
 	async put(key: string, data: Uint8Array): Promise<void> {
-		return withSpan(
-			"procella.storage",
-			"storage.put",
-			{ "storage.backend": "s3", "storage.key": key },
-			async () => {
-				const startTime = performance.now();
-				try {
-					await this.client.send(
-						new PutObjectCommand({
-							Bucket: this.bucket,
-							Key: key,
-							Body: data,
-						}),
-					);
-					storageOperationSize().record(data.byteLength, {
-						"storage.operation": "put",
-						"storage.backend": "s3",
-					});
-				} finally {
-					storageOperationDuration().record(performance.now() - startTime, {
-						"storage.operation": "put",
-						"storage.backend": "s3",
-					});
-				}
-			},
-		);
+		return withSpan("procella.storage", "storage.put", { "storage.backend": "s3" }, async () => {
+			const startTime = performance.now();
+			try {
+				await this.client.send(
+					new PutObjectCommand({
+						Bucket: this.bucket,
+						Key: key,
+						Body: data,
+					}),
+				);
+				storageOperationSize().record(data.byteLength, {
+					"storage.operation": "put",
+					"storage.backend": "s3",
+				});
+			} finally {
+				storageOperationDuration().record(performance.now() - startTime, {
+					"storage.operation": "put",
+					"storage.backend": "s3",
+				});
+			}
+		});
 	}
 
 	async delete(key: string): Promise<void> {
-		return withSpan(
-			"procella.storage",
-			"storage.delete",
-			{ "storage.backend": "s3", "storage.key": key },
-			async () => {
-				const startTime = performance.now();
+		return withSpan("procella.storage", "storage.delete", { "storage.backend": "s3" }, async () => {
+			const startTime = performance.now();
+			try {
+				await this.client.send(
+					new DeleteObjectCommand({
+						Bucket: this.bucket,
+						Key: key,
+					}),
+				);
+			} finally {
+				storageOperationDuration().record(performance.now() - startTime, {
+					"storage.operation": "delete",
+					"storage.backend": "s3",
+				});
+			}
+		});
+	}
+
+	async exists(key: string): Promise<boolean> {
+		return withSpan("procella.storage", "storage.exists", { "storage.backend": "s3" }, async () => {
+			const startTime = performance.now();
+			try {
 				try {
 					await this.client.send(
-						new DeleteObjectCommand({
+						new HeadObjectCommand({
 							Bucket: this.bucket,
 							Key: key,
 						}),
 					);
-				} finally {
-					storageOperationDuration().record(performance.now() - startTime, {
-						"storage.operation": "delete",
-						"storage.backend": "s3",
-					});
-				}
-			},
-		);
-	}
-
-	async exists(key: string): Promise<boolean> {
-		return withSpan(
-			"procella.storage",
-			"storage.exists",
-			{ "storage.backend": "s3", "storage.key": key },
-			async () => {
-				const startTime = performance.now();
-				try {
-					try {
-						await this.client.send(
-							new HeadObjectCommand({
-								Bucket: this.bucket,
-								Key: key,
-							}),
-						);
-						return true;
-					} catch (err: unknown) {
-						if (
-							isS3ErrorName(err, "NotFound") ||
-							(isS3Error(err) && err.$metadata?.httpStatusCode === 404)
-						) {
-							return false;
-						}
-
-						throw err;
+					return true;
+				} catch (err: unknown) {
+					if (
+						isS3ErrorName(err, "NotFound") ||
+						(isS3Error(err) && err.$metadata?.httpStatusCode === 404)
+					) {
+						return false;
 					}
-				} finally {
-					storageOperationDuration().record(performance.now() - startTime, {
-						"storage.operation": "exists",
-						"storage.backend": "s3",
-					});
+
+					throw err;
 				}
-			},
-		);
+			} finally {
+				storageOperationDuration().record(performance.now() - startTime, {
+					"storage.operation": "exists",
+					"storage.backend": "s3",
+				});
+			}
+		});
 	}
 
 	private static async bodyToUint8Array(body: unknown): Promise<Uint8Array> {

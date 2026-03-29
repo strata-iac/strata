@@ -176,36 +176,46 @@ export class DescopeAuthService implements AuthService {
 	}
 
 	async createCliAccessKey(caller: Caller, name: string): Promise<string> {
+		const start = performance.now();
 		return withSpan(
 			"procella.auth",
 			"auth.createCliAccessKey",
 			{ "auth.mode": "descope" },
 			async () => {
-				const userResp = await this.sdk.management.user.loadByUserId(caller.userId);
-				const u = userResp.ok ? userResp.data : undefined;
-				const loginId =
-					u?.email ??
-					u?.name ??
-					(u?.givenName && u?.familyName ? `${u.givenName} ${u.familyName}` : undefined) ??
-					u?.loginIds?.[0] ??
-					caller.userId;
+				try {
+					const userResp = await this.sdk.management.user.loadByUserId(caller.userId);
+					const u = userResp.ok ? userResp.data : undefined;
+					const loginId =
+						u?.email ??
+						u?.name ??
+						(u?.givenName && u?.familyName ? `${u.givenName} ${u.familyName}` : undefined) ??
+						u?.loginIds?.[0] ??
+						caller.userId;
 
-				const resp = await this.sdk.management.accessKey.create(
-					name,
-					0,
-					undefined,
-					[{ tenantId: caller.tenantId, roleNames: [...caller.roles] }],
-					caller.userId,
-					{ procellaLogin: loginId },
-				);
-				if (!resp.ok || !resp.data?.cleartext) {
-					throw new Error(
-						resp.error?.errorMessage ??
-							resp.error?.errorDescription ??
-							"Failed to create access key",
+					const resp = await this.sdk.management.accessKey.create(
+						name,
+						0,
+						undefined,
+						[{ tenantId: caller.tenantId, roleNames: [...caller.roles] }],
+						caller.userId,
+						{ procellaLogin: loginId },
 					);
+					if (!resp.ok || !resp.data?.cleartext) {
+						throw new Error(
+							resp.error?.errorMessage ??
+								resp.error?.errorDescription ??
+								"Failed to create access key",
+						);
+					}
+					return resp.data.cleartext;
+				} catch (error) {
+					authFailureCount().add(1, { "auth.mode": "descope" });
+					throw error;
+				} finally {
+					authAuthenticateDuration().record(performance.now() - start, {
+						"auth.mode": "descope",
+					});
 				}
-				return resp.data.cleartext;
 			},
 		);
 	}
