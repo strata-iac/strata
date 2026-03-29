@@ -4,12 +4,13 @@ import type { Database } from "@procella/db";
 import { projects, stacks } from "@procella/db";
 import { withDbSpan, withSpan } from "@procella/telemetry";
 import {
+	BadRequestError,
 	ConflictError,
 	parseStackFQN,
 	StackAlreadyExistsError,
 	StackNotFoundError,
 } from "@procella/types";
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, type SQL, sql } from "drizzle-orm";
 
 export function pgErrorCode(err: unknown): string | undefined {
 	let current: unknown = err;
@@ -50,8 +51,32 @@ export interface StackInfo {
 	stackName: string;
 	tags: Record<string, string>;
 	activeUpdateId: string | null;
+	lastUpdate: number | null;
+	resourceCount: number | null;
 	createdAt: Date;
 	updatedAt: Date;
+}
+
+export interface SearchStacksParams {
+	query?: string;
+	organization?: string;
+	project?: string;
+	tagName?: string;
+	tagValue?: string;
+	continuationToken?: string;
+	pageSize?: number;
+	sortBy?: "name" | "lastUpdated" | "created";
+	sortOrder?: "asc" | "desc";
+}
+
+export interface StackPage {
+	stacks: StackInfo[];
+	continuationToken?: string;
+}
+
+interface StackSearchCursor {
+	id: string;
+	sortValue: string;
 }
 
 // ============================================================================
@@ -70,6 +95,8 @@ export interface StacksService {
 	getStack(tenantId: string, org: string, project: string, stack: string): Promise<StackInfo>;
 
 	listStacks(tenantId: string, org?: string, project?: string): Promise<StackInfo[]>;
+
+	searchStacks?(tenantId: string, params: SearchStacksParams): Promise<StackPage>;
 
 	deleteStack(tenantId: string, org: string, project: string, stack: string): Promise<void>;
 
@@ -98,6 +125,7 @@ export interface StacksService {
 	): Promise<void>;
 
 	getStackByFQN(tenantId: string, fqn: string): Promise<StackInfo>;
+	getStackByNames(org: string, project: string, stack: string): Promise<StackInfo>;
 }
 
 // ============================================================================
@@ -125,6 +153,47 @@ export function mergeTags(
 	return { ...existing, ...incoming };
 }
 
+export function sanitizeTsQuery(query: string): string | undefined {
+	const terms = query
+		.trim()
+		.split(/\s+/)
+		.map((part) => part.replace(/[^a-zA-Z0-9_]/g, ""))
+		.filter((part) => part.length > 0);
+
+	if (terms.length === 0) {
+		return undefined;
+	}
+
+	return terms.join(" & ");
+}
+
+export function encodeContinuationToken(cursor: StackSearchCursor): string {
+	return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64");
+}
+
+export function decodeContinuationToken(token: string): StackSearchCursor {
+	let decoded: unknown;
+	try {
+		decoded = JSON.parse(Buffer.from(token, "base64").toString("utf8"));
+	} catch {
+		throw new BadRequestError("Invalid continuation token");
+	}
+
+	if (
+		typeof decoded !== "object" ||
+		decoded === null ||
+		typeof (decoded as Record<string, unknown>).id !== "string" ||
+		typeof (decoded as Record<string, unknown>).sortValue !== "string"
+	) {
+		throw new BadRequestError("Invalid continuation token");
+	}
+
+	return {
+		id: (decoded as Record<string, unknown>).id as string,
+		sortValue: (decoded as Record<string, unknown>).sortValue as string,
+	};
+}
+
 // ============================================================================
 // Row → StackInfo mapper
 // ============================================================================
@@ -149,6 +218,8 @@ function toStackInfo(row: {
 		stackName: row.stack_name,
 		tags: (row.stack_tags ?? {}) as Record<string, string>,
 		activeUpdateId: row.stack_active_update_id,
+		lastUpdate: Math.floor(row.stack_updated_at.getTime() / 1000),
+		resourceCount: null,
 		createdAt: row.stack_created_at,
 		updatedAt: row.stack_updated_at,
 	};
@@ -214,6 +285,8 @@ export class PostgresStacksService implements StacksService {
 							stackName: stack,
 							tags: (row.tags ?? {}) as Record<string, string>,
 							activeUpdateId: row.activeUpdateId,
+							lastUpdate: null,
+							resourceCount: null,
 							createdAt: row.createdAt,
 							updatedAt: row.updatedAt,
 						};
@@ -304,6 +377,101 @@ export class PostgresStacksService implements StacksService {
 				return rows.map(toStackInfo);
 			},
 		);
+	}
+
+	async searchStacks(tenantId: string, params: SearchStacksParams): Promise<StackPage> {
+		const pageSize = Math.min(Math.max(params.pageSize ?? 50, 1), 200);
+		const sortBy = params.sortBy ?? "name";
+		const sortOrder = params.sortOrder ?? "asc";
+		const conditions: SQL[] = [eq(projects.tenantId, tenantId)];
+
+		if (params.project) {
+			conditions.push(eq(projects.name, params.project));
+		}
+
+		if (params.tagName && params.tagValue !== undefined) {
+			conditions.push(sql`${stacks.tags} ->> ${params.tagName} = ${params.tagValue}`);
+		} else if (params.tagName) {
+			conditions.push(sql`${stacks.tags} ? ${params.tagName}`);
+		}
+
+		if (params.query) {
+			const tsQuery = sanitizeTsQuery(params.query);
+			if (tsQuery) {
+				conditions.push(sql`${stacks.searchVector}::tsvector @@ to_tsquery('simple', ${tsQuery})`);
+			}
+		}
+
+		const sortColumn =
+			sortBy === "name"
+				? stacks.name
+				: sortBy === "lastUpdated"
+					? stacks.updatedAt
+					: stacks.createdAt;
+
+		if (params.continuationToken) {
+			const cursor = decodeContinuationToken(params.continuationToken);
+
+			if (sortBy === "name") {
+				conditions.push(
+					sortOrder === "asc"
+						? sql`(${sortColumn} > ${cursor.sortValue} OR (${sortColumn} = ${cursor.sortValue} AND ${stacks.id} > ${cursor.id}))`
+						: sql`(${sortColumn} < ${cursor.sortValue} OR (${sortColumn} = ${cursor.sortValue} AND ${stacks.id} < ${cursor.id}))`,
+				);
+			} else {
+				const sortDate = new Date(cursor.sortValue);
+				if (Number.isNaN(sortDate.getTime())) {
+					throw new BadRequestError("Invalid continuation token");
+				}
+				conditions.push(
+					sortOrder === "asc"
+						? sql`(${sortColumn} > ${sortDate} OR (${sortColumn} = ${sortDate} AND ${stacks.id} > ${cursor.id}))`
+						: sql`(${sortColumn} < ${sortDate} OR (${sortColumn} = ${sortDate} AND ${stacks.id} < ${cursor.id}))`,
+				);
+			}
+		}
+
+		const rows = await this.db
+			.select({
+				stack_id: stacks.id,
+				stack_name: stacks.name,
+				stack_tags: stacks.tags,
+				stack_active_update_id: stacks.activeUpdateId,
+				stack_created_at: stacks.createdAt,
+				stack_updated_at: stacks.updatedAt,
+				project_id: projects.id,
+				project_tenant_id: projects.tenantId,
+				project_name: projects.name,
+			})
+			.from(stacks)
+			.innerJoin(projects, eq(stacks.projectId, projects.id))
+			.where(and(...conditions))
+			.orderBy(
+				sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn),
+				sortOrder === "asc" ? asc(stacks.id) : desc(stacks.id),
+			)
+			.limit(pageSize + 1);
+
+		const hasMore = rows.length > pageSize;
+		const pageRows = hasMore ? rows.slice(0, pageSize) : rows;
+		const stackInfos = pageRows.map(toStackInfo);
+
+		if (!hasMore || pageRows.length === 0) {
+			return { stacks: stackInfos };
+		}
+
+		const lastRow = pageRows[pageRows.length - 1];
+		const sortValue =
+			sortBy === "name"
+				? lastRow.stack_name
+				: sortBy === "lastUpdated"
+					? lastRow.stack_updated_at.toISOString()
+					: lastRow.stack_created_at.toISOString();
+
+		return {
+			stacks: stackInfos,
+			continuationToken: encodeContinuationToken({ id: lastRow.stack_id, sortValue }),
+		};
 	}
 
 	async deleteStack(tenantId: string, _org: string, project: string, stack: string): Promise<void> {
@@ -480,5 +648,28 @@ export class PostgresStacksService implements StacksService {
 				return this.getStack(tenantId, parsed.org, parsed.project, parsed.stack);
 			},
 		);
+	}
+
+	async getStackByNames(org: string, project: string, stack: string): Promise<StackInfo> {
+		const rows = await this.db
+			.select({
+				stack_id: stacks.id,
+				stack_name: stacks.name,
+				stack_tags: stacks.tags,
+				stack_active_update_id: stacks.activeUpdateId,
+				stack_created_at: stacks.createdAt,
+				stack_updated_at: stacks.updatedAt,
+				project_id: projects.id,
+				project_tenant_id: projects.tenantId,
+				project_name: projects.name,
+			})
+			.from(stacks)
+			.innerJoin(projects, eq(stacks.projectId, projects.id))
+			.where(and(eq(projects.name, project), eq(stacks.name, stack)));
+
+		if (rows.length === 0) {
+			throw new StackNotFoundError(org, project, stack);
+		}
+		return toStackInfo(rows[0]);
 	}
 }

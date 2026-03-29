@@ -1,11 +1,19 @@
-import { createAuthService } from "@procella/auth";
+// @procella/server — Shared bootstrap logic for both Bun.serve and Vercel.
+//
+// Creates all services and the Hono app. Called once at module load time
+// in both entry points (index.ts for local dev, vercel.ts for production).
+
+import { DescopeAuditService, NoopAuditService } from "@procella/audit";
+import { createAuthService, DescopeAuthService } from "@procella/auth";
 import { loadConfig } from "@procella/config";
 import { AesCryptoService, devMasterKey } from "@procella/crypto";
 import { createDb } from "@procella/db";
+import { buildGitHubAppConfig, OctokitGitHubService } from "@procella/github";
 import { PostgresStacksService } from "@procella/stacks";
 import { createBlobStorage } from "@procella/storage";
 import { initTelemetry } from "@procella/telemetry";
 import { PostgresUpdatesService } from "@procella/updates";
+import { PostgresWebhooksService } from "@procella/webhooks";
 import { createApp } from "./routes/index.js";
 
 export async function bootstrap() {
@@ -15,6 +23,7 @@ export async function bootstrap() {
 
 	const { db, client } = await createDb({ url: config.databaseUrl, max: config.databasePoolMax });
 
+	// Auth
 	const authConfig =
 		config.authMode === "dev"
 			? {
@@ -52,17 +61,32 @@ export async function bootstrap() {
 				})());
 	const crypto = new AesCryptoService(encryptionKey);
 
+	// Domain services
 	const stacksService = new PostgresStacksService({ db });
 	const updatesService = new PostgresUpdatesService({ db, storage, crypto });
+	const auditService =
+		authConfig.mode === "descope" && auth instanceof DescopeAuthService
+			? new DescopeAuditService(auth.sdk)
+			: new NoopAuditService();
+	const webhooksService = new PostgresWebhooksService({ db });
+	const githubConfig = buildGitHubAppConfig(config);
+	const githubService = githubConfig
+		? new OctokitGitHubService({ db, config: githubConfig })
+		: null;
 
+	// Hono app
 	const app = createApp({
 		auth,
 		authConfig,
+		audit: auditService,
 		corsOrigins: config.corsOrigins,
 		db,
 		dbUrl: config.databaseUrl,
 		stacks: stacksService,
 		updates: updatesService,
+		webhooks: webhooksService,
+		github: githubService,
+		githubWebhookSecret: githubConfig?.webhookSecret,
 	});
 
 	return { app, auth, config, db, client };

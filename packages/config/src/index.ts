@@ -49,6 +49,13 @@ const configSchema = z
 			.default("false")
 			.transform((v) => v === "true" || v === "1"),
 
+		githubAppId: z.string().optional(),
+		githubAppPrivateKey: z
+			.string()
+			.transform((key) => key.replace(/\\n/g, "\n"))
+			.optional(),
+		githubAppWebhookSecret: z.string().optional(),
+
 		// CORS
 		corsOrigins: z
 			.string()
@@ -84,6 +91,17 @@ const configSchema = z
 				path: ["encryptionKey"],
 			});
 		}
+
+		const githubFields = [data.githubAppId, data.githubAppPrivateKey, data.githubAppWebhookSecret];
+		const githubProvided = githubFields.filter((value) => Boolean(value)).length;
+		if (githubProvided > 0 && githubProvided < 3) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message:
+					"GitHub App integration requires PROCELLA_GITHUB_APP_ID, PROCELLA_GITHUB_APP_PRIVATE_KEY, and PROCELLA_GITHUB_APP_WEBHOOK_SECRET together.",
+				path: ["githubAppId"],
+			});
+		}
 	});
 
 // ============================================================================
@@ -115,6 +133,9 @@ const envMapping = {
 	blobS3Region: "PROCELLA_BLOB_S3_REGION",
 	encryptionKey: "PROCELLA_ENCRYPTION_KEY",
 	otelEnabled: "PROCELLA_OTEL_ENABLED",
+	githubAppId: "PROCELLA_GITHUB_APP_ID",
+	githubAppPrivateKey: "PROCELLA_GITHUB_APP_PRIVATE_KEY",
+	githubAppWebhookSecret: "PROCELLA_GITHUB_APP_WEBHOOK_SECRET",
 	corsOrigins: "PROCELLA_CORS_ORIGINS",
 } as const;
 

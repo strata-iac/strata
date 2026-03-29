@@ -126,6 +126,26 @@ describe("@procella/config", () => {
 			const config = loadConfig();
 			expect(config.encryptionKey).toBeUndefined();
 		});
+
+		test("accepts complete GitHub app configuration", () => {
+			clearProcellaEnv();
+			setMinimalEnv();
+			Bun.env.PROCELLA_GITHUB_APP_ID = "12345";
+			Bun.env.PROCELLA_GITHUB_APP_PRIVATE_KEY = "-----BEGIN KEY-----\\nline\\n-----END KEY-----";
+			Bun.env.PROCELLA_GITHUB_APP_WEBHOOK_SECRET = "secret";
+
+			const config = loadConfig();
+			expect(config.githubAppId).toBe("12345");
+			expect(config.githubAppPrivateKey).toContain("\nline\n");
+			expect(config.githubAppWebhookSecret).toBe("secret");
+		});
+
+		test("throws when GitHub app configuration is partial", () => {
+			clearProcellaEnv();
+			setMinimalEnv();
+			Bun.env.PROCELLA_GITHUB_APP_ID = "12345";
+			expect(() => loadConfig()).toThrow();
+		});
 	});
 
 	describe("tryLoadConfig", () => {

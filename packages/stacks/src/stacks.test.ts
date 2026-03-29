@@ -19,6 +19,8 @@ describe("@procella/stacks", () => {
 				stackName: "dev",
 				tags: { "pulumi:project": "my-proj", "pulumi:stack": "dev" },
 				activeUpdateId: null,
+				lastUpdate: null,
+				resourceCount: null,
 				createdAt: new Date(),
 				updatedAt: new Date(),
 			};
@@ -141,6 +143,8 @@ describe("@procella/stacks", () => {
 				stackName: "s",
 				tags: {},
 				activeUpdateId: null,
+				lastUpdate: null,
+				resourceCount: null,
 				createdAt: new Date(),
 				updatedAt: new Date(),
 			};
@@ -154,6 +158,7 @@ describe("@procella/stacks", () => {
 				updateStackTags: async () => {},
 				replaceStackTags: async () => {},
 				getStackByFQN: async () => mockInfo,
+				getStackByNames: async () => mockInfo,
 			};
 
 			// Type-level check: all methods exist and are callable
@@ -177,6 +182,7 @@ describe("@procella/stacks", () => {
 				updateStackTags: async () => {},
 				replaceStackTags: async () => {},
 				getStackByFQN: async () => ({}) as StackInfo,
+				getStackByNames: async () => ({}) as StackInfo,
 			};
 
 			// No filters

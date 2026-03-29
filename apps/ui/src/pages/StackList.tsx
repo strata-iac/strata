@@ -1,16 +1,167 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
+import { memo, useCallback, useRef, useState } from "react";
 import { StackCard, type UpdateStatus } from "../components/ui";
 import { apiBase } from "../config";
 import { trpc } from "../trpc";
 
+type SortBy = "name" | "lastUpdated" | "created";
+type SortOrder = "asc" | "desc";
+
+// ============================================================================
+// Debounced input — manages its own text state, notifies parent after delay
+// ============================================================================
+
+const DebouncedInput = memo(function DebouncedInput({
+	onCommit,
+	placeholder,
+	className,
+	delay = 300,
+	resetKey,
+}: {
+	onCommit: (value: string) => void;
+	placeholder: string;
+	className?: string;
+	delay?: number;
+	resetKey?: number;
+}) {
+	const [text, setText] = useState("");
+	const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	const commitRef = useRef(onCommit);
+	commitRef.current = onCommit;
+
+	const prevKeyRef = useRef(resetKey);
+	if (resetKey !== prevKeyRef.current) {
+		prevKeyRef.current = resetKey;
+		setText("");
+	}
+
+	return (
+		<input
+			type="text"
+			value={text}
+			onChange={(e) => {
+				const val = e.target.value;
+				setText(val);
+				clearTimeout(timerRef.current);
+				timerRef.current = setTimeout(() => commitRef.current(val), delay);
+			}}
+			placeholder={placeholder}
+			className={
+				className ??
+				"bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500"
+			}
+		/>
+	);
+});
+
+// ============================================================================
+// Stack table — memoized to avoid rerendering when parent state changes
+// ============================================================================
+
+interface StackItem {
+	orgName: string;
+	projectName: string;
+	stackName: string;
+	version: number;
+	activeUpdate: boolean;
+	currentOperation: string | null;
+	tags: Record<string, string>;
+}
+
+const StackTable = memo(function StackTable({ items }: { items: StackItem[] }) {
+	const queryClient = useQueryClient();
+	const utils = trpc.useUtils();
+
+	const handleMouseEnter = useCallback(
+		(stack: StackItem) => {
+			queryClient.prefetchQuery({
+				queryKey: getQueryKey(
+					trpc.stacks.detail,
+					{ org: stack.orgName, project: stack.projectName, stack: stack.stackName },
+					"query",
+				),
+				queryFn: () =>
+					utils.stacks.detail.fetch({
+						org: stack.orgName,
+						project: stack.projectName,
+						stack: stack.stackName,
+					}),
+				staleTime: 10_000,
+			});
+		},
+		[queryClient, utils],
+	);
+
+	return (
+		<div className="bg-slate-brand/50 border border-slate-brand rounded-xl overflow-hidden">
+			{items.map((stack, index) => {
+				const status: UpdateStatus = stack.activeUpdate ? "updating" : "succeeded";
+				return (
+					<StackCard
+						key={`${stack.orgName}/${stack.projectName}/${stack.stackName}`}
+						orgName={stack.orgName}
+						projectName={stack.projectName}
+						stackName={stack.stackName}
+						href={`/stacks/${stack.orgName}/${stack.projectName}/${stack.stackName}`}
+						lastUpdateStatus={status}
+						onHover={() => handleMouseEnter(stack)}
+						isFirst={index === 0}
+						isLast={index === items.length - 1}
+					/>
+				);
+			})}
+		</div>
+	);
+});
+
+// ============================================================================
+// Main component
+// ============================================================================
+
 export function StackList() {
+	const [query, setQuery] = useState("");
+	const [project, setProject] = useState("");
+	const [tagName, setTagName] = useState("");
+	const [tagValue, setTagValue] = useState("");
+	const [sortBy, setSortBy] = useState<SortBy>("name");
+	const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+	const [resetKey, setResetKey] = useState(0);
+
+	const hasFilters = query !== "" || project !== "" || tagName !== "" || tagValue !== "";
+	const hasNonDefaultSort = sortBy !== "name" || sortOrder !== "asc";
+
+	const queryInput =
+		hasFilters || hasNonDefaultSort
+			? {
+					query: query || undefined,
+					project: project || undefined,
+					tagName: tagName || undefined,
+					tagValue: tagValue || undefined,
+					sortBy,
+					sortOrder,
+					pageSize: 50,
+				}
+			: undefined;
+
 	const {
-		data: stacks,
+		data: page,
 		isLoading: loading,
 		error: queryError,
-	} = trpc.stacks.list.useQuery(undefined, { refetchInterval: 5000 });
+	} = trpc.stacks.list.useQuery(queryInput, { refetchInterval: 5000 });
 	const error = queryError?.message ?? null;
+
+	const items: StackItem[] = page?.stacks ?? [];
+
+	const clearFilters = useCallback(() => {
+		setQuery("");
+		setProject("");
+		setTagName("");
+		setTagValue("");
+		setSortBy("name");
+		setSortOrder("asc");
+		setResetKey((k) => k + 1);
+	}, []);
 
 	if (loading) {
 		return (
@@ -38,7 +189,7 @@ export function StackList() {
 		);
 	}
 
-	const items = stacks ?? [];
+	const hasNoStacks = !hasFilters && items.length === 0;
 
 	return (
 		<div className="space-y-6">
@@ -51,7 +202,125 @@ export function StackList() {
 				)}
 			</div>
 
-			{items.length === 0 ? <EmptyState /> : <StackTable items={items} />}
+			{!hasNoStacks && (
+				<div className="space-y-3">
+					<div className="relative">
+						<svg
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							strokeWidth="2"
+							className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none"
+							aria-hidden="true"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+							/>
+						</svg>
+						<DebouncedInput
+							onCommit={setQuery}
+							placeholder="Search stacks..."
+							resetKey={resetKey}
+							className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500"
+						/>
+					</div>
+
+					<div className="flex flex-wrap items-center gap-3">
+						<DebouncedInput
+							onCommit={setProject}
+							placeholder="Filter by project..."
+							resetKey={resetKey}
+							className="bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500 w-48"
+						/>
+						<DebouncedInput
+							onCommit={setTagName}
+							placeholder="Tag name..."
+							resetKey={resetKey}
+							className="bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500 w-36"
+						/>
+						<DebouncedInput
+							onCommit={setTagValue}
+							placeholder="Tag value..."
+							resetKey={resetKey}
+							className="bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500 w-36"
+						/>
+
+						<div className="flex items-center gap-1.5">
+							<select
+								value={sortBy}
+								onChange={(e) => setSortBy(e.target.value as SortBy)}
+								className="bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+							>
+								<option value="name">Name</option>
+								<option value="lastUpdated">Last Updated</option>
+								<option value="created">Created</option>
+							</select>
+							<button
+								type="button"
+								onClick={() => setSortOrder((p) => (p === "asc" ? "desc" : "asc"))}
+								className="bg-zinc-900 border border-zinc-700 text-zinc-400 hover:text-zinc-100 rounded-lg px-2.5 py-2 text-sm transition-colors"
+								title={sortOrder === "asc" ? "Ascending" : "Descending"}
+							>
+								{sortOrder === "asc" ? "↑" : "↓"}
+							</button>
+						</div>
+
+						{hasFilters && (
+							<button
+								type="button"
+								onClick={clearFilters}
+								className="text-xs text-zinc-400 hover:text-zinc-100 transition-colors"
+							>
+								Clear filters
+							</button>
+						)}
+					</div>
+				</div>
+			)}
+
+			{hasNoStacks ? (
+				<EmptyState />
+			) : items.length === 0 && hasFilters ? (
+				<EmptySearchState onClear={clearFilters} />
+			) : (
+				<StackTable items={items} />
+			)}
+		</div>
+	);
+}
+
+// ============================================================================
+// Empty states
+// ============================================================================
+
+function EmptySearchState({ onClear }: { onClear: () => void }) {
+	return (
+		<div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-12 text-center">
+			<svg
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				className="w-10 h-10 text-zinc-600 mx-auto mb-3"
+				aria-hidden="true"
+			>
+				<path
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+				/>
+			</svg>
+			<p className="text-zinc-400 text-sm font-medium mb-1">No stacks match your search</p>
+			<p className="text-zinc-500 text-xs mb-4">Try adjusting your filters or search terms.</p>
+			<button
+				type="button"
+				onClick={onClear}
+				className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+			>
+				Clear filters
+			</button>
 		</div>
 	);
 }
@@ -59,7 +328,6 @@ export function StackList() {
 function EmptyState() {
 	return (
 		<div className="space-y-6">
-			{/* Getting started card */}
 			<div className="bg-slate-brand/50 border border-slate-brand rounded-xl p-8">
 				<div className="flex items-start gap-4">
 					<div className="w-10 h-10 rounded-lg bg-lightning/10 border border-lightning/20 flex items-center justify-center shrink-0">
@@ -83,7 +351,6 @@ function EmptyState() {
 						<p className="text-sm text-cloud leading-relaxed mb-5">
 							Connect the Pulumi CLI to this backend and create your first stack.
 						</p>
-
 						<div className="space-y-3">
 							<CommandStep
 								step="1"
@@ -101,7 +368,6 @@ function EmptyState() {
 				</div>
 			</div>
 
-			{/* Quick reference cards */}
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 				<QuickRefCard
 					title="API Token Authentication"
@@ -151,60 +417,6 @@ function QuickRefCard({
 			<pre className="bg-deep-sky border border-slate-brand rounded-lg px-3 py-2.5 font-mono text-xs text-cloud overflow-x-auto whitespace-pre leading-relaxed">
 				{code}
 			</pre>
-		</div>
-	);
-}
-
-interface StackItem {
-	orgName: string;
-	projectName: string;
-	stackName: string;
-	version: number;
-	activeUpdate: boolean;
-	currentOperation: string | null;
-	tags: Record<string, string>;
-}
-
-function StackTable({ items }: { items: StackItem[] }) {
-	const queryClient = useQueryClient();
-	const utils = trpc.useUtils();
-
-	const handleMouseEnter = (stack: StackItem) => {
-		queryClient.prefetchQuery({
-			queryKey: getQueryKey(
-				trpc.stacks.detail,
-				{ org: stack.orgName, project: stack.projectName, stack: stack.stackName },
-				"query",
-			),
-			queryFn: () =>
-				utils.stacks.detail.fetch({
-					org: stack.orgName,
-					project: stack.projectName,
-					stack: stack.stackName,
-				}),
-			staleTime: 10_000,
-		});
-	};
-
-	return (
-		<div className="bg-slate-brand/50 border border-slate-brand rounded-xl overflow-hidden">
-			{items.map((stack, index) => {
-				const status: UpdateStatus = stack.activeUpdate ? "updating" : "succeeded";
-
-				return (
-					<StackCard
-						key={`${stack.orgName}/${stack.projectName}/${stack.stackName}`}
-						orgName={stack.orgName}
-						projectName={stack.projectName}
-						stackName={stack.stackName}
-						href={`/stacks/${stack.orgName}/${stack.projectName}/${stack.stackName}`}
-						lastUpdateStatus={status}
-						onHover={() => handleMouseEnter(stack)}
-						isFirst={index === 0}
-						isLast={index === items.length - 1}
-					/>
-				);
-			})}
 		</div>
 	);
 }

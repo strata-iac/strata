@@ -1,5 +1,12 @@
 import { database, databaseUrl, vpc } from "./database";
-import { allSecrets, descopeManagementKey, devAuthToken, encryptionKey } from "./secrets";
+import {
+	allSecrets,
+	descopeManagementKey,
+	devAuthToken,
+	encryptionKey,
+	otelEndpoint,
+	otelHeaders,
+} from "./secrets";
 import { bucket } from "./storage";
 
 const isProd = $app.stage === "production";
@@ -28,6 +35,9 @@ export const api = new sst.aws.Function("ProcellaApi", {
 		PROCELLA_AUTH_MODE: $dev ? "dev" : "descope",
 		PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
 		PROCELLA_CORS_ORIGINS: appOrigin,
+		PROCELLA_OTEL_ENABLED: "true",
+		OTEL_EXPORTER_OTLP_ENDPOINT: otelEndpoint.value,
+		OTEL_EXPORTER_OTLP_HEADERS: otelHeaders.value,
 		...($dev ? { PROCELLA_DEV_AUTH_TOKEN: devAuthToken.value } : {}),
 		...(!$dev
 			? {
@@ -45,23 +55,7 @@ export const router = new sst.aws.Router("ProcellaRouter", {
 	},
 });
 
-import * as crypto from "node:crypto";
-import * as fs from "node:fs";
 import * as command from "@pulumi/command";
-
-const migrationHash = crypto
-	.createHash("sha256")
-	.update(
-		fs
-			.readdirSync("packages/db/drizzle", { recursive: true })
-			.filter(
-				(f) => typeof f === "string" && !fs.statSync(`packages/db/drizzle/${f}`).isDirectory(),
-			)
-			.sort()
-			.map((f) => fs.readFileSync(`packages/db/drizzle/${f}`, "utf8"))
-			.join("\n"),
-	)
-	.digest("hex");
 
 export const migrateFn = new sst.aws.Function("ProcellaMigrate", {
 	runtime: "provided.al2023",
@@ -83,8 +77,10 @@ export const migrateFn = new sst.aws.Function("ProcellaMigrate", {
 });
 
 if (!$dev) {
+	const migrateCmd = $interpolate`aws lambda invoke --function-name ${migrateFn.name} --payload '{}' --cli-binary-format raw-in-base64-out --cli-read-timeout 360 /tmp/migrate-out-${stage}.json && cat /tmp/migrate-out-${stage}.json`;
 	new command.local.Command("ProcellaMigrateRun", {
-		create: $interpolate`aws lambda invoke --function-name ${migrateFn.name} --payload '{}' --cli-binary-format raw-in-base64-out --cli-read-timeout 360 /tmp/migrate-out-${stage}.json && cat /tmp/migrate-out-${stage}.json`,
-		triggers: [migrationHash],
+		create: migrateCmd,
+		update: migrateCmd,
+		triggers: [Date.now().toString()],
 	});
 }

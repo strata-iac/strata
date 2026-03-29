@@ -8,6 +8,7 @@ import { sql } from "drizzle-orm";
 import {
 	bigint,
 	boolean,
+	index,
 	integer,
 	jsonb,
 	pgTable,
@@ -47,6 +48,7 @@ export const stacks = pgTable(
 			.references(() => projects.id, { onDelete: "cascade" }),
 		name: text().notNull(),
 		tags: jsonb().notNull().default({}),
+		searchVector: text("search_vector"),
 		activeUpdateId: uuid("active_update_id"),
 		createdAt: timestamp("created_at").notNull().defaultNow(),
 		updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -152,6 +154,66 @@ export const journalEntries = pgTable(
 	(table) => [uniqueIndex("idx_journal_entries_update_seq").on(table.updateId, table.sequenceId)],
 );
 
+export const webhooks = pgTable(
+	"webhooks",
+	{
+		id: uuid().primaryKey().defaultRandom(),
+		tenantId: text("tenant_id").notNull(),
+		name: text().notNull(),
+		url: text().notNull(),
+		secret: text().notNull(),
+		events: text().array().notNull(),
+		active: boolean().notNull().default(true),
+		createdBy: text("created_by").notNull(),
+		createdAt: timestamp("created_at").notNull().defaultNow(),
+		updatedAt: timestamp("updated_at").notNull().defaultNow(),
+	},
+	(table) => [index("idx_webhooks_tenant").on(table.tenantId)],
+);
+
+export const webhookDeliveries = pgTable(
+	"webhook_deliveries",
+	{
+		id: uuid().primaryKey().defaultRandom(),
+		webhookId: uuid("webhook_id")
+			.notNull()
+			.references(() => webhooks.id, { onDelete: "cascade" }),
+		event: text().notNull(),
+		payload: jsonb().notNull(),
+		requestHeaders: jsonb("request_headers"),
+		responseStatus: integer("response_status"),
+		responseBody: text("response_body"),
+		responseHeaders: jsonb("response_headers"),
+		duration: integer(),
+		attempt: integer().notNull().default(1),
+		success: boolean().notNull().default(false),
+		error: text(),
+		createdAt: timestamp("created_at").notNull().defaultNow(),
+	},
+	(table) => [
+		index("idx_deliveries_webhook").on(table.webhookId),
+		index("idx_deliveries_created").on(table.createdAt.desc()),
+	],
+);
+
+export const githubInstallations = pgTable(
+	"github_installations",
+	{
+		id: uuid().primaryKey().defaultRandom(),
+		tenantId: text("tenant_id").notNull(),
+		installationId: integer("installation_id").notNull(),
+		accountLogin: text("account_login").notNull(),
+		accountType: text("account_type").notNull(),
+		repositorySelection: text("repository_selection").notNull(),
+		createdAt: timestamp("created_at").notNull().defaultNow(),
+		updatedAt: timestamp("updated_at").notNull().defaultNow(),
+	},
+	(table) => [
+		index("idx_github_tenant").on(table.tenantId),
+		uniqueIndex("idx_github_tenant_installation").on(table.tenantId, table.installationId),
+	],
+);
+
 // ============================================================================
 // Schema export — pass to drizzle() for relational queries
 // ============================================================================
@@ -163,4 +225,7 @@ export const schema = {
 	checkpoints,
 	updateEvents,
 	journalEntries,
+	webhooks,
+	webhookDeliveries,
+	githubInstallations,
 };

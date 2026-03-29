@@ -3,6 +3,12 @@
 		"target": "ESNext",
 		"module": "ESNext",
 		"moduleResolution": "bundler",
+		"baseUrl": ".",
+		"paths": {
+			"@procella/audit": ["packages/audit/src/index.ts"],
+			"@procella/github": ["packages/github/src/index.ts"],
+			"@procella/webhooks": ["packages/webhooks/src/index.ts"]
+		},
 		"esModuleInterop": true,
 		"strict": true,
 		"skipLibCheck": true,
@@ -27,6 +33,9 @@
 		{ "path": "packages/storage" },
 		{ "path": "packages/auth" },
 		{ "path": "packages/stacks" },
+		{ "path": "packages/audit" },
+		{ "path": "packages/webhooks" },
+		{ "path": "packages/github" },
 		{ "path": "packages/updates" },
 		{ "path": "packages/telemetry" },
 		{ "path": "packages/api" },

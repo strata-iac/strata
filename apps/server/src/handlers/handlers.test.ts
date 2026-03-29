@@ -30,6 +30,8 @@ const mockStackInfo: StackInfo = {
 	stackName: "dev",
 	tags: { env: "dev" },
 	activeUpdateId: null,
+	lastUpdate: null,
+	resourceCount: null,
 	createdAt: new Date("2025-01-01"),
 	updatedAt: new Date("2025-01-01"),
 };
@@ -48,6 +50,7 @@ function mockStacksService(overrides?: Partial<StacksService>): StacksService {
 		updateStackTags: async () => {},
 		replaceStackTags: async () => {},
 		getStackByFQN: async () => mockStackInfo,
+		getStackByNames: async () => mockStackInfo,
 		...overrides,
 	};
 }

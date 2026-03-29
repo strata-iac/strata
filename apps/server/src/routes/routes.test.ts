@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import type { AuditService } from "@procella/audit";
 import type { AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
 import type { StackInfo, StacksService } from "@procella/stacks";
 import type { Caller } from "@procella/types";
 import { UnauthorizedError } from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
+import type { CreateWebhookInput, WebhookEventValue, WebhooksService } from "@procella/webhooks";
 import { createApp } from "./index.js";
 
 // ============================================================================
@@ -28,6 +30,8 @@ const mockStackInfo: StackInfo = {
 	stackName: "dev",
 	tags: {},
 	activeUpdateId: null,
+	lastUpdate: null,
+	resourceCount: null,
 	createdAt: new Date("2025-01-01"),
 	updatedAt: new Date("2025-01-01"),
 };
@@ -69,6 +73,7 @@ function mockStacksService(): StacksService {
 		updateStackTags: async () => {},
 		replaceStackTags: async () => {},
 		getStackByFQN: async () => mockStackInfo,
+		getStackByNames: async () => mockStackInfo,
 	};
 }
 
@@ -103,6 +108,68 @@ function mockUpdatesService(): UpdatesService {
 	} as unknown as UpdatesService;
 }
 
+function mockAuditService(): AuditService {
+	return {
+		log: () => {},
+		query: async () => ({ entries: [], total: 0 }),
+		export: async () => [],
+	};
+}
+
+function mockWebhooksService(): WebhooksService {
+	return {
+		createWebhook: async (_tenantId: string, input: CreateWebhookInput, createdBy: string) => ({
+			id: "hook-1",
+			name: input.name,
+			url: input.url,
+			events: input.events,
+			active: true,
+			createdBy,
+			createdAt: new Date("2025-01-01"),
+			updatedAt: new Date("2025-01-01"),
+			secret: input.secret ?? "generated-secret",
+		}),
+		listWebhooks: async () => [],
+		getWebhook: async () => null,
+		updateWebhook: async (
+			_tenantId: string,
+			webhookId: string,
+			updates: Partial<CreateWebhookInput>,
+		) => ({
+			id: webhookId,
+			name: updates.name ?? "hook",
+			url: updates.url ?? "https://example.com/hook",
+			events: updates.events ?? ["stack.created"],
+			active: true,
+			createdBy: "u-1",
+			createdAt: new Date("2025-01-01"),
+			updatedAt: new Date("2025-01-01"),
+		}),
+		deleteWebhook: async () => {},
+		listDeliveries: async (_tenantId: string, _webhookId: string, _limit?: number) => [],
+		emit: (_event: {
+			tenantId: string;
+			event: WebhookEventValue;
+			data: Record<string, unknown>;
+		}) => {},
+		emitAndWait: async (_event: {
+			tenantId: string;
+			event: WebhookEventValue;
+			data: Record<string, unknown>;
+		}) => {},
+		ping: async () => ({
+			id: "delivery-1",
+			event: "webhook.ping",
+			responseStatus: 200,
+			success: true,
+			attempt: 1,
+			error: null,
+			duration: 10,
+			createdAt: new Date("2025-01-01"),
+		}),
+	};
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -119,10 +186,14 @@ describe("@procella/server routes", () => {
 		return createApp({
 			auth: mockAuthService(),
 			authConfig,
+			audit: mockAuditService(),
 			db: { execute: async () => ({ rows: [{ acquired: false }] }) } as unknown as Database,
 			dbUrl: "postgres://test:test@localhost:5432/test",
+			github: null,
+			githubWebhookSecret: undefined,
 			stacks: mockStacksService(),
 			updates: mockUpdatesService(),
+			webhooks: mockWebhooksService(),
 		});
 	}
 

@@ -7,13 +7,16 @@
 	"include": ["src/**/*.ts"],
 	"references": [
 		{ "path": "../../packages/api" },
+		{ "path": "../../packages/audit" },
 		{ "path": "../../packages/types" },
 		{ "path": "../../packages/config" },
 		{ "path": "../../packages/db" },
+		{ "path": "../../packages/github" },
 		{ "path": "../../packages/crypto" },
 		{ "path": "../../packages/storage" },
 		{ "path": "../../packages/auth" },
 		{ "path": "../../packages/stacks" },
+		{ "path": "../../packages/webhooks" },
 		{ "path": "../../packages/updates" },
 		{ "path": "../../packages/telemetry" }
 	]

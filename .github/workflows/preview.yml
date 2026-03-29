@@ -63,6 +63,8 @@ jobs:
           SST_SECRET_ProcellaEncryptionKey: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
           SST_SECRET_ProcellaDevAuthToken: ${{ secrets.PROCELLA_DEV_AUTH_TOKEN }}
           SST_SECRET_ProcellaDescopeManagementKey: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
+          SST_SECRET_ProcellaOtelEndpoint: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+          SST_SECRET_ProcellaOtelHeaders: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
 
       - name: Get stack outputs
         id: outputs

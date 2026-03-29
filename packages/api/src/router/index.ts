@@ -1,9 +1,12 @@
 // @procella/api — Root tRPC AppRouter definition.
 
 import { router } from "../trpc.js";
+import { auditRouter } from "./audit.js";
 import { eventsRouter } from "./events.js";
+import { githubRouter } from "./github.js";
 import { stacksRouter } from "./stacks.js";
 import { updatesRouter } from "./updates.js";
+import { webhooksRouter } from "./webhooks.js";
 
 // ============================================================================
 // App Router
@@ -11,8 +14,11 @@ import { updatesRouter } from "./updates.js";
 
 export const appRouter = router({
 	stacks: stacksRouter,
+	audit: auditRouter,
 	updates: updatesRouter,
 	events: eventsRouter,
+	github: githubRouter,
+	webhooks: webhooksRouter,
 });
 
 export type AppRouter = typeof appRouter;

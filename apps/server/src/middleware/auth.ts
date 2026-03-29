@@ -2,8 +2,8 @@
 
 import type { AuthService } from "@procella/auth";
 import { requireRole } from "@procella/auth";
-import type { Role } from "@procella/types";
-import { ProcellaError } from "@procella/types";
+import type { Caller, Role } from "@procella/types";
+import { ProcellaError, UnauthorizedError } from "@procella/types";
 import type { MiddlewareHandler } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { Env } from "../types.js";
@@ -16,7 +16,9 @@ import type { Env } from "../types.js";
 export function apiAuth(authService: AuthService): MiddlewareHandler<Env> {
 	return async (c, next) => {
 		try {
-			const caller = await authService.authenticate(c.req.raw);
+			extractTokenValue(c.req.raw);
+			const caller: Caller = await authService.authenticate(c.req.raw);
+
 			c.set("caller", caller);
 			await next();
 		} catch (error) {
@@ -29,6 +31,31 @@ export function apiAuth(authService: AuthService): MiddlewareHandler<Env> {
 			return c.json({ code: 401, message: "Unauthorized" }, 401);
 		}
 	};
+}
+
+function extractTokenValue(request: Request): string {
+	const header = request.headers.get("Authorization");
+	if (!header) {
+		throw new UnauthorizedError("Missing Authorization header");
+	}
+
+	if (header.startsWith("token ")) {
+		const value = header.slice(6).trim();
+		if (!value) {
+			throw new UnauthorizedError("Empty token value");
+		}
+		return value;
+	}
+
+	if (header.startsWith("Bearer ")) {
+		const value = header.slice(7).trim();
+		if (!value) {
+			throw new UnauthorizedError("Empty Bearer token");
+		}
+		return value;
+	}
+
+	throw new UnauthorizedError("Invalid Authorization header format");
 }
 
 // ============================================================================

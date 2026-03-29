@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { getTableColumns, getTableName } from "drizzle-orm";
-import { checkpoints, projects, stacks, updateEvents, updates } from "./schema.js";
+import {
+	checkpoints,
+	githubInstallations,
+	projects,
+	stacks,
+	updateEvents,
+	updates,
+} from "./schema.js";
 
 describe("@procella/db schema", () => {
 	describe("projects table", () => {
@@ -122,13 +129,29 @@ describe("@procella/db schema", () => {
 		});
 	});
 
+	describe("github_installations table", () => {
+		test("is named 'github_installations'", () => {
+			expect(getTableName(githubInstallations)).toBe("github_installations");
+		});
+
+		test("has tenant and installation columns", () => {
+			const columns = getTableColumns(githubInstallations);
+			expect(columns.tenantId.name).toBe("tenant_id");
+			expect(columns.installationId.name).toBe("installation_id");
+			expect(columns.accountLogin.name).toBe("account_login");
+			expect(columns.accountType.name).toBe("account_type");
+			expect(columns.repositorySelection.name).toBe("repository_selection");
+		});
+	});
+
 	describe("all tables", () => {
-		test("all 5 tables are defined", () => {
+		test("all tables are defined", () => {
 			expect(getTableName(projects)).toBe("projects");
 			expect(getTableName(stacks)).toBe("stacks");
 			expect(getTableName(updates)).toBe("updates");
 			expect(getTableName(checkpoints)).toBe("checkpoints");
 			expect(getTableName(updateEvents)).toBe("update_events");
+			expect(getTableName(githubInstallations)).toBe("github_installations");
 		});
 
 		test("all tables have id and created_at columns", () => {
