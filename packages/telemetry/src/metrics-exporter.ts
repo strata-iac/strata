@@ -56,9 +56,17 @@ export class FetchOtlpMetricExporter implements PushMetricExporter {
 			body,
 		})
 			.then((res) => {
+				if (!res.ok) {
+					process.stderr.write(
+						`[otlp-metrics] export failed: ${res.status} ${res.statusText} → ${this.url}\n`,
+					);
+				}
 				resultCallback({ code: res.ok ? ExportResultCode.SUCCESS : ExportResultCode.FAILED });
 			})
-			.catch(() => {
+			.catch((err) => {
+				process.stderr.write(
+					`[otlp-metrics] export error: ${err instanceof Error ? err.message : err} → ${this.url}\n`,
+				);
 				resultCallback({ code: ExportResultCode.FAILED });
 			});
 	}

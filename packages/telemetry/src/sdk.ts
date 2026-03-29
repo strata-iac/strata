@@ -54,16 +54,18 @@ export function initTelemetry(config: TelemetryConfig): void {
 	);
 
 	traceProvider = new NodeTracerProvider({ resource });
+	const baseUrl = config.otlpEndpoint
+		? config.otlpEndpoint.replace(/\/v1\/(traces|metrics)$/, "")
+		: undefined;
 	const traceExporter = new FetchOtlpTraceExporter(
-		config.otlpEndpoint ? { url: config.otlpEndpoint } : undefined,
+		baseUrl ? { url: `${baseUrl}/v1/traces` } : undefined,
 	);
 	traceProvider.addSpanProcessor(new BatchSpanProcessor(traceExporter) as SpanProcessor);
 	traceProvider.register();
 
-	const metricsUrl = config.otlpEndpoint
-		? `${config.otlpEndpoint.replace(/\/v1\/(traces|metrics)$/, "")}/v1/metrics`
-		: undefined;
-	const metricExporter = new FetchOtlpMetricExporter(metricsUrl ? { url: metricsUrl } : undefined);
+	const metricExporter = new FetchOtlpMetricExporter(
+		baseUrl ? { url: `${baseUrl}/v1/metrics` } : undefined,
+	);
 	const metricReader = new PeriodicExportingMetricReader({
 		exporter: metricExporter,
 		exportIntervalMillis: 15_000,
