@@ -292,12 +292,6 @@ export class PostgresWebhooksService implements WebhooksService {
 			.where(and(eq(webhooks.tenantId, event.tenantId), eq(webhooks.active, true)));
 
 		const filtered = rows.filter((row) => row.events.includes(event.event));
-		console.error("[webhooks] emitAsync:", {
-			tenantId: event.tenantId,
-			event: event.event,
-			totalWebhooks: rows.length,
-			matchingWebhooks: filtered.length,
-		});
 		if (filtered.length === 0) {
 			return;
 		}
