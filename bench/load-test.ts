@@ -8,10 +8,12 @@
  * LOAD_STAGGER_MS        Stagger between worker launches in ms (default: 0)
  */
 
-import { cpSync, mkdtempSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
+
+const SYSTEM_PULUMI_HOME = process.env.PULUMI_HOME ?? join(process.env.HOME ?? "", ".pulumi");
 
 const PROCELLA_URL = process.env.PROCELLA_URL;
 const ACCESS_TOKEN = process.env.PULUMI_ACCESS_TOKEN;
@@ -52,12 +54,22 @@ interface WorkerResult {
 	error?: string;
 }
 
+function createWorkerHome(): string {
+	const home = mkdtempSync(join(tmpdir(), "load-pulumi-"));
+	const credSrc = join(SYSTEM_PULUMI_HOME, "credentials.json");
+	if (existsSync(credSrc)) cpSync(credSrc, join(home, "credentials.json"));
+	const pluginsSrc = join(SYSTEM_PULUMI_HOME, "plugins");
+	if (existsSync(pluginsSrc)) symlinkSync(pluginsSrc, join(home, "plugins"));
+	return home;
+}
+
 async function pulumi(
 	args: string[],
-	opts: { cwd: string },
+	opts: { cwd: string; pulumiHome: string },
 ): Promise<{ exit: number; stdout: string; stderr: string }> {
 	const env: Record<string, string | undefined> = {
 		...process.env,
+		PULUMI_HOME: opts.pulumiHome,
 		PULUMI_SKIP_UPDATE_CHECK: "true",
 		PULUMI_DIY_BACKEND_URL: "",
 	};
@@ -86,14 +98,16 @@ async function runWorker(example: string, workerId: number): Promise<WorkerResul
 	const tag = `\x1b[36m[${example}#${workerId}]\x1b[0m`;
 	const start = performance.now();
 
+	const pulumiHome = createWorkerHome();
 	const isolatedDir = mkdtempSync(join(tmpdir(), `load-${example}-`));
 	cpSync(join(EXAMPLES_DIR, example), isolatedDir, { recursive: true });
 
+	const run = (args: string[]) => pulumi(args, { cwd: isolatedDir, pulumiHome });
 	const cycles: CycleResult[] = [];
 
 	try {
 		console.log(`${tag} stack init ${stackName}`);
-		const init = await pulumi(["stack", "init", stackName], { cwd: isolatedDir });
+		const init = await run(["stack", "init", stackName]);
 		if (init.exit !== 0) {
 			throw new Error(`stack init failed (exit ${init.exit}): ${init.stderr.slice(0, 300)}`);
 		}
@@ -108,9 +122,7 @@ async function runWorker(example: string, workerId: number): Promise<WorkerResul
 			try {
 				const t0 = performance.now();
 				console.log(`${tag} cycle ${c + 1}/${CYCLES}: up`);
-				const up = await pulumi(["up", "--yes", "--skip-preview", "--stack", stackName], {
-					cwd: isolatedDir,
-				});
+				const up = await run(["up", "--yes", "--skip-preview"]);
 				upMs = performance.now() - t0;
 				upOk = up.exit === 0;
 				if (!upOk) {
@@ -120,9 +132,7 @@ async function runWorker(example: string, workerId: number): Promise<WorkerResul
 
 				const t1 = performance.now();
 				console.log(`${tag} cycle ${c + 1}/${CYCLES}: destroy`);
-				const des = await pulumi(["destroy", "--yes", "--skip-preview", "--stack", stackName], {
-					cwd: isolatedDir,
-				});
+				const des = await run(["destroy", "--yes", "--skip-preview"]);
 				destroyMs = performance.now() - t1;
 				destroyOk = des.exit === 0;
 				if (!destroyOk) {
@@ -138,8 +148,9 @@ async function runWorker(example: string, workerId: number): Promise<WorkerResul
 		}
 
 		console.log(`${tag} stack rm ${stackName}`);
-		await pulumi(["stack", "rm", "--yes", "--stack", stackName], { cwd: isolatedDir });
+		await run(["stack", "rm", "--yes", stackName]);
 	} finally {
+		rmSync(pulumiHome, { recursive: true, force: true });
 		rmSync(isolatedDir, { recursive: true, force: true });
 	}
 
