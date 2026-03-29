@@ -21,6 +21,7 @@ export const api = new sst.aws.Function("ProcellaApi", {
 	architecture: "x86_64",
 	bundle: ".build/api",
 	handler: "bootstrap",
+	streaming: true,
 	url: {
 		cors: false,
 	},
