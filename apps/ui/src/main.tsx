@@ -2,7 +2,7 @@ import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-qu
 import { TRPCClientError } from "@trpc/client";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Route, Routes } from "react-router";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import "./index.css";
 
 import { ProcellaAuthProvider } from "./components/AuthProvider";
@@ -79,6 +79,7 @@ function App() {
 							}
 						/>
 						<Route path="/cli-login" element={<CliLogin />} />
+						<Route path="/account/tokens" element={<Navigate to="/tokens" replace />} />
 						<Route path="/welcome/cli" element={<WelcomeCli />} />
 						<Route path="/design" element={<Design />} />
 						<Route element={<HomeRoute />}>
@@ -92,10 +93,17 @@ function App() {
 									path="stacks/:org/:project/:stack/updates/:updateID"
 									element={<UpdateDetail />}
 								/>
+								<Route
+									path="stacks/:org/:project/:stack/previews/:updateID"
+									element={<UpdateDetail />}
+								/>
 								{/* CLI-generated "View in Browser" URLs omit /stacks/ prefix */}
 								<Route path=":org/:project/:stack" element={<StackDetail />} />
 								<Route path=":org/:project/:stack/resources" element={<ResourceDetail />} />
 								<Route path=":org/:project/:stack/updates/:updateID" element={<UpdateDetail />} />
+								<Route path=":org/:project/:stack/previews/:updateID" element={<UpdateDetail />} />
+								{/* CLI shows /{org}/{project}/{stack}/settings/options on cross-org rename errors */}
+								<Route path=":org/:project/:stack/settings/options" element={<StackDetail />} />
 							</Route>
 						</Route>
 					</Routes>
