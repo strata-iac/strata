@@ -1,5 +1,4 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { getQueryKey } from "@trpc/react-query";
+import { skipToken } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import type { UpdateStatus } from "../components/ui/status";
@@ -121,7 +120,6 @@ export function UpdateDetail() {
 	}>();
 
 	const [events, setEvents] = useState<EngineEvent[]>([]);
-	const [isPolling, setIsPolling] = useState(true);
 	const [filter, setFilter] = useState<EventFilter>("all");
 	const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 	const [isAtBottom, setIsAtBottom] = useState(true);
@@ -129,56 +127,80 @@ export function UpdateDetail() {
 	const continuationTokenRef = useRef<string | undefined>(undefined);
 	const eventsEndRef = useRef<HTMLDivElement>(null);
 	const logContainerRef = useRef<HTMLDivElement>(null);
-	const queryClient = useQueryClient();
+	const utils = trpc.useUtils();
 
-	const { data: updateInfo } = trpc.updates.latest.useQuery(
-		{ org: org ?? "", project: project ?? "", stack: stack ?? "" },
-		{ enabled: Boolean(org && project && stack) },
-	);
-
-	const { data: eventsData, error: queryError } = trpc.events.list.useQuery(
+	const { data: updateInfo } = trpc.updates.get.useQuery(
 		{
 			org: org ?? "",
 			project: project ?? "",
 			stack: stack ?? "",
-			updateID: updateID ?? "",
+			updateIdOrVersion: updateID ?? "",
+		},
+		{ enabled: Boolean(org && project && stack && updateID) },
+	);
+
+	const updateStatus = mapUpdateStatus(updateInfo?.result, events.length > 0);
+	const isRunning = updateStatus === "running" || updateStatus === "updating";
+	const isTerminal =
+		updateStatus === "succeeded" || updateStatus === "failed" || updateStatus === "cancelled";
+
+	const resolvedUpdateID = updateInfo?.updateID ?? updateID ?? "";
+
+	const {
+		data: eventsData,
+		error: queryError,
+		refetch: refetchEvents,
+	} = trpc.events.list.useQuery(
+		{
+			org: org ?? "",
+			project: project ?? "",
+			stack: stack ?? "",
+			updateID: resolvedUpdateID,
 			continuationToken: continuationTokenRef.current,
 		},
 		{
-			enabled: Boolean(org && project && stack && updateID),
-			refetchInterval: isPolling ? 2000 : false,
+			enabled: Boolean(org && project && stack && resolvedUpdateID),
 		},
 	);
 
 	const lastSeqRef = useRef<number>(0);
 
+	// Subscribe to real-time events via SSE — only for active (non-terminal) updates.
+	// Streams full event data directly (no separate HTTP fetch needed).
+	// Uses skipToken for completed updates to prevent SSE connection.
+	// initialLastSeqRef is stable (never mutated) to prevent tRPC reconnection.
+	const initialLastSeqRef = useRef<number | undefined>(undefined);
+	const subscriptionEnabled = Boolean(org && project && stack && resolvedUpdateID) && !isTerminal;
+
 	trpc.updates.onEvents.useSubscription(
+		subscriptionEnabled
+			? {
+					org: org ?? "",
+					project: project ?? "",
+					stack: stack ?? "",
+					updateId: resolvedUpdateID,
+					lastEventId: initialLastSeqRef.current,
+				}
+			: skipToken,
 		{
-			org: org ?? "",
-			project: project ?? "",
-			stack: stack ?? "",
-			updateId: updateID ?? "",
-			lastEventId: lastSeqRef.current || undefined,
-		},
-		{
-			enabled: Boolean(org && project && stack && updateID),
-			onData: (data) => {
-				if (data.seq) lastSeqRef.current = data.seq;
-				queryClient.invalidateQueries({
-					queryKey: getQueryKey(trpc.events.list, undefined, "query"),
+			onData: (event) => {
+				const data = event.data as unknown as EngineEvent;
+				if (!data?.sequence) return;
+				lastSeqRef.current = data.sequence;
+				setEvents((prev) => {
+					if (prev.some((e) => e.sequence === data.sequence)) return prev;
+					return [...prev, data].sort((a, b) => a.sequence - b.sequence);
 				});
-				queryClient.invalidateQueries({
-					queryKey: getQueryKey(trpc.updates.latest, undefined, "query"),
-				});
+				// Refresh update status only on events that signal completion/cancellation
+				if (data.summaryEvent || data.cancelEvent) {
+					utils.updates.get.invalidate();
+				}
 			},
 		},
 	);
 
 	const error = queryError?.message ?? null;
 	const { grouped, completed, total } = useResourceTracker(events);
-
-	const updateStatus = mapUpdateStatus(updateInfo?.result, events.length > 0);
-	const isRunning = updateStatus === "running" || updateStatus === "updating";
 
 	const firstEventTimestampMs = useMemo(
 		() => (events.length > 0 ? eventTimestampMs(events[0]) : undefined),
@@ -237,10 +259,9 @@ export function UpdateDetail() {
 
 		if (eventsData.continuationToken) {
 			continuationTokenRef.current = eventsData.continuationToken;
-		} else {
-			setIsPolling(false);
+			refetchEvents();
 		}
-	}, [eventsData]);
+	}, [eventsData, refetchEvents]);
 
 	useEffect(() => {
 		if (!isRunning) return;
@@ -286,7 +307,7 @@ export function UpdateDetail() {
 			case "update":
 				return "text-yellow-400";
 			case "delete":
-				return "text-red-400";
+				return "text-red-300";
 			case "same":
 				return "text-cloud";
 			default:
@@ -301,7 +322,7 @@ export function UpdateDetail() {
 			const { severity, message } = event.diagnosticEvent;
 			const colorClass =
 				severity === "error"
-					? "text-red-400"
+					? "text-red-300"
 					: severity === "warning"
 						? "text-yellow-400"
 						: "text-lightning";
@@ -377,7 +398,7 @@ export function UpdateDetail() {
 					className="flex gap-4 py-2 border-b border-slate-brand/50 last:border-0 bg-red-900/10 px-2 -mx-2 rounded"
 				>
 					<span className="text-cloud shrink-0 w-20">{time}</span>
-					<span className="shrink-0 w-16 font-medium text-red-400">cancel</span>
+					<span className="shrink-0 w-16 font-medium text-red-300">cancel</span>
 					<span className="text-red-300 font-mono text-sm">Update cancelled</span>
 				</div>
 			);
@@ -488,7 +509,7 @@ export function UpdateDetail() {
 			</header>
 
 			{error && (
-				<div className="bg-red-900/20 border border-red-900/50 text-red-400 p-4 rounded-lg shrink-0">
+				<div className="bg-red-900/20 border border-red-900/50 text-red-300 p-4 rounded-lg shrink-0">
 					{error}
 				</div>
 			)}

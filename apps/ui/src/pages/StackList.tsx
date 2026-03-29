@@ -1,5 +1,3 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { getQueryKey } from "@trpc/react-query";
 import { memo, useCallback, useRef, useState } from "react";
 import { StackCard, type UpdateStatus } from "../components/ui";
 import { apiBase } from "../config";
@@ -70,27 +68,17 @@ interface StackItem {
 }
 
 const StackTable = memo(function StackTable({ items }: { items: StackItem[] }) {
-	const queryClient = useQueryClient();
 	const utils = trpc.useUtils();
 
 	const handleMouseEnter = useCallback(
 		(stack: StackItem) => {
-			queryClient.prefetchQuery({
-				queryKey: getQueryKey(
-					trpc.stacks.detail,
-					{ org: stack.orgName, project: stack.projectName, stack: stack.stackName },
-					"query",
-				),
-				queryFn: () =>
-					utils.stacks.detail.fetch({
-						org: stack.orgName,
-						project: stack.projectName,
-						stack: stack.stackName,
-					}),
-				staleTime: 10_000,
+			utils.stacks.detail.prefetch({
+				org: stack.orgName,
+				project: stack.projectName,
+				stack: stack.stackName,
 			});
 		},
-		[queryClient, utils],
+		[utils],
 	);
 
 	return (
@@ -182,7 +170,7 @@ export function StackList() {
 		return (
 			<div className="space-y-6">
 				<h1 className="text-xl font-semibold text-mist">Stacks</h1>
-				<div className="bg-red-950/30 border border-red-900/40 text-red-400 p-4 rounded-xl text-sm">
+				<div className="bg-red-950/30 border border-red-900/40 text-red-300 p-4 rounded-xl text-sm">
 					{error}
 				</div>
 			</div>
