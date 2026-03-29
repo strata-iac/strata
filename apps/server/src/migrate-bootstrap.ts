@@ -6,9 +6,10 @@ import { join } from "node:path";
 	const BASE_URL = `http://${RUNTIME_API}/2018-06-01/runtime`;
 
 	const { loadConfig } = await import("@procella/config");
-	const { runMigrations } = await import("@procella/db");
+	const { ensureDatabase, runMigrations } = await import("@procella/db");
 
 	const config = loadConfig();
+	const dbUrl = config.databaseUrl as string;
 
 	const binaryDir = join(import.meta.dir, "drizzle");
 	const devDir = join(import.meta.dir, "../../../packages/db/drizzle");
@@ -18,7 +19,13 @@ import { join } from "node:path";
 	const requestId = res.headers.get("Lambda-Runtime-Aws-Request-Id")!;
 
 	try {
-		await runMigrations(config.databaseUrl as string, migrationsDir);
+		const parsed = new URL(dbUrl.replace(/^postgres(ql)?:\/\//, "http://"));
+		const dbName = parsed.pathname.slice(1).split("?")[0];
+		if (dbName && dbName !== "postgres") {
+			await ensureDatabase(dbUrl.replace(`/${dbName}`, "/postgres"), dbName);
+		}
+
+		await runMigrations(dbUrl, migrationsDir);
 
 		await fetch(`${BASE_URL}/invocation/${requestId}/response`, {
 			method: "POST",
