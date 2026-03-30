@@ -33,6 +33,8 @@ function mockUpdatesService(overrides?: Partial<UpdatesService>): UpdatesService
 		batchDecrypt: mock(async (_fqn: string, cts: Uint8Array[]) =>
 			cts.map(() => new Uint8Array([112])),
 		),
+		verifyLeaseToken: mock(async () => {}),
+		verifyUpdateOwnership: mock(async () => {}),
 		...overrides,
 	};
 }

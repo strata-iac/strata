@@ -1,6 +1,82 @@
+import { isIP } from "node:net";
 import { type Database, webhookDeliveries, webhooks } from "@procella/db";
-import { NotFoundError } from "@procella/types";
+import { BadRequestError, NotFoundError } from "@procella/types";
 import { and, desc, eq } from "drizzle-orm";
+
+// ============================================================================
+// SSRF Protection
+// ============================================================================
+
+const PRIVATE_IPV4_PATTERNS = [
+	/^127\./,
+	/^10\./,
+	/^172\.(1[6-9]|2\d|3[01])\./,
+	/^192\.168\./,
+	/^169\.254\./,
+	/^0\./,
+];
+
+const PRIVATE_IPV6_PATTERNS = [/^::1$/, /^fc00:/i, /^fe80:/i, /^fd[0-9a-f]{2}:/i];
+
+const BLOCKED_HOSTNAMES = new Set([
+	"localhost",
+	"localhost.localdomain",
+	"metadata.google.internal",
+]);
+
+function stripBrackets(hostname: string): string {
+	if (hostname.startsWith("[") && hostname.endsWith("]")) {
+		return hostname.slice(1, -1);
+	}
+	return hostname;
+}
+
+function ipv4MappedToIpv4(ipv6: string): string | null {
+	const match = ipv6.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+	if (!match) return null;
+	const hi = Number.parseInt(match[1], 16);
+	const lo = Number.parseInt(match[2], 16);
+	return `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+}
+
+function isPrivateIp(raw: string): boolean {
+	const bare = stripBrackets(raw);
+
+	if (isIP(bare) === 4) {
+		return PRIVATE_IPV4_PATTERNS.some((p) => p.test(bare));
+	}
+
+	if (isIP(bare) === 6) {
+		if (PRIVATE_IPV6_PATTERNS.some((p) => p.test(bare))) return true;
+		const mapped = ipv4MappedToIpv4(bare);
+		if (mapped) return PRIVATE_IPV4_PATTERNS.some((p) => p.test(mapped));
+		return false;
+	}
+
+	return false;
+}
+
+export function validateWebhookUrl(url: string): void {
+	let parsed: URL;
+	try {
+		parsed = new URL(url);
+	} catch {
+		throw new BadRequestError("Invalid webhook URL");
+	}
+
+	if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+		throw new BadRequestError("Webhook URL must use HTTP or HTTPS");
+	}
+
+	const hostname = parsed.hostname.toLowerCase();
+	if (BLOCKED_HOSTNAMES.has(hostname)) {
+		throw new BadRequestError("Webhook URL cannot target private or metadata addresses");
+	}
+
+	if (isPrivateIp(hostname)) {
+		throw new BadRequestError("Webhook URL cannot target private or reserved IP addresses");
+	}
+}
 
 export const WebhookEvent = {
 	STACK_CREATED: "stack.created",
@@ -100,6 +176,7 @@ export class PostgresWebhooksService implements WebhooksService {
 		input: CreateWebhookInput,
 		createdBy: string,
 	): Promise<WebhookInfo & { secret: string }> {
+		validateWebhookUrl(input.url);
 		const secret = input.secret ?? crypto.randomUUID();
 		const [row] = await this.db
 			.insert(webhooks)
@@ -153,7 +230,10 @@ export class PostgresWebhooksService implements WebhooksService {
 		};
 
 		if (typeof updates.name === "string") patch.name = updates.name;
-		if (typeof updates.url === "string") patch.url = updates.url;
+		if (typeof updates.url === "string") {
+			validateWebhookUrl(updates.url);
+			patch.url = updates.url;
+		}
 		if (Array.isArray(updates.events)) patch.events = updates.events;
 		if (typeof updates.secret === "string") patch.secret = updates.secret;
 
@@ -304,6 +384,24 @@ export class PostgresWebhooksService implements WebhooksService {
 		event: string,
 		payload: Record<string, unknown>,
 	): Promise<void> {
+		try {
+			validateWebhookUrl(webhook.url);
+		} catch (err) {
+			await this.recordDelivery({
+				webhookId: webhook.id,
+				event,
+				payload,
+				requestHeaders: {},
+				responseStatus: 0,
+				responseHeaders: {},
+				responseBody: "",
+				success: false,
+				attempt: 1,
+				error: err instanceof Error ? err.message : "Invalid webhook URL",
+				duration: 0,
+			});
+			return;
+		}
 		const body = JSON.stringify({ event, timestamp: new Date().toISOString(), data: payload });
 		const signature = await signPayload(body, webhook.secret);
 
@@ -324,6 +422,7 @@ export class PostgresWebhooksService implements WebhooksService {
 					headers: requestHeaders,
 					body,
 					signal: AbortSignal.timeout(10_000),
+					redirect: "manual",
 				});
 				const duration = Date.now() - start;
 				const responseBody = await resp.text().catch(() => "");
@@ -380,6 +479,23 @@ export class PostgresWebhooksService implements WebhooksService {
 		event: string,
 		payload: Record<string, unknown>,
 	): Promise<string> {
+		try {
+			validateWebhookUrl(webhook.url);
+		} catch (err) {
+			return this.recordDelivery({
+				webhookId: webhook.id,
+				event,
+				payload,
+				requestHeaders: null,
+				responseStatus: null,
+				responseBody: null,
+				responseHeaders: null,
+				success: false,
+				attempt: 1,
+				error: err instanceof Error ? err.message : "Invalid webhook URL",
+				duration: 0,
+			});
+		}
 		const body = JSON.stringify({ event, timestamp: new Date().toISOString(), data: payload });
 		const signature = await signPayload(body, webhook.secret);
 		const start = Date.now();
@@ -397,6 +513,7 @@ export class PostgresWebhooksService implements WebhooksService {
 				headers: requestHeaders,
 				body,
 				signal: AbortSignal.timeout(10_000),
+				redirect: "manual",
 			});
 			const duration = Date.now() - start;
 			const responseBody = await resp.text().catch(() => "");
