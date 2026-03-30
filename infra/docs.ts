@@ -1,3 +1,5 @@
+import { router } from "./router";
+
 const isProd = $app.stage === "production";
 const stage = $app.stage;
 
@@ -7,5 +9,8 @@ export const docs = new sst.aws.StaticSite("ProcellaDocs", {
 		command: "bun run build",
 		output: "dist",
 	},
-	domain: isProd ? "docs.procella.cloud" : `docs.${stage}.procella.cloud`,
+	router: {
+		instance: router,
+		domain: isProd ? "docs.procella.cloud" : `docs.${stage}.procella.cloud`,
+	},
 });

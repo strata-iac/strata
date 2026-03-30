@@ -19,16 +19,18 @@ export default $config({
 		await import("./infra/database");
 		await import("./infra/storage");
 		if (!$dev) await import("./infra/descope");
-		const { router } = await import("./infra/api");
+		const { router } = await import("./infra/router");
+		const { api } = await import("./infra/api");
 		await import("./infra/gc");
 		await import("./infra/web-api");
 		const { site } = await import("./infra/site");
 		const { docs } = await import("./infra/docs");
 
 		return {
-			api: router.url,
+			router: router.url,
 			app: site.url,
 			docs: docs.url,
+			api: api.url,
 		};
 	},
 });
