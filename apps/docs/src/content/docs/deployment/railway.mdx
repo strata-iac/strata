@@ -39,9 +39,8 @@ A ready-to-use `railway.toml` is included in the repo root:
 ```toml
 # railway.toml — Procella on Railway
 [build]
-  builder      = "DOCKERFILE"
+  builder        = "DOCKERFILE"
   dockerfilePath = "Dockerfile"
-  dockerTarget = "standalone"
 
 [deploy]
   healthcheckPath    = "/healthz"
@@ -52,7 +51,7 @@ A ready-to-use `railway.toml` is included in the repo root:
 ```
 
 <Aside type="note">
-Railway auto-detects the `Dockerfile` even without `builder = "DOCKERFILE"`, but specifying it explicitly is cleaner. The `dockerTarget = "standalone"` is **required** — the Dockerfile has multiple targets (`standalone` for Docker hosts, `lambda` for AWS Lambda) and Docker builds the last stage by default. Without this setting, Railway would build the Lambda target which lacks the compiled binary and migrations.
+Railway auto-detects the `Dockerfile` even without `builder = "DOCKERFILE"`, but specifying it explicitly is cleaner. The Dockerfile's final stage is `standalone` (distroless with the compiled binary) — Railway builds the last stage by default. The `ENTRYPOINT ["/procella"]` is used automatically; only add `startCommand` if you need to override it.
 </Aside>
 
 ---

@@ -25,13 +25,6 @@ RUN bun build --compile \
     --no-compile-autoload-dotenv --no-compile-autoload-bunfig \
     apps/server/src/index.ts --outfile procella
 
-FROM gcr.io/distroless/cc-debian13 AS standalone
-COPY --from=build /usr/src/app/procella /procella
-COPY --from=build /usr/src/app/packages/db/drizzle /migrations
-COPY --from=ui /usr/src/app/apps/ui/dist /ui
-EXPOSE 9090
-ENTRYPOINT ["/procella"]
-
 FROM base AS lambda
 WORKDIR /var/task
 COPY --from=adapter /lambda-adapter /opt/extensions/lambda-adapter
@@ -42,3 +35,10 @@ COPY tsconfig.json ./
 ENV PORT=8080
 ENV READINESS_CHECK_PATH=/healthz
 CMD ["bun", "run", "apps/server/src/lambda-bootstrap.ts"]
+
+FROM gcr.io/distroless/cc-debian13 AS standalone
+COPY --from=build /usr/src/app/procella /procella
+COPY --from=build /usr/src/app/packages/db/drizzle /migrations
+COPY --from=ui /usr/src/app/apps/ui/dist /ui
+EXPOSE 9090
+ENTRYPOINT ["/procella"]
