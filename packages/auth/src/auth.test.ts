@@ -6,6 +6,7 @@ import {
 	createAuthService,
 	DescopeAuthService,
 	DevAuthService,
+	extractOrgSlug,
 	METHOD_ROLE_MAP,
 	requireRole,
 	slugify,
@@ -431,5 +432,44 @@ describe("slugify", () => {
 
 	test("collapses consecutive hyphens from mixed separators", () => {
 		expect(slugify("a - b _ c")).toBe("a-b-c");
+	});
+});
+
+// ============================================================================
+// extractOrgSlug
+// ============================================================================
+
+describe("extractOrgSlug", () => {
+	test("uses top-level tenant_name from session JWT", () => {
+		const claims = { tenant_name: "My Company" };
+		expect(extractOrgSlug(claims, "T3raw_tenant_id")).toBe("my-company");
+	});
+
+	test("uses nested tenants.<id>.name from access key JWT", () => {
+		const claims = {
+			tenants: {
+				T3raw_tenant_id: { name: "Acme Corp", roles: ["admin"] },
+			},
+		};
+		expect(extractOrgSlug(claims, "T3raw_tenant_id")).toBe("acme-corp");
+	});
+
+	test("prefers top-level tenant_name over nested name", () => {
+		const claims = {
+			tenant_name: "Top Level Org",
+			tenants: {
+				T3id: { name: "Nested Org" },
+			},
+		};
+		expect(extractOrgSlug(claims, "T3id")).toBe("top-level-org");
+	});
+
+	test("falls back to tenantId when no name is available", () => {
+		const claims = { tenants: { T3id: { roles: ["admin"] } } };
+		expect(extractOrgSlug(claims, "T3id")).toBe("T3id");
+	});
+
+	test("falls back to tenantId for empty claims", () => {
+		expect(extractOrgSlug({}, "T3raw")).toBe("T3raw");
 	});
 });

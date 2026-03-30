@@ -453,18 +453,26 @@ function extractTenantId(claims: Record<string, unknown>): string | undefined {
 
 /**
  * Derive a URL-safe org slug from the tenant name in JWT claims.
- * The `tenant_name` claim is set via Descope JWT Templates (mapped from `{{tenant.name}}`).
+ * Session JWTs carry `tenant_name` at the top level (mapped from `{{tenant.name}}`
+ * via Descope JWT Templates). CLI access key JWTs store it in
+ * `tenants.<tenantId>.name` instead. Both paths are checked.
  * Falls back to the raw tenantId if no name is available.
  */
-function extractOrgSlug(claims: Record<string, unknown>, tenantId: string): string {
-	const tenantName =
+export function extractOrgSlug(claims: Record<string, unknown>, tenantId: string): string {
+	// 1. Top-level tenant_name (present in session JWTs)
+	const topLevel =
 		typeof claims.tenant_name === "string" && claims.tenant_name ? claims.tenant_name : undefined;
-	if (!tenantName) {
-		return tenantId;
+	if (topLevel) return slugify(topLevel) || tenantId;
+
+	// 2. Nested tenants.<id>.name (present in CLI access key JWTs)
+	if (claims.tenants && typeof claims.tenants === "object") {
+		const tenants = claims.tenants as Record<string, Record<string, unknown>>;
+		const name = tenants[tenantId]?.name;
+		if (typeof name === "string" && name) return slugify(name) || tenantId;
 	}
-	const slug = slugify(tenantName);
-	// Fall back to tenantId if slugify produces empty string (e.g. non-Latin names)
-	return slug || tenantId;
+
+	// 3. Last resort — should not happen if Descope is configured correctly
+	return tenantId;
 }
 
 /** Convert a string to a URL-safe slug (lowercase, alphanumeric + hyphens). */
