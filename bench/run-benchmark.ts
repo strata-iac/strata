@@ -190,12 +190,12 @@ async function createPulumiHome(): Promise<string> {
 
   // Copy credentials so the CLI can resolve the current backend
   const credSrc = path.join(SYSTEM_PULUMI_HOME, "credentials.json");
-  if (existsSync(credSrc)) {
+  try {
     const cpCred = Bun.spawn(["cp", "-f", credSrc, path.join(home, "credentials.json")], {
       stdout: "pipe", stderr: "pipe",
     });
     await cpCred.exited;
-  }
+  } catch {}
 
   return home;
 }
@@ -347,7 +347,7 @@ async function runTrial(
       };
     }
 
-    const up = await timed(() => runPulumi(["up", "--yes"], projectDir, pulumiHome, mode, stack));
+    const up = await timed(() => runPulumi(["up", "--yes"], projectDir, pulumiHome, mode, stackRef));
 
     if (up.exitCode !== 0) {
       console.error(`[${mode}/${variant}] N=${n} trial=${trial} up failed (exit ${up.exitCode}):\n  stdout: ${up.stdout.slice(0, 500)}\n  stderr: ${up.stderr.slice(0, 500)}`);
@@ -361,7 +361,7 @@ async function runTrial(
       };
     }
 
-    const preview = await timed(() => runPulumi(["preview"], projectDir, pulumiHome, mode, stack));
+    const preview = await timed(() => runPulumi(["preview"], projectDir, pulumiHome, mode, stackRef));
 
     let checkpointBytes: number | null = null;
     let journalEntryCount: number | null = null;
@@ -372,7 +372,7 @@ async function runTrial(
       journalEntryCount = updateId ? await getJournalEntryCount(updateId) : null;
     }
 
-    const destroy = await timed(() => runPulumi(["destroy", "--yes"], projectDir, pulumiHome, mode, stack));
+    const destroy = await timed(() => runPulumi(["destroy", "--yes"], projectDir, pulumiHome, mode, stackRef));
 
     return {
       n, mode, variant, trial,
