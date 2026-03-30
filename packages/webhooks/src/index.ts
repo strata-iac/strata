@@ -1,4 +1,4 @@
-import { lookup } from "node:dns/promises";
+import { resolve4, resolve6 } from "node:dns/promises";
 import { isIP } from "node:net";
 import { type Database, webhookDeliveries, webhooks } from "@procella/db";
 import { BadRequestError, NotFoundError } from "@procella/types";
@@ -94,15 +94,18 @@ export async function resolveAndValidateWebhookUrl(url: string): Promise<void> {
 
 	if (isIP(hostname)) return;
 
-	let addresses: { address: string }[];
-	try {
-		addresses = await lookup(hostname, { all: true });
-	} catch {
+	const [v4, v6] = await Promise.all([
+		resolve4(hostname).catch((): string[] => []),
+		resolve6(hostname).catch((): string[] => []),
+	]);
+	const addresses = [...v4, ...v6];
+
+	if (addresses.length === 0) {
 		throw new BadRequestError("Webhook URL hostname could not be resolved");
 	}
 
 	for (const addr of addresses) {
-		if (isPrivateIp(addr.address)) {
+		if (isPrivateIp(addr)) {
 			throw new BadRequestError(
 				"Webhook URL hostname resolves to a private or reserved IP address",
 			);
