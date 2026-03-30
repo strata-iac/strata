@@ -26,6 +26,8 @@ function mockUpdatesService(overrides?: Partial<UpdatesService>): UpdatesService
 		decryptValue: mock(async () => new Uint8Array()),
 		batchEncrypt: mock(async () => []),
 		batchDecrypt: mock(async () => []),
+		verifyLeaseToken: mock(async () => {}),
+		verifyUpdateOwnership: mock(async () => {}),
 		...overrides,
 	};
 }
