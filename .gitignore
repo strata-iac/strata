@@ -52,3 +52,5 @@ node-compile-cache/
 
 # Beads / Dolt files (added by bd init)
 .beads-credential-key
+
+sst-env.d.ts

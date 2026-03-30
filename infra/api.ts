@@ -1,4 +1,5 @@
 import { database, databaseUrl, vpc } from "./database";
+import { router } from "./router";
 import {
 	allSecrets,
 	descopeManagementKey,
@@ -24,6 +25,10 @@ export const api = new sst.aws.Function("ProcellaCliApi", {
 	handler: "bootstrap",
 	url: {
 		cors: false,
+		router: {
+			instance: router,
+			domain: isProd ? "api.procella.cloud" : `api.${stage}.procella.cloud`,
+		},
 	},
 	timeout: "60 seconds",
 	memory: "512 MB",
@@ -49,15 +54,6 @@ export const api = new sst.aws.Function("ProcellaCliApi", {
 	},
 });
 
-export const router = new sst.aws.Router("ProcellaRouter", {
-	domain: isProd ? "api.procella.cloud" : `api.${stage}.procella.cloud`,
-	routes: {
-		"/*": api.url,
-	},
-});
-
-import * as command from "@pulumi/command";
-
 export const migrateFn = new sst.aws.Function("ProcellaMigrate", {
 	runtime: "provided.al2023",
 	architecture: "x86_64",
@@ -76,9 +72,8 @@ export const migrateFn = new sst.aws.Function("ProcellaMigrate", {
 		PROCELLA_BLOB_S3_BUCKET: bucket.name,
 	},
 });
-
 if (!$dev) {
-	const migrateCmd = $interpolate`aws lambda invoke --function-name ${migrateFn.name} --payload '{}' --cli-binary-format raw-in-base64-out --cli-read-timeout 360 /tmp/migrate-out-${stage}.json && cat /tmp/migrate-out-${stage}.json`;
+	const migrateCmd = $interpolate`aws lambda invoke --region ${migrateFn.nodes.function.region} --function-name ${migrateFn.name} --payload '{}' --cli-binary-format raw-in-base64-out --cli-read-timeout 360 /tmp/migrate-out-${stage}.json && cat /tmp/migrate-out-${stage}.json`;
 	new command.local.Command("ProcellaMigrateRun", {
 		create: migrateCmd,
 		update: migrateCmd,

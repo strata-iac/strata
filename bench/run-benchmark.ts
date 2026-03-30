@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -8,17 +9,59 @@ import { generateProgram, generateSecretsProgram } from "./generate-programs";
 import type { BenchmarkResults, Mode, TrialResult, Variant } from "./types";
 
 const BENCH_PORT = 18_081;
+const SYSTEM_PULUMI_HOME = process.env.PULUMI_HOME ?? path.join(process.env.HOME ?? "", ".pulumi");
+
+// ---------------------------------------------------------------------------
+// Resolve backend URL + token: BENCH_URL/BENCH_TOKEN → credentials.json → local
+// ---------------------------------------------------------------------------
+
+interface PulumiCredentials {
+	current?: string;
+	accessTokens?: Record<string, string>;
+	accounts?: Record<string, { accessToken?: string }>;
+}
+
+function readPulumiCredentials(): { url: string; token: string } | null {
+	const credPath = path.join(SYSTEM_PULUMI_HOME, "credentials.json");
+	if (!existsSync(credPath)) return null;
+	try {
+		const creds: PulumiCredentials = JSON.parse(readFileSync(credPath, "utf8"));
+		const url = creds.current;
+		if (!url) return null;
+		const token =
+			creds.accessTokens?.[url] ?? creds.accounts?.[url]?.accessToken;
+		if (!token) return null;
+		return { url, token };
+	} catch {
+		return null;
+	}
+}
+
 const BENCH_URL = process.env.BENCH_URL;
-const BACKEND_URL = BENCH_URL ?? `http://127.0.0.1:${BENCH_PORT}`;
-const TEST_TOKEN = process.env.BENCH_TOKEN ?? "benchtoken";
+const BENCH_TOKEN = process.env.BENCH_TOKEN;
+
+// Priority: explicit env → current pulumi login → spin up local server
+const resolved: { url: string; token: string; source: "env" | "login" | "local" } = (() => {
+	if (BENCH_URL) {
+		return { url: BENCH_URL, token: BENCH_TOKEN ?? "benchtoken", source: "env" as const };
+	}
+	const creds = readPulumiCredentials();
+	if (creds) {
+		return { url: creds.url, token: BENCH_TOKEN ?? creds.token, source: "login" as const };
+	}
+	return { url: `http://127.0.0.1:${BENCH_PORT}`, token: BENCH_TOKEN ?? "benchtoken", source: "local" as const };
+})();
+
+const BACKEND_URL = resolved.url;
+const TEST_TOKEN = resolved.token;
+const IS_REMOTE = resolved.source !== "local";
+let REMOTE_ORG = "";
+const HAS_DB_METRICS = !IS_REMOTE || !!process.env.BENCH_DATABASE_URL;
+const PROJECT_ROOT = path.resolve(import.meta.dir, "..");
 const TEST_DB_URL =
   process.env.BENCH_DATABASE_URL ??
   process.env.PROCELLA_DATABASE_URL ??
   "postgres://procella:procella@localhost:5432/procella?sslmode=disable";
-const PROJECT_ROOT = path.resolve(import.meta.dir, "..");
-const IS_REMOTE = !!BENCH_URL;
-let REMOTE_ORG = "";
-const HAS_DB_METRICS = !IS_REMOTE || !!process.env.BENCH_DATABASE_URL;
 
 const BENCH_SIZES = (() => {
   const raw = process.env.BENCH_SIZES;
@@ -134,16 +177,24 @@ async function truncate(): Promise<void> {
 
 async function createPulumiHome(): Promise<string> {
   const home = await mkdtemp(path.join(tmpdir(), "procella-bench-pulumi-"));
-  const systemHome = process.env.PULUMI_HOME ?? path.join(process.env.HOME ?? "", ".pulumi");
-  const systemPlugins = path.join(systemHome, "plugins");
+  const systemPlugins = path.join(SYSTEM_PULUMI_HOME, "plugins");
   const homePlugins = path.join(home, "plugins");
 
+  // Copy plugins (symlink would be fine, but cp -rf is safer for isolation)
   try {
     const cp = Bun.spawn(["cp", "-rf", systemPlugins, homePlugins], {
-      stdout: "pipe",
-      stderr: "pipe",
+      stdout: "pipe", stderr: "pipe",
     });
     await cp.exited;
+  } catch {}
+
+  // Copy credentials so the CLI can resolve the current backend
+  const credSrc = path.join(SYSTEM_PULUMI_HOME, "credentials.json");
+  try {
+    const cpCred = Bun.spawn(["cp", "-f", credSrc, path.join(home, "credentials.json")], {
+      stdout: "pipe", stderr: "pipe",
+    });
+    await cpCred.exited;
   } catch {}
 
   return home;
@@ -177,19 +228,29 @@ async function runPulumi(
   cwd: string,
   pulumiHome: string,
   mode: Mode = "checkpoint",
+  stack?: string,
 ): Promise<CommandResult> {
+  const env: Record<string, string> = {
+    ...cleanEnv(),
+    PULUMI_CONFIG_PASSPHRASE: "test",
+    PULUMI_SKIP_UPDATE_CHECK: "true",
+    PULUMI_DIY_BACKEND_URL: "",
+    PULUMI_HOME: pulumiHome,
+    ...(mode === "journal" ? { PULUMI_ENABLE_JOURNALING: "true" } : { PULUMI_DISABLE_JOURNALING: "true" }),
+  };
+  if (resolved.source === "login") {
+    // Ensure inherited Pulumi auth vars don't override credentials.json
+    delete env.PULUMI_ACCESS_TOKEN;
+    delete env.PULUMI_BACKEND_URL;
+  } else {
+    env.PULUMI_ACCESS_TOKEN = TEST_TOKEN;
+    env.PULUMI_BACKEND_URL = BACKEND_URL;
+  }
+  if (stack) env.PULUMI_STACK = stack;
+
   const proc = Bun.spawn([PULUMI_BIN, ...args, "--non-interactive"], {
     cwd,
-    env: {
-      ...cleanEnv(),
-      PULUMI_ACCESS_TOKEN: TEST_TOKEN,
-      PULUMI_BACKEND_URL: BACKEND_URL,
-      PULUMI_CONFIG_PASSPHRASE: "test",
-      PULUMI_SKIP_UPDATE_CHECK: "true",
-      PULUMI_DIY_BACKEND_URL: "",
-      PULUMI_HOME: pulumiHome,
-      ...(mode === "journal" ? { PULUMI_ENABLE_JOURNALING: "true" } : { PULUMI_DISABLE_JOURNALING: "true" }),
-    },
+    env,
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -259,7 +320,9 @@ async function runTrial(
   const org = IS_REMOTE ? REMOTE_ORG : "dev-org";
   const project = variant === "secrets" ? "bench-secrets" : "bench";
   const stack = IS_REMOTE ? `t${trial}-${uniqueId()}` : `${variant[0]}${n}`;
-  const stackRef = `${org}/${project}/${stack}`;
+  // In login mode, let the CLI resolve the org from credentials — avoids
+  // mismatch between display org name and internal tenant ID.
+  const stackRef = resolved.source === "login" ? stack : `${org}/${project}/${stack}`;
 
   if (!IS_REMOTE) {
     await truncate();
@@ -284,7 +347,7 @@ async function runTrial(
       };
     }
 
-    const up = await timed(() => runPulumi(["up", "--yes"], projectDir, pulumiHome, mode));
+    const up = await timed(() => runPulumi(["up", "--yes"], projectDir, pulumiHome, mode, stackRef));
 
     if (up.exitCode !== 0) {
       console.error(`[${mode}/${variant}] N=${n} trial=${trial} up failed (exit ${up.exitCode}):\n  stdout: ${up.stdout.slice(0, 500)}\n  stderr: ${up.stderr.slice(0, 500)}`);
@@ -298,7 +361,7 @@ async function runTrial(
       };
     }
 
-    const preview = await timed(() => runPulumi(["preview"], projectDir, pulumiHome, mode));
+    const preview = await timed(() => runPulumi(["preview"], projectDir, pulumiHome, mode, stackRef));
 
     let checkpointBytes: number | null = null;
     let journalEntryCount: number | null = null;
@@ -309,7 +372,7 @@ async function runTrial(
       journalEntryCount = updateId ? await getJournalEntryCount(updateId) : null;
     }
 
-    const destroy = await timed(() => runPulumi(["destroy", "--yes"], projectDir, pulumiHome, mode));
+    const destroy = await timed(() => runPulumi(["destroy", "--yes"], projectDir, pulumiHome, mode, stackRef));
 
     return {
       n, mode, variant, trial,
@@ -478,29 +541,40 @@ async function main(): Promise<void> {
   PULUMI_BIN = await findPulumi();
   console.log(`Procella benchmark: modes=${BENCH_MODES.join(",")}, variants=${BENCH_VARIANTS.join(",")}, sizes=${BENCH_SIZES.join(",")}, trials=${BENCH_TRIALS}`);
   console.log(`Using pulumi: ${PULUMI_BIN}`);
-  if (IS_REMOTE) {
-    console.log(`Remote mode: ${BACKEND_URL}`);
-    // Detect org from authenticated user
-    const userRes = await fetch(`${BACKEND_URL}/api/user`, {
-      headers: { Authorization: `token ${TEST_TOKEN}`, Accept: "application/vnd.pulumi+8" },
-    });
-    if (!userRes.ok) {
-      const body = await userRes.text();
-      throw new Error(`Auth check failed (${userRes.status}): ${body}`);
-    }
-    const userInfo = (await userRes.json()) as { organizations?: Array<{ githubLogin: string }> };
-    REMOTE_ORG = userInfo.organizations?.[0]?.githubLogin ?? "";
-    if (!REMOTE_ORG) {
-      throw new Error(`No org found in user info: ${JSON.stringify(userInfo)}`);
-    }
-    console.log(`  Authenticated as org: ${REMOTE_ORG}`);
-    console.log(`  DB metrics: ${TEST_DB_URL !== "postgres://procella:procella@localhost:5432/procella?sslmode=disable" ? "enabled" : "disabled"}`);
-  }
+  console.log(`Backend: ${BACKEND_URL} (${resolved.source})`);
 
   if (!IS_REMOTE) {
     await resetDb();
   }
   const pulumiHome = await createPulumiHome();
+
+  if (IS_REMOTE) {
+    if (resolved.source === "login") {
+      // Use `pulumi whoami` to get the org the CLI actually uses (matches backend)
+      const whoami = await runPulumi(["whoami", "--json"], PROJECT_ROOT, pulumiHome);
+      if (whoami.exitCode !== 0) {
+        throw new Error(`pulumi whoami failed (exit ${whoami.exitCode}): ${whoami.stderr}`);
+      }
+      const info = JSON.parse(whoami.stdout) as { user?: string; organizations?: string[] };
+      REMOTE_ORG = info.organizations?.[0] ?? info.user ?? "";
+    } else {
+      // Explicit BENCH_URL: detect org from the API
+      const userRes = await fetch(`${BACKEND_URL}/api/user`, {
+        headers: { Authorization: `token ${TEST_TOKEN}`, Accept: "application/vnd.pulumi+8" },
+      });
+      if (!userRes.ok) {
+        const body = await userRes.text();
+        throw new Error(`Auth check failed (${userRes.status}): ${body}`);
+      }
+      const userInfo = (await userRes.json()) as { organizations?: Array<{ githubLogin: string }> };
+      REMOTE_ORG = userInfo.organizations?.[0]?.githubLogin ?? "";
+    }
+    if (!REMOTE_ORG) {
+      throw new Error("Could not determine org. Check your pulumi login or BENCH_URL/BENCH_TOKEN.");
+    }
+    console.log(`  Org: ${REMOTE_ORG}`);
+    console.log(`  DB metrics: ${HAS_DB_METRICS ? "enabled" : "disabled"}`);
+  }
   const allResults: TrialResult[] = [];
 
   try {

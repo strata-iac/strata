@@ -69,6 +69,10 @@ export interface UpdatesService {
 	batchEncrypt(stackFQN: string, plaintexts: Uint8Array[]): Promise<Uint8Array[]>;
 
 	batchDecrypt(stackFQN: string, ciphertexts: Uint8Array[]): Promise<Uint8Array[]>;
+
+	verifyLeaseToken(updateId: string, token: string): Promise<void>;
+
+	verifyUpdateOwnership(updateId: string, stackId: string): Promise<void>;
 }
 
 // ============================================================================

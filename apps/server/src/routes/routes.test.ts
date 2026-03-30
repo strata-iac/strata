@@ -55,7 +55,7 @@ function mockAuthService(): AuthService {
 		},
 		authenticateUpdateToken: async (token: string) => {
 			const parts = token.split(":");
-			if (parts.length !== 3 || parts[0] !== "update") {
+			if (parts.length !== 4 || parts[0] !== "update") {
 				throw new UnauthorizedError("Invalid update token");
 			}
 			return { updateId: parts[1], stackId: parts[2] };
@@ -105,6 +105,8 @@ function mockUpdatesService(): UpdatesService {
 		decryptValue: async () => new Uint8Array([4, 5, 6]),
 		batchEncrypt: async () => [new Uint8Array([1])],
 		batchDecrypt: async () => [new Uint8Array([2])],
+		verifyLeaseToken: async () => {},
+		verifyUpdateOwnership: async () => {},
 	} as unknown as UpdatesService;
 }
 

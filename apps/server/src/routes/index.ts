@@ -80,7 +80,7 @@ export function createApp(deps: {
 		verifySignature: verifyGitHubWebhookSignature,
 	});
 	const checkpointH = checkpointHandlers(deps.updates);
-	const eventH = eventHandlers(deps.updates);
+	const eventH = eventHandlers(deps.updates, deps.stacks);
 	const cryptoH = cryptoHandlers(deps.updates);
 	const stateH = stateHandlers(deps.updates, deps.stacks);
 
@@ -88,7 +88,9 @@ export function createApp(deps: {
 	const withApiAuth = apiAuth(deps.auth);
 	const withAudit = auditMiddleware(deps.audit);
 	const withPulumiAccept = pulumiAccept();
-	const withUpdateAuth = updateAuth(deps.auth);
+	const withUpdateAuth = updateAuth(deps.auth, (updateId, token) =>
+		deps.updates.verifyLeaseToken(updateId, token),
+	);
 
 	// ========================================================================
 	// tRPC routes (/trpc/*)
