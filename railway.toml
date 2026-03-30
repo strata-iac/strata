@@ -9,6 +9,7 @@
 [build]
   builder        = "DOCKERFILE"
   dockerfilePath = "Dockerfile"
+  dockerTarget   = "standalone"
 
 [deploy]
   preDeployCommand        = "/procella --migrate"
