@@ -1,3 +1,4 @@
+import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { type Database, webhookDeliveries, webhooks } from "@procella/db";
 import { BadRequestError, NotFoundError } from "@procella/types";
@@ -23,6 +24,9 @@ const BLOCKED_HOSTNAMES = new Set([
 	"localhost.localdomain",
 	"metadata.google.internal",
 ]);
+
+/** Hostname suffixes used by DNS rebinding / wildcard DNS services. */
+const BLOCKED_HOSTNAME_SUFFIXES = [".nip.io", ".sslip.io", ".xip.io", ".localtest.me", ".lvh.me"];
 
 function stripBrackets(hostname: string): string {
 	if (hostname.startsWith("[") && hostname.endsWith("]")) {
@@ -75,6 +79,34 @@ export function validateWebhookUrl(url: string): void {
 
 	if (isPrivateIp(hostname)) {
 		throw new BadRequestError("Webhook URL cannot target private or reserved IP addresses");
+	}
+}
+
+export async function resolveAndValidateWebhookUrl(url: string): Promise<void> {
+	validateWebhookUrl(url);
+
+	const parsed = new URL(url);
+	const hostname = parsed.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+
+	if (BLOCKED_HOSTNAME_SUFFIXES.some((suffix) => hostname.endsWith(suffix))) {
+		throw new BadRequestError("Webhook URL uses a blocked DNS rebinding service");
+	}
+
+	if (isIP(hostname)) return;
+
+	let addresses: { address: string }[];
+	try {
+		addresses = await lookup(hostname, { all: true });
+	} catch {
+		throw new BadRequestError("Webhook URL hostname could not be resolved");
+	}
+
+	for (const addr of addresses) {
+		if (isPrivateIp(addr.address)) {
+			throw new BadRequestError(
+				"Webhook URL hostname resolves to a private or reserved IP address",
+			);
+		}
 	}
 }
 
@@ -176,7 +208,7 @@ export class PostgresWebhooksService implements WebhooksService {
 		input: CreateWebhookInput,
 		createdBy: string,
 	): Promise<WebhookInfo & { secret: string }> {
-		validateWebhookUrl(input.url);
+		await resolveAndValidateWebhookUrl(input.url);
 		const secret = input.secret ?? crypto.randomUUID();
 		const [row] = await this.db
 			.insert(webhooks)
@@ -231,7 +263,7 @@ export class PostgresWebhooksService implements WebhooksService {
 
 		if (typeof updates.name === "string") patch.name = updates.name;
 		if (typeof updates.url === "string") {
-			validateWebhookUrl(updates.url);
+			await resolveAndValidateWebhookUrl(updates.url);
 			patch.url = updates.url;
 		}
 		if (Array.isArray(updates.events)) patch.events = updates.events;
@@ -385,7 +417,7 @@ export class PostgresWebhooksService implements WebhooksService {
 		payload: Record<string, unknown>,
 	): Promise<void> {
 		try {
-			validateWebhookUrl(webhook.url);
+			await resolveAndValidateWebhookUrl(webhook.url);
 		} catch (err) {
 			await this.recordDelivery({
 				webhookId: webhook.id,
@@ -480,7 +512,7 @@ export class PostgresWebhooksService implements WebhooksService {
 		payload: Record<string, unknown>,
 	): Promise<string> {
 		try {
-			validateWebhookUrl(webhook.url);
+			await resolveAndValidateWebhookUrl(webhook.url);
 		} catch (err) {
 			return this.recordDelivery({
 				webhookId: webhook.id,
