@@ -8,11 +8,12 @@
  * LOAD_STAGGER_MS        Stagger between worker launches in ms (default: 0)
  */
 
-import { cpSync, existsSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 
+const PROJECT_ROOT = resolve(import.meta.dir, "..");
 const SYSTEM_PULUMI_HOME = process.env.PULUMI_HOME ?? join(process.env.HOME ?? "", ".pulumi");
 
 const PROCELLA_URL = process.env.PROCELLA_URL;
@@ -20,20 +21,34 @@ const ACCESS_TOKEN = process.env.PULUMI_ACCESS_TOKEN;
 const CYCLES = Math.max(1, Number(process.env.LOAD_CYCLES ?? "4"));
 const WORKERS_PER_EXAMPLE = Math.max(1, Number(process.env.LOAD_WORKERS ?? "1"));
 const STAGGER_MS = Math.max(0, Number(process.env.LOAD_STAGGER_MS ?? "0"));
-const EXAMPLES_DIR = resolve(import.meta.dir, "..", "examples");
+const EXAMPLES_DIR = resolve(PROJECT_ROOT, "examples");
 
-// Safe for load testing — no protected resources, no cross-stack deps.
+// Skip: protect (can't destroy protected resources), stack-ref (cross-stack dependency)
 const ALL_SAFE_EXAMPLES = [
 	"multi-resource", // 12 resources, mixed types
-	"component", //      cross-group dependencies
-	"secrets-heavy", //  encrypted config + secret outputs
-	"large-state", //    80 resources — stress test
+	"component", // cross-group dependencies
+	"secrets-heavy", // encrypted config + secret outputs
+	"large-state", // 80 resources stress test
 	"replace-triggers", // command provider, replacement lifecycle
 ] as const;
 
-const EXAMPLES: string[] = process.env.LOAD_EXAMPLES
-	? process.env.LOAD_EXAMPLES.split(",").map((s) => s.trim())
-	: [...ALL_SAFE_EXAMPLES];
+const EXAMPLES: string[] = (() => {
+	const raw = process.env.LOAD_EXAMPLES;
+	if (!raw) return [...ALL_SAFE_EXAMPLES];
+	const parsed = raw
+		.split(",")
+		.map((s) => s.trim())
+		.filter((s) => s.length > 0);
+	if (parsed.length === 0) return [...ALL_SAFE_EXAMPLES];
+	const missing = parsed.filter((name) => !existsSync(join(EXAMPLES_DIR, name)));
+	if (missing.length > 0) {
+		console.error(
+			`LOAD_EXAMPLES: directories not found: ${missing.join(", ")}. Available: ${ALL_SAFE_EXAMPLES.join(", ")}`,
+		);
+		process.exit(1);
+	}
+	return parsed;
+})();
 
 interface CycleResult {
 	cycle: number;
@@ -54,32 +69,65 @@ interface WorkerResult {
 	error?: string;
 }
 
+function cleanEnv(): Record<string, string> {
+	const env: Record<string, string> = {};
+	for (const [key, value] of Object.entries(process.env)) {
+		if (key.startsWith("PROCELLA_")) continue;
+		if (key.startsWith("AWS_")) continue;
+		if (value !== undefined) env[key] = value;
+	}
+	return env;
+}
+
 function createWorkerHome(): string {
 	const home = mkdtempSync(join(tmpdir(), "load-pulumi-"));
 	const credSrc = join(SYSTEM_PULUMI_HOME, "credentials.json");
 	if (existsSync(credSrc)) cpSync(credSrc, join(home, "credentials.json"));
 	const pluginsSrc = join(SYSTEM_PULUMI_HOME, "plugins");
-	if (existsSync(pluginsSrc)) symlinkSync(pluginsSrc, join(home, "plugins"));
+	if (existsSync(pluginsSrc)) cpSync(pluginsSrc, join(home, "plugins"), { recursive: true });
 	return home;
 }
 
+async function findPulumi(): Promise<string> {
+	const fromEnv = process.env.PULUMI_PATH;
+	if (fromEnv) return fromEnv;
+
+	const mise = Bun.spawn(["mise", "which", "pulumi"], {
+		stdout: "pipe",
+		stderr: "pipe",
+		cwd: PROJECT_ROOT,
+	});
+	const [miseExit, miseOut] = await Promise.all([mise.exited, new Response(mise.stdout).text()]);
+	if (miseExit === 0 && miseOut.trim()) return miseOut.trim();
+
+	const which = Bun.spawn(["which", "pulumi"], { stdout: "pipe", stderr: "pipe" });
+	const [whichExit, whichOut] = await Promise.all([
+		which.exited,
+		new Response(which.stdout).text(),
+	]);
+	if (whichExit === 0 && whichOut.trim()) return whichOut.trim();
+
+	throw new Error("pulumi not found. Install via mise or set PULUMI_PATH.");
+}
+
+let PULUMI_BIN = "";
+
 async function pulumi(
 	args: string[],
-	opts: { cwd: string; pulumiHome: string; stack?: string },
+	opts: { cwd: string; pulumiHome: string },
 ): Promise<{ exit: number; stdout: string; stderr: string }> {
-	const env: Record<string, string | undefined> = {
-		...process.env,
+	const env: Record<string, string> = {
+		...cleanEnv(),
 		PULUMI_HOME: opts.pulumiHome,
 		PULUMI_SKIP_UPDATE_CHECK: "true",
 		PULUMI_DIY_BACKEND_URL: "",
 	};
 	if (PROCELLA_URL) env.PULUMI_BACKEND_URL = PROCELLA_URL;
 	if (ACCESS_TOKEN) env.PULUMI_ACCESS_TOKEN = ACCESS_TOKEN;
-	if (opts.stack) env.PULUMI_STACK = opts.stack;
 
-	const proc = Bun.spawn(["pulumi", ...args, "--non-interactive"], {
+	const proc = Bun.spawn([PULUMI_BIN, ...args, "--non-interactive"], {
 		cwd: opts.cwd,
-		env: env as Record<string, string>,
+		env,
 		stdout: "pipe",
 		stderr: "pipe",
 	});
@@ -103,8 +151,7 @@ async function runWorker(example: string, workerId: number): Promise<WorkerResul
 	const isolatedDir = mkdtempSync(join(tmpdir(), `load-${example}-`));
 	cpSync(join(EXAMPLES_DIR, example), isolatedDir, { recursive: true });
 
-	const run = (args: string[], stack?: string) =>
-		pulumi(args, { cwd: isolatedDir, pulumiHome, stack });
+	const run = (args: string[]) => pulumi(args, { cwd: isolatedDir, pulumiHome });
 	const cycles: CycleResult[] = [];
 
 	try {
@@ -120,11 +167,13 @@ async function runWorker(example: string, workerId: number): Promise<WorkerResul
 			let upOk = false;
 			let destroyOk = false;
 			let error: string | undefined;
+			let upAttempted = false;
 
 			try {
 				const t0 = performance.now();
 				console.log(`${tag} cycle ${c + 1}/${CYCLES}: up`);
-				const up = await run(["up", "--yes", "--skip-preview"], stackName);
+				upAttempted = true;
+				const up = await run(["up", "--yes", "--skip-preview"]);
 				upMs = performance.now() - t0;
 				upOk = up.exit === 0;
 				if (!upOk) {
@@ -134,7 +183,7 @@ async function runWorker(example: string, workerId: number): Promise<WorkerResul
 
 				const t1 = performance.now();
 				console.log(`${tag} cycle ${c + 1}/${CYCLES}: destroy`);
-				const des = await run(["destroy", "--yes", "--skip-preview"], stackName);
+				const des = await run(["destroy", "--yes", "--skip-preview"]);
 				destroyMs = performance.now() - t1;
 				destroyOk = des.exit === 0;
 				if (!destroyOk) {
@@ -144,13 +193,20 @@ async function runWorker(example: string, workerId: number): Promise<WorkerResul
 			} catch (e) {
 				error = e instanceof Error ? e.message : String(e);
 				console.error(`${tag} cycle ${c + 1}/${CYCLES}: \x1b[31mFAILED\x1b[0m ${error}`);
+				if (upAttempted && !destroyOk) {
+					console.log(`${tag} cycle ${c + 1}/${CYCLES}: best-effort destroy`);
+					await run(["destroy", "--yes", "--skip-preview"]).catch(() => {});
+				}
 			}
 
 			cycles.push({ cycle: c + 1, upMs, destroyMs, upOk, destroyOk, error });
 		}
 
 		console.log(`${tag} stack rm ${stackName}`);
-		await run(["stack", "rm", "--yes", stackName]);
+		const rm = await run(["stack", "rm", "--yes", stackName]);
+		if (rm.exit !== 0) {
+			console.error(`${tag} stack rm failed (exit ${rm.exit}): ${rm.stderr.slice(0, 200)}`);
+		}
 	} finally {
 		rmSync(pulumiHome, { recursive: true, force: true });
 		rmSync(isolatedDir, { recursive: true, force: true });
@@ -179,7 +235,7 @@ function percentile(sorted: number[], pct: number): number {
 	return sorted[idx];
 }
 
-function printSummary(results: WorkerResult[]): void {
+function printSummary(results: WorkerResult[], wallClockMs?: number): void {
 	const total = results.length;
 	const passed = results.filter((r) => r.ok).length;
 	const failed = total - passed;
@@ -190,7 +246,9 @@ function printSummary(results: WorkerResult[]): void {
 	lines.push("\x1b[1m  LOAD TEST RESULTS\x1b[0m");
 	lines.push("\x1b[1m" + "━".repeat(80) + "\x1b[0m");
 	lines.push("");
-	lines.push(`  Workers: ${total}  |  Passed: \x1b[32m${passed}\x1b[0m  |  Failed: ${failed > 0 ? `\x1b[31m${failed}\x1b[0m` : "0"}`);
+	lines.push(
+		`  Workers: ${total}  |  Passed: \x1b[32m${passed}\x1b[0m  |  Failed: ${failed > 0 ? `\x1b[31m${failed}\x1b[0m` : "0"}`,
+	);
 	lines.push(`  Cycles per worker: ${CYCLES}`);
 	lines.push("");
 
@@ -222,18 +280,20 @@ function printSummary(results: WorkerResult[]): void {
 		);
 	}
 
-	const maxTotal = Math.max(...results.map((r) => r.totalMs), 0);
+	const elapsed = wallClockMs ?? Math.max(...results.map((r) => r.totalMs), 0);
 	lines.push("");
-	lines.push(`  Wall clock: ${fmtMs(maxTotal)}`);
+	lines.push(`  Wall clock: ${fmtMs(elapsed)}`);
 	lines.push("\x1b[1m" + "━".repeat(80) + "\x1b[0m");
 
 	for (const line of lines) console.log(line);
 }
 
 async function main(): Promise<void> {
+	PULUMI_BIN = await findPulumi();
 	const totalWorkers = EXAMPLES.length * WORKERS_PER_EXAMPLE;
 
 	console.log("\x1b[1mProcella load test\x1b[0m");
+	console.log(`  Pulumi:   ${PULUMI_BIN}`);
 	console.log(`  Backend:  ${PROCELLA_URL ?? "(current pulumi login)"}`);
 	console.log(`  Examples: ${EXAMPLES.join(", ")}`);
 	console.log(`  Workers:  ${WORKERS_PER_EXAMPLE} per example (${totalWorkers} total)`);
@@ -241,6 +301,7 @@ async function main(): Promise<void> {
 	if (STAGGER_MS > 0) console.log(`  Stagger:  ${STAGGER_MS}ms between launches`);
 	console.log("");
 
+	const mainStart = performance.now();
 	const promises: Promise<WorkerResult>[] = [];
 	let delay = 0;
 
@@ -249,7 +310,9 @@ async function main(): Promise<void> {
 			if (delay > 0) {
 				const d = delay;
 				promises.push(
-					new Promise<WorkerResult>((resolve) => setTimeout(() => resolve(runWorker(example, w)), d)),
+					new Promise<WorkerResult>((resolve) =>
+						setTimeout(() => resolve(runWorker(example, w)), d),
+					),
 				);
 			} else {
 				promises.push(runWorker(example, w));
@@ -259,6 +322,7 @@ async function main(): Promise<void> {
 	}
 
 	const settled = await Promise.allSettled(promises);
+	const wallClockMs = performance.now() - mainStart;
 
 	const completed: WorkerResult[] = [];
 	for (const r of settled) {
@@ -269,7 +333,7 @@ async function main(): Promise<void> {
 		}
 	}
 
-	printSummary(completed);
+	printSummary(completed, wallClockMs);
 
 	const outPath = join(import.meta.dir, "load-results.json");
 	await Bun.write(
