@@ -7,7 +7,6 @@
 // with a simple JSON response format (no streaming framing).
 
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
-import { sql } from "drizzle-orm";
 
 // biome-ignore lint/style/noNonNullAssertion: Lambda Runtime API always sets this
 const RUNTIME_API = process.env.AWS_LAMBDA_RUNTIME_API!;
@@ -65,21 +64,7 @@ async function postResponse(requestId: string, response: Response): Promise<void
 
 (async () => {
 	const { bootstrapCli } = await import("./bootstrap.js");
-	const { app, db } = await bootstrapCli();
-
-	// Pre-warm DB connection pool during Lambda init phase.
-	// With provisioned concurrency, this runs once when the instance is
-	// initialized (free time), ensuring the first real request is fast.
-	// 5s timeout prevents hanging if the DB is unreachable during init.
-	try {
-		const ref = { timer: undefined as ReturnType<typeof setTimeout> | undefined };
-		const timeout = new Promise<never>((_, r) => {
-			ref.timer = setTimeout(() => r(new Error("warmup timeout")), 5_000);
-		});
-		await Promise.race([db.execute(sql`SELECT 1`).finally(() => clearTimeout(ref.timer)), timeout]);
-	} catch {
-		/* DB warmup is best-effort */
-	}
+	const { app } = await bootstrapCli();
 	while (true) {
 		const next = await fetch(`${BASE_URL}/invocation/next`);
 		// biome-ignore lint/style/noNonNullAssertion: Lambda Runtime API always sets this

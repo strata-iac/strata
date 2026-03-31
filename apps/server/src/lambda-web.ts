@@ -10,7 +10,6 @@
 //   Body: {JSON prelude}\x00\x00\x00\x00\x00\x00\x00\x00{response body}
 
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
-import { sql } from "drizzle-orm";
 
 // biome-ignore lint/style/noNonNullAssertion: Lambda Runtime API always sets this
 const RUNTIME_API = process.env.AWS_LAMBDA_RUNTIME_API!;
@@ -99,20 +98,7 @@ async function streamResponse(requestId: string, response: Response): Promise<vo
 
 (async () => {
 	const { bootstrapWeb } = await import("./bootstrap.js");
-	const { app, db } = await bootstrapWeb();
-
-	// Pre-warm DB connection pool during Lambda init phase.
-	// 5s timeout prevents hanging if the DB is unreachable during init.
-	try {
-		const ref = { timer: undefined as ReturnType<typeof setTimeout> | undefined };
-		const timeout = new Promise<never>((_, r) => {
-			ref.timer = setTimeout(() => r(new Error("warmup timeout")), 5_000);
-		});
-		await Promise.race([db.execute(sql`SELECT 1`).finally(() => clearTimeout(ref.timer)), timeout]);
-	} catch {
-		/* DB warmup is best-effort */
-	}
-
+	const { app } = await bootstrapWeb();
 	while (true) {
 		const next = await fetch(`${BASE_URL}/invocation/next`);
 		// biome-ignore lint/style/noNonNullAssertion: Lambda Runtime API always sets this
