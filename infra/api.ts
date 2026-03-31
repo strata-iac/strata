@@ -1,4 +1,5 @@
 import { database, databaseUrl, vpc } from "./database";
+import { router } from "./router";
 import {
 	allSecrets,
 	descopeManagementKey,
@@ -18,26 +19,30 @@ const appOrigin = isProd ? "https://app.procella.cloud" : `https://app.${stage}.
 const rootOrigin = isProd ? "https://procella.cloud" : `https://${stage}.procella.cloud`;
 
 // ---------------------------------------------------------------------------
-// CLI API — API Gateway v2 (HTTP API)
+// CLI API — CloudFront + Lambda Function URL with HTTP/3 (QUIC)
 //
-// Bypasses CloudFront for lower per-request latency. The Pulumi CLI protocol
-// is extremely chatty (30-50+ sequential HTTP round trips per `pulumi up`),
-// so shaving even 10-20ms per request yields measurable improvements.
+// CloudFront terminates TLS at the nearest edge (~20ms from anywhere), then
+// routes to the Lambda origin over AWS’s backbone network. For the chatty
+// Pulumi CLI protocol (~18 sequential requests per `pulumi up`), this saves
+// 1-3s for users far from us-east-1 vs direct API Gateway.
 //
-// API Gateway v2 invokes Lambda directly (not via Function URL HTTP request),
-// eliminating the CloudFront edge → origin HTTP round trip.
+// HTTP/3 (QUIC) enables 0-RTT connection resumption on repeat connections,
+// eliminating TLS handshake latency after the first request.
 // ---------------------------------------------------------------------------
-export const api = new sst.aws.ApiGatewayV2("ProcellaCliGw", {
-	domain: isProd ? "api.procella.cloud" : `api.${stage}.procella.cloud`,
-});
-
-api.route("$default", {
+export const api = new sst.aws.Function("ProcellaCliApi", {
 	runtime: "provided.al2023",
 	architecture: "x86_64",
 	bundle: ".build/cli-api",
 	handler: "bootstrap",
-	timeout: "30 seconds",
+	timeout: "60 seconds",
 	memory: "512 MB",
+	url: {
+		cors: false,
+		router: {
+			instance: router,
+			domain: isProd ? "api.procella.cloud" : `api.${stage}.procella.cloud`,
+		},
+	},
 	// Provisioned concurrency keeps N Lambda instances warm at all times,
 	// eliminating cold starts (500-2000ms each) that compound across the
 	// chatty Pulumi CLI protocol. Disabled in dev mode only.
