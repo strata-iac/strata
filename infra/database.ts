@@ -21,7 +21,7 @@ export const database = !isProd
 	: new sst.aws.Aurora("ProcellaDatabase", {
 			engine: "postgres",
 			dataApi: true,
-			scaling: { min: "0.5 ACU", max: "16 ACU" },
+			scaling: { min: "4 ACU", max: "16 ACU" },
 			vpc,
 			dev: {
 				username: "procella",
