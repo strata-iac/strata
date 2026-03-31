@@ -87,7 +87,7 @@ function App() {
 						<Route path="/" element={<HomePage />} />
 						<Route element={<ProtectedRoute />}>
 							<Route element={<Layout />}>
-								<Route path="/home" element={<StackList />} />
+								<Route path="home" element={<StackList />} />
 								<Route path="tokens" element={<Tokens />} />
 								<Route path="settings" element={<Settings />} />
 								<Route path="webhooks" element={<Webhooks />} />
