@@ -65,7 +65,6 @@ async function postResponse(requestId: string, response: Response): Promise<void
 (async () => {
 	const { bootstrapCli } = await import("./bootstrap.js");
 	const { app } = await bootstrapCli();
-
 	while (true) {
 		const next = await fetch(`${BASE_URL}/invocation/next`);
 		// biome-ignore lint/style/noNonNullAssertion: Lambda Runtime API always sets this

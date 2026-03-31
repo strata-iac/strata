@@ -99,7 +99,6 @@ async function streamResponse(requestId: string, response: Response): Promise<vo
 (async () => {
 	const { bootstrapWeb } = await import("./bootstrap.js");
 	const { app } = await bootstrapWeb();
-
 	while (true) {
 		const next = await fetch(`${BASE_URL}/invocation/next`);
 		// biome-ignore lint/style/noNonNullAssertion: Lambda Runtime API always sets this

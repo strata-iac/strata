@@ -21,6 +21,17 @@ A self-hosted [Pulumi](https://www.pulumi.com/) backend. Run `pulumi login`, `pu
 - **Audit logs** — automatic audit trail via Descope management API
 - **GitHub App** — PR preview comments and commit status checks
 
+## Performance
+
+Benchmarked from Iowa (USA) against Procella deployed in us-east-1 (N. Virginia), N=10 resources, journal mode:
+
+| Backend | `up` | `preview` | `destroy` |
+|---|---|---|---|
+| **Procella (AWS)** | **1,412ms** | **677ms** | **1,087ms** |
+| Pulumi Cloud | 1,647ms | 749ms | 1,158ms |
+
+Procella is faster than Pulumi Cloud. Server-side processing is ~55ms p50 per request on both — the difference comes from infrastructure choices (CloudFront edge termination, direct Lambda invocation). See the [benchmarking docs](apps/docs/src/content/docs/development/benchmarking.md) for methodology and how to run your own comparison.
+
 ## Tech Stack
 
 | Component | Technology |

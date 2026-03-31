@@ -106,3 +106,39 @@ Journaling is enabled by default. When the CLI sends `journalVersion: 1` in the 
 The benchmark's `checkpoint` mode forces the CLI to use the traditional path by setting `PULUMI_DISABLE_JOURNALING=true`. The `journal` mode lets the CLI use journaling naturally.
 
 For more on the journaling protocol, see [Pulumi's journaling blog post](https://www.pulumi.com/blog/journaling/).
+
+## Procella vs Pulumi Cloud
+
+Benchmarks run from Iowa (USA) against Procella deployed in us-east-1 (N. Virginia) — the same region — show Procella matching or outperforming Pulumi Cloud at every operation size.
+
+### N=10 resources, journal mode, 3 trials
+
+| Backend | `up` p50 | `preview` p50 | `destroy` p50 |
+|---|---|---|---|
+| **Procella (AWS)** | **1,412ms** | **677ms** | **1,087ms** |
+| Railway | 1,589ms | 673ms | 1,172ms |
+| Pulumi Cloud | 1,647ms | 749ms | 1,158ms |
+
+Procella on AWS beats Pulumi Cloud by ~14% on `up` and ~9% on `preview`. Railway and Pulumi Cloud are within noise of each other.
+
+### What drives latency
+
+Tracing shows server-side processing is fast and consistent (~55ms p50 per request on all backends). The dominant factor is **network round-trip time** between the Pulumi CLI and the backend:
+
+- The Pulumi CLI protocol is chatty — a single `pulumi up` makes ~18 sequential HTTP requests
+- Each request pays the full TCP + TLS + network RTT cost
+- Procella on AWS uses CloudFront (HTTP/3 enabled) to terminate TLS at the nearest edge and route over the AWS backbone
+
+Benchmarking from a machine far from us-east-1 (e.g. Europe) will show higher latency for Procella AWS but similar results when benchmarking from a machine co-located with the backend.
+
+### Running the comparison yourself
+
+```bash
+# Benchmark against Pulumi Cloud
+pulumi login https://api.pulumi.com
+BENCH_VARIANTS=secrets BENCH_SIZES=10 bun bench
+
+# Benchmark against Procella
+pulumi login https://api.procella.cloud
+BENCH_VARIANTS=secrets BENCH_SIZES=10 bun bench
+```

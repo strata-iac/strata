@@ -18,11 +18,24 @@ const descopeProjectId = !$dev ? (await import("./descope")).projectId : undefin
 const appOrigin = isProd ? "https://app.procella.cloud" : `https://app.${stage}.procella.cloud`;
 const rootOrigin = isProd ? "https://procella.cloud" : `https://${stage}.procella.cloud`;
 
+// ---------------------------------------------------------------------------
+// CLI API — CloudFront + Lambda Function URL with HTTP/3 (QUIC)
+//
+// CloudFront terminates TLS at the nearest edge (~20ms from anywhere), then
+// routes to the Lambda origin over AWS’s backbone network. For the chatty
+// Pulumi CLI protocol (~18 sequential requests per `pulumi up`), this saves
+// 1-3s for users far from us-east-1 vs direct API Gateway.
+//
+// HTTP/3 (QUIC) enables 0-RTT connection resumption on repeat connections,
+// eliminating TLS handshake latency after the first request.
+// ---------------------------------------------------------------------------
 export const api = new sst.aws.Function("ProcellaCliApi", {
 	runtime: "provided.al2023",
 	architecture: "x86_64",
 	bundle: ".build/cli-api",
 	handler: "bootstrap",
+	timeout: "60 seconds",
+	memory: "512 MB",
 	url: {
 		cors: false,
 		router: {
@@ -30,8 +43,6 @@ export const api = new sst.aws.Function("ProcellaCliApi", {
 			domain: isProd ? "api.procella.cloud" : `api.${stage}.procella.cloud`,
 		},
 	},
-	timeout: "60 seconds",
-	memory: "512 MB",
 	vpc,
 	link: [database, bucket, ...allSecrets],
 	environment: {
@@ -42,6 +53,7 @@ export const api = new sst.aws.Function("ProcellaCliApi", {
 		PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
 		PROCELLA_CORS_ORIGINS: `${appOrigin},${rootOrigin}`,
 		PROCELLA_OTEL_ENABLED: "true",
+		OTEL_SERVICE_NAME: `procella-cli-${stage}`,
 		OTEL_EXPORTER_OTLP_ENDPOINT: otelEndpoint.value,
 		OTEL_EXPORTER_OTLP_HEADERS: otelHeaders.value,
 		...($dev ? { PROCELLA_DEV_AUTH_TOKEN: devAuthToken.value } : {}),

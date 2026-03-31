@@ -234,7 +234,7 @@ async function runPulumi(
     ...cleanEnv(),
     PULUMI_CONFIG_PASSPHRASE: "test",
     PULUMI_SKIP_UPDATE_CHECK: "true",
-    PULUMI_DIY_BACKEND_URL: "",
+    ...(resolved.source !== "login" ? { PULUMI_DIY_BACKEND_URL: "" } : {}),
     PULUMI_HOME: pulumiHome,
     ...(mode === "journal" ? { PULUMI_ENABLE_JOURNALING: "true" } : { PULUMI_DISABLE_JOURNALING: "true" }),
   };
@@ -242,13 +242,17 @@ async function runPulumi(
     // Ensure inherited Pulumi auth vars don't override credentials.json
     delete env.PULUMI_ACCESS_TOKEN;
     delete env.PULUMI_BACKEND_URL;
+    delete env.PULUMI_DIY_BACKEND_URL;
   } else {
     env.PULUMI_ACCESS_TOKEN = TEST_TOKEN;
     env.PULUMI_BACKEND_URL = BACKEND_URL;
   }
-  if (stack) env.PULUMI_STACK = stack;
 
-  const proc = Bun.spawn([PULUMI_BIN, ...args, "--non-interactive"], {
+  // Use --stack flag instead of PULUMI_STACK env var. The flag does proper
+  // stack name resolution (org/project lookup) which is required for Pulumi
+  // Cloud where PULUMI_STACK needs a fully qualified org/project/stack name.
+  const finalArgs = stack ? [...args, "--stack", stack] : args;
+  const proc = Bun.spawn([PULUMI_BIN, ...finalArgs, "--non-interactive"], {
     cwd,
     env,
     stdout: "pipe",
