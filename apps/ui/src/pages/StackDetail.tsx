@@ -306,7 +306,7 @@ function SettingsTab({ org, project, stack, tags }: SettingsTabProps) {
 	});
 
 	const deleteMut = trpc.stacks.delete.useMutation({
-		onSuccess: () => navigate("/"),
+		onSuccess: () => navigate("/home"),
 	});
 
 	const importMut = trpc.stacks.import.useMutation({
@@ -758,7 +758,7 @@ export function StackDetail() {
 		return (
 			<div className="space-y-6">
 				<div className="flex items-center gap-4">
-					<Link to="/" className="text-cloud hover:text-mist transition-colors">
+					<Link to="/home" className="text-cloud hover:text-mist transition-colors">
 						&larr; Back
 					</Link>
 					<div className="h-8 w-48 bg-slate-brand rounded animate-pulse" />
@@ -782,7 +782,7 @@ export function StackDetail() {
 		return (
 			<div className="space-y-6">
 				<div className="flex items-center gap-4">
-					<Link to="/" className="text-cloud hover:text-mist">
+					<Link to="/home" className="text-cloud hover:text-mist">
 						&larr; Back
 					</Link>
 					<h1 className="text-2xl font-bold text-mist">
@@ -805,7 +805,7 @@ export function StackDetail() {
 			{/* ── Header ──────────────────────────────────────────────── */}
 			<div className="flex items-center justify-between">
 				<div className="flex items-center gap-4">
-					<Link to="/" className="text-cloud hover:text-mist transition-colors">
+					<Link to="/home" className="text-cloud hover:text-mist transition-colors">
 						&larr; Back
 					</Link>
 					<h1 className="text-2xl font-bold text-mist">

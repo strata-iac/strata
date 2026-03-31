@@ -47,11 +47,11 @@ export function Layout() {
 					<div className="flex items-center gap-6">
 						<ProcellaLogo
 							size="sm"
-							linkTo="/"
+							linkTo="/home"
 							className="text-mist hover:text-white transition-colors"
 						/>
 						<nav className="hidden sm:flex items-center gap-1">
-							<NavLink to="/" end className={navLinkClass}>
+							<NavLink to="/home" end className={navLinkClass}>
 								Stacks
 							</NavLink>
 

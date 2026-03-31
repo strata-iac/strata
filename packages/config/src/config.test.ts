@@ -22,7 +22,7 @@ function clearProcellaEnv() {
 beforeEach(() => {
 	savedEnv = {};
 	for (const key of Object.keys(Bun.env)) {
-		if (key.startsWith("PROCELLA_") || key.startsWith("AWS_")) {
+		if (key.startsWith("PROCELLA_") || key.startsWith("AWS_") || key === "PORT") {
 			savedEnv[key] = Bun.env[key];
 		}
 	}
@@ -30,6 +30,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	clearProcellaEnv();
+	delete Bun.env.PORT;
 	for (const [key, value] of Object.entries(savedEnv)) {
 		if (value !== undefined) {
 			Bun.env[key] = value;
@@ -125,6 +126,42 @@ describe("@procella/config", () => {
 			// No PROCELLA_ENCRYPTION_KEY set — should be fine in dev
 			const config = loadConfig();
 			expect(config.encryptionKey).toBeUndefined();
+		});
+
+		test("falls back to PORT env var when PROCELLA_LISTEN_ADDR is not set", () => {
+			clearProcellaEnv();
+			setMinimalEnv();
+			delete Bun.env.PROCELLA_LISTEN_ADDR;
+			Bun.env.PORT = "3000";
+			const config = loadConfig();
+			expect(config.listenAddr).toBe(":3000");
+		});
+
+		test("PROCELLA_LISTEN_ADDR takes precedence over PORT", () => {
+			clearProcellaEnv();
+			setMinimalEnv();
+			Bun.env.PROCELLA_LISTEN_ADDR = ":8080";
+			Bun.env.PORT = "3000";
+			const config = loadConfig();
+			expect(config.listenAddr).toBe(":8080");
+		});
+
+		test("normalizes PORT with leading colon", () => {
+			clearProcellaEnv();
+			setMinimalEnv();
+			delete Bun.env.PROCELLA_LISTEN_ADDR;
+			Bun.env.PORT = ":3000";
+			const config = loadConfig();
+			expect(config.listenAddr).toBe(":3000");
+		});
+
+		test("ignores non-numeric PORT value", () => {
+			clearProcellaEnv();
+			setMinimalEnv();
+			delete Bun.env.PROCELLA_LISTEN_ADDR;
+			Bun.env.PORT = "not-a-port";
+			const config = loadConfig();
+			expect(config.listenAddr).toBe(":9090");
 		});
 
 		test("accepts complete GitHub app configuration", () => {
