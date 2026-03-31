@@ -7,10 +7,11 @@ import "./index.css";
 
 import { ProcellaAuthProvider } from "./components/AuthProvider";
 import { FullPageSpinner } from "./components/FullPageSpinner";
-import { HomeRoute } from "./components/HomeRoute";
 import { Layout } from "./components/Layout";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 import { CliLogin } from "./pages/CliLogin";
 import { Design } from "./pages/Design";
+import { HomePage } from "./pages/HomePage";
 import { ResourceDetail } from "./pages/ResourceDetail";
 import { Settings } from "./pages/Settings";
 import { StackDetail } from "./pages/StackDetail";
@@ -83,9 +84,10 @@ function App() {
 						<Route path="/account/tokens" element={<Navigate to="/tokens" replace />} />
 						<Route path="/welcome/cli" element={<WelcomeCli />} />
 						<Route path="/design" element={<Design />} />
-						<Route element={<HomeRoute />}>
-							<Route path="/" element={<Layout />}>
-								<Route index element={<StackList />} />
+						<Route path="/" element={<HomePage />} />
+						<Route element={<ProtectedRoute />}>
+							<Route element={<Layout />}>
+								<Route path="/home" element={<StackList />} />
 								<Route path="tokens" element={<Tokens />} />
 								<Route path="settings" element={<Settings />} />
 								<Route path="webhooks" element={<Webhooks />} />

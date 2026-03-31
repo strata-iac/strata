@@ -9,7 +9,7 @@ import { useAuthConfig } from "../hooks/useAuthConfig";
 export function Login() {
 	const { config, isLoading } = useAuthConfig();
 	const location = useLocation();
-	const returnTo = (location.state as { returnTo?: string })?.returnTo ?? "/";
+	const returnTo = (location.state as { returnTo?: string })?.returnTo ?? "/home";
 
 	if (isLoading || !config) {
 		return <FullPageSpinner />;

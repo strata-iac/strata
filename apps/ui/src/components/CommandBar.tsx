@@ -72,7 +72,7 @@ export function CommandBar() {
 						>
 							<CommandItem
 								onSelect={() => {
-									navigate("/");
+									navigate("/home");
 									setOpen(false);
 								}}
 								label="All Stacks"
