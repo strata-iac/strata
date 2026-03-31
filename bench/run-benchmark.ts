@@ -247,9 +247,12 @@ async function runPulumi(
     env.PULUMI_ACCESS_TOKEN = TEST_TOKEN;
     env.PULUMI_BACKEND_URL = BACKEND_URL;
   }
-  if (stack) env.PULUMI_STACK = stack;
 
-  const proc = Bun.spawn([PULUMI_BIN, ...args, "--non-interactive"], {
+  // Use --stack flag instead of PULUMI_STACK env var. The flag does proper
+  // stack name resolution (org/project lookup) which is required for Pulumi
+  // Cloud where PULUMI_STACK needs a fully qualified org/project/stack name.
+  const finalArgs = stack ? [...args, "--stack", stack] : args;
+  const proc = Bun.spawn([PULUMI_BIN, ...finalArgs, "--non-interactive"], {
     cwd,
     env,
     stdout: "pipe",
