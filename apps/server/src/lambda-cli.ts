@@ -72,11 +72,11 @@ async function postResponse(requestId: string, response: Response): Promise<void
 	// initialized (free time), ensuring the first real request is fast.
 	// 5s timeout prevents hanging if the DB is unreachable during init.
 	try {
-		let timer: ReturnType<typeof setTimeout>;
+		const ref = { timer: undefined as ReturnType<typeof setTimeout> | undefined };
 		const timeout = new Promise<never>((_, r) => {
-			timer = setTimeout(() => r(new Error("warmup timeout")), 5_000);
+			ref.timer = setTimeout(() => r(new Error("warmup timeout")), 5_000);
 		});
-		await Promise.race([db.execute(sql`SELECT 1`).finally(() => clearTimeout(timer!)), timeout]);
+		await Promise.race([db.execute(sql`SELECT 1`).finally(() => clearTimeout(ref.timer)), timeout]);
 	} catch {
 		/* DB warmup is best-effort */
 	}

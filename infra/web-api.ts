@@ -5,6 +5,7 @@
 
 const isProd = $app.stage === "production";
 const stage = $app.stage;
+
 import { database, databaseUrl, vpc } from "./database";
 import {
 	allSecrets,
