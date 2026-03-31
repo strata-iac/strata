@@ -104,8 +104,11 @@ async function streamResponse(requestId: string, response: Response): Promise<vo
 	// Pre-warm DB connection pool during Lambda init phase.
 	// 5s timeout prevents hanging if the DB is unreachable during init.
 	try {
-		const timeout = new Promise((_, r) => setTimeout(() => r(new Error("warmup timeout")), 5_000));
-		await Promise.race([db.execute(sql`SELECT 1`), timeout]);
+		let timer: ReturnType<typeof setTimeout>;
+		const timeout = new Promise<never>((_, r) => {
+			timer = setTimeout(() => r(new Error("warmup timeout")), 5_000);
+		});
+		await Promise.race([db.execute(sql`SELECT 1`).finally(() => clearTimeout(timer!)), timeout]);
 	} catch {
 		/* DB warmup is best-effort */
 	}

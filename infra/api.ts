@@ -43,10 +43,10 @@ export const api = new sst.aws.Function("ProcellaCliApi", {
 			domain: isProd ? "api.procella.cloud" : `api.${stage}.procella.cloud`,
 		},
 	},
-	// Provisioned concurrency keeps N Lambda instances warm at all times,
+	// Provisioned concurrency keeps N Lambda instances warm in production,
 	// eliminating cold starts (500-2000ms each) that compound across the
-	// chatty Pulumi CLI protocol. Disabled in dev mode only.
-	...(!$dev ? { concurrency: { provisioned: 2 } } : {}),
+	// chatty Pulumi CLI protocol. Production-only to control costs.
+	...(isProd ? { concurrency: { provisioned: 2 } } : {}),
 	vpc,
 	link: [database, bucket, ...allSecrets],
 	environment: {

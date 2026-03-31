@@ -3,8 +3,8 @@
 // Served from the same CloudFront distribution as the static site (app. domain)
 // via ordered cache behaviors in infra/site.ts. Streaming enabled for SSE.
 
+const isProd = $app.stage === "production";
 const stage = $app.stage;
-
 import { database, databaseUrl, vpc } from "./database";
 import {
 	allSecrets,
@@ -18,7 +18,6 @@ import { bucket } from "./storage";
 
 const descopeProjectId = !$dev ? (await import("./descope")).projectId : undefined;
 
-
 export const webApi = new sst.aws.Function("ProcellaWebApi", {
 	runtime: "provided.al2023",
 	architecture: "x86_64",
@@ -31,7 +30,7 @@ export const webApi = new sst.aws.Function("ProcellaWebApi", {
 	timeout: "60 seconds",
 	memory: "512 MB",
 	// Provisioned concurrency eliminates cold starts for the dashboard API.
-	...(!$dev ? { concurrency: { provisioned: 1 } } : {}),
+	...(isProd ? { concurrency: { provisioned: 1 } } : {}),
 	vpc,
 	link: [database, bucket, ...allSecrets],
 	environment: {
