@@ -3,6 +3,8 @@
 // Served from the same CloudFront distribution as the static site (app. domain)
 // via ordered cache behaviors in infra/site.ts. Streaming enabled for SSE.
 
+const stage = $app.stage;
+
 import { database, databaseUrl, vpc } from "./database";
 import {
 	allSecrets,
@@ -39,6 +41,7 @@ export const webApi = new sst.aws.Function("ProcellaWebApi", {
 		PROCELLA_AUTH_MODE: $dev ? "dev" : "descope",
 		PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
 		PROCELLA_OTEL_ENABLED: "true",
+		OTEL_SERVICE_NAME: `procella-web-${stage}`,
 		OTEL_EXPORTER_OTLP_ENDPOINT: otelEndpoint.value,
 		OTEL_EXPORTER_OTLP_HEADERS: otelHeaders.value,
 		...($dev ? { PROCELLA_DEV_AUTH_TOKEN: devAuthToken.value } : {}),

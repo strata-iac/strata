@@ -52,6 +52,7 @@ api.route("$default", {
 		PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
 		PROCELLA_CORS_ORIGINS: `${appOrigin},${rootOrigin}`,
 		PROCELLA_OTEL_ENABLED: "true",
+		OTEL_SERVICE_NAME: `procella-cli-${stage}`,
 		OTEL_EXPORTER_OTLP_ENDPOINT: otelEndpoint.value,
 		OTEL_EXPORTER_OTLP_HEADERS: otelHeaders.value,
 		...($dev ? { PROCELLA_DEV_AUTH_TOKEN: devAuthToken.value } : {}),
