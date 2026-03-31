@@ -144,6 +144,11 @@ function envToConfig(): Record<string, unknown> {
 	for (const [key, envVar] of Object.entries(envMapping)) {
 		result[key] = process.env[envVar];
 	}
+	// PaaS platforms (Railway, Render, Heroku) inject PORT.
+	// Fall back to PORT when PROCELLA_LISTEN_ADDR is not set.
+	if (!result.listenAddr && process.env.PORT) {
+		result.listenAddr = `:${process.env.PORT}`;
+	}
 	return result;
 }
 

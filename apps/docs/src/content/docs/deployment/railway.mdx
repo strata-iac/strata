@@ -122,5 +122,5 @@ Or set it in the dashboard under **Settings → Deploy → Replicas**.
 ## Bun / Docker Notes
 
 - Railway builds using your `Dockerfile` as-is. The `bun build --compile` binary runs inside a [distroless](https://github.com/GoogleContainerTools/distroless) final stage — no shell, no package manager, no Node.js runtime.
-- The compiled binary listens on `PROCELLA_LISTEN_ADDR` (default `:9090`). Set this explicitly in your Railway variables. Railway's proxy routes public HTTPS traffic to it automatically.
-- Railway injects a `PORT` variable, but Procella does **not** read `PORT`. Always set `PROCELLA_LISTEN_ADDR` explicitly (e.g., `:9090`). Do not attempt `PROCELLA_LISTEN_ADDR=:$PORT` — env vars are not interpolated inside other values.
+- The compiled binary listens on `PROCELLA_LISTEN_ADDR` (default `:9090`). If `PROCELLA_LISTEN_ADDR` is not set, Procella automatically reads Railway's `PORT` variable — no extra configuration needed.
+- To override the port explicitly, set `PROCELLA_LISTEN_ADDR` (e.g., `:8080`) in your Railway variables. This takes precedence over `PORT`.
