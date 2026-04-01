@@ -67,14 +67,17 @@ jobs:
           SST_SECRET_ProcellaOtelEndpoint: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
           SST_SECRET_ProcellaOtelHeaders: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
 
-      - name: Get stack outputs
-        id: outputs
-        shell: bash {0}
-        run: |
-          STAGE="pr-${{ github.event.number }}"
-          echo "api=https://api.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
-          echo "app=https://app.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
-          echo "docs=https://docs.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
+		- name: Get stack outputs
+			id: outputs
+			env:
+				AWS_REGION: us-east-1
+			run: |
+				STAGE="pr-${{ github.event.number }}"
+				SST_OUT=$(npx sst output --stage "$STAGE" --json 2>/dev/null || echo '{}')
+				echo "api=https://api.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
+				echo "app=https://app.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
+				echo "docs=https://docs.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
+				echo "descope_project_id=$(echo "$SST_OUT" | jq -r '.descopeProjectId // empty')" >> $GITHUB_OUTPUT
 
   comment:
     name: PR Comment
@@ -130,3 +133,42 @@ jobs:
                 body,
               });
             }
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: needs.deploy.result == 'success' && needs.deploy.outputs.descope_project_id != ''
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: procella
+          POSTGRES_PASSWORD: procella
+          POSTGRES_DB: procella
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U procella"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
+      - uses: actions/cache@v5
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - uses: pulumi/setup-pulumi@v2
+      - run: bun install --frozen-lockfile
+      - name: Run Descope + OIDC integration tests
+        env:
+          PROCELLA_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
+          PROCELLA_DESCOPE_PROJECT_ID: ${{ needs.deploy.outputs.descope_project_id }}
+          PROCELLA_DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
+          PROCELLA_ENCRYPTION_KEY: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
+        run: bun run e2e:descope
