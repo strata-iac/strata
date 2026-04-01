@@ -31,6 +31,9 @@
         "sharp": "^0.34.0",
         "zod": "catalog:",
       },
+      "devDependencies": {
+        "@codecov/astro-plugin": "^1.9.1",
+      },
     },
     "apps/server": {
       "name": "@procella/server",
@@ -361,6 +364,8 @@
     "@clack/core": ["@clack/core@1.1.0", "", { "dependencies": { "sisteransi": "^1.0.5" } }, "sha512-SVcm4Dqm2ukn64/8Gub2wnlA5nS2iWJyCkdNHcvNHPIeBTGojpdJ+9cZKwLfmqy7irD4N5qLteSilJlE0WLAtA=="],
 
     "@clack/prompts": ["@clack/prompts@1.1.0", "", { "dependencies": { "@clack/core": "1.1.0", "sisteransi": "^1.0.5" } }, "sha512-pkqbPGtohJAvm4Dphs2M8xE29ggupihHdy1x84HNojZuMtFsHiUlRvqD24tM2+XmI+61LlfNceM3Wr7U5QES5g=="],
+
+    "@codecov/astro-plugin": ["@codecov/astro-plugin@1.9.1", "", { "dependencies": { "@codecov/bundler-plugin-core": "^1.9.1", "@codecov/vite-plugin": "^1.9.1", "unplugin": "^1.10.1" }, "peerDependencies": { "astro": "4.x || 5.x" } }, "sha512-Ajw1a4hqTt4PPeHGcGN0WoomxVuPTwrvtEZbhCXGjLWzuQaBnQnLz5SOMxV+B6FHbgZy1Cn55J36MtO6xpzI7g=="],
 
     "@codecov/bundler-plugin-core": ["@codecov/bundler-plugin-core@1.9.1", "", { "dependencies": { "@actions/core": "^1.10.1", "@actions/github": "^6.0.0", "chalk": "4.1.2", "semver": "^7.5.4", "unplugin": "^1.10.1", "zod": "^3.22.4" } }, "sha512-dt3ic7gMswz4p/qdkYPVJwXlLiLsz55rBBn2I7mr0HTG8pCoLRqnANJIwo5WrqGBZgPyVSMPBqBra6VxLWfDyA=="],
 
