@@ -6,19 +6,29 @@ import type { OidcTrustPolicy, TrustPolicyRepository } from "./types.js";
 export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
 	constructor(private readonly db: Database) {}
 
-	async findByOrgSlug(orgSlug: string): Promise<OidcTrustPolicy[]> {
+	async findByOrgSlug(orgSlug: string, tenantId?: string): Promise<OidcTrustPolicy[]> {
 		const rows = await this.db
 			.select()
 			.from(oidcTrustPolicies)
-			.where(and(eq(oidcTrustPolicies.orgSlug, orgSlug), eq(oidcTrustPolicies.active, true)));
+			.where(
+				and(
+					eq(oidcTrustPolicies.orgSlug, orgSlug),
+					eq(oidcTrustPolicies.active, true),
+					...(tenantId ? [eq(oidcTrustPolicies.tenantId, tenantId)] : []),
+				),
+			);
 		return rows.map(mapRow);
 	}
 
-	async listByOrgSlug(orgSlug: string): Promise<OidcTrustPolicy[]> {
+	async listByOrgSlug(orgSlug: string, tenantId?: string): Promise<OidcTrustPolicy[]> {
 		const rows = await this.db
 			.select()
 			.from(oidcTrustPolicies)
-			.where(eq(oidcTrustPolicies.orgSlug, orgSlug));
+			.where(
+				tenantId
+					? and(eq(oidcTrustPolicies.orgSlug, orgSlug), eq(oidcTrustPolicies.tenantId, tenantId))
+					: eq(oidcTrustPolicies.orgSlug, orgSlug),
+			);
 		return rows.map(mapRow);
 	}
 

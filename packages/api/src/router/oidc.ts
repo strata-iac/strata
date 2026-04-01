@@ -57,7 +57,7 @@ export const oidcRouter = router({
 		assertOidc(ctx);
 		// biome-ignore lint/style/noNonNullAssertion: assertOidc guards above
 		// biome-ignore lint/style/noNonNullAssertion: assertOidc guards above
-		return ctx.oidcPolicies!.listByOrgSlug(ctx.caller.orgSlug);
+		return ctx.oidcPolicies!.listByOrgSlug(ctx.caller.orgSlug, ctx.caller.tenantId);
 	}),
 
 	createPolicy: publicProcedure.input(createPolicyInput).mutation(async ({ ctx, input }) => {

@@ -166,6 +166,6 @@ This means you can trace any stack update back to the exact workflow run and the
 | `access_denied` (403) | No trust policy matches the JWT claims | Check claim conditions in Settings → OIDC. Verify the org slug in the audience matches your Procella org exactly. |
 | `invalid_target` | Audience format wrong | Use `urn:pulumi:org:YOUR_ORG_SLUG` exactly — the `urn:pulumi:org:` prefix is required. |
 | `token_expired` | The GitHub Actions OIDC token expired before exchange | Request the token and run `pulumi login` in the same shell step with no blocking commands between them. |
-| OIDC endpoint not found (404) | `PROCELLA_OIDC_ENABLED` not set | Set `PROCELLA_OIDC_ENABLED=true` and restart the server. |
+| OIDC exchange returns 501 | `PROCELLA_OIDC_ENABLED` is `false` (or `dev` auth mode) | Set `PROCELLA_OIDC_ENABLED=true` and `PROCELLA_AUTH_MODE=descope`, then restart the server. The endpoint is always registered but returns 501 when OIDC is disabled. |
 | `id_token` permission missing | Job lacks `id-token: write` | Add `permissions: id-token: write` to the job in your workflow YAML. |
 | `ACTIONS_ID_TOKEN_REQUEST_URL` empty | Workflow triggered without OIDC (e.g. pull_request from a fork) | OIDC is unavailable for fork PRs. Use `environment` protection rules to restrict which contexts can request tokens. |
