@@ -88,7 +88,11 @@ export class OidcExchangeService implements OidcService {
 		}
 
 		const requestedExpiration = req.expiration ?? DEFAULT_EXCHANGE_EXPIRATION;
-		const expiration = Math.min(requestedExpiration, matchedPolicy.maxExpiration);
+		const clampedExpiration =
+			Number.isFinite(requestedExpiration) && requestedExpiration > 0
+				? Math.floor(requestedExpiration)
+				: DEFAULT_EXCHANGE_EXPIRATION;
+		const expiration = Math.min(clampedExpiration, matchedPolicy.maxExpiration);
 		const workloadClaims = buildWorkloadClaims(claims, matchedPolicy);
 		const expireTime = Math.floor(Date.now() / 1000) + expiration;
 
@@ -150,7 +154,9 @@ function buildWorkloadLogin(jwtClaims: Record<string, unknown>, policy: OidcTrus
 }
 
 function optStr(v: unknown): string | undefined {
-	return typeof v === "string" && v ? v : undefined;
+	if (typeof v === "string" && v) return v;
+	if (typeof v === "number" || typeof v === "boolean") return String(v);
+	return undefined;
 }
 
 export class OidcExchangeError extends Error {
