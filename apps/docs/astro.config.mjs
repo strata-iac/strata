@@ -1,6 +1,6 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
-import { codecovAstroPlugin } from '@codecov/astro-plugin';
+import codecovAstroPlugin from '@codecov/astro-plugin';
 
 export default defineConfig({
   site: process.env.SITE_URL || 'https://docs.procella.dev',
