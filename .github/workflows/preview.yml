@@ -59,7 +59,8 @@ jobs:
         continue-on-error: true
 
       - name: Deploy
-        run: npx sst deploy --stage pr-${{ github.event.number }}
+        id: deploy
+        run: npx sst deploy --stage pr-${{ github.event.number }} | tee /tmp/sst-deploy.log
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SST_SECRET_ProcellaEncryptionKey: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
@@ -72,9 +73,7 @@ jobs:
         id: outputs
         run: |
           STAGE="pr-${{ github.event.number }}"
-          # sst state export prints Pulumi state JSON; outputs are under the Stack resource
-          SST_STATE=$(npx sst state export --stage "$STAGE" 2>/dev/null || echo '{}')
-          DESCOPE_ID=$(echo "$SST_STATE" | jq -r '(.resources // []) | map(select(.type == "pulumi:pulumi:Stack")) | first | .outputs.descopeProjectId // empty' 2>/dev/null || true)
+          DESCOPE_ID=$(grep -oP 'descopeProjectId:\s*\K\S+' /tmp/sst-deploy.log | tail -1)
           echo "api=https://api.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
           echo "app=https://app.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
           echo "docs=https://docs.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
