@@ -32,10 +32,12 @@ const mockWebhookInfo = {
 const mockDelivery = {
 	id: "delivery-1",
 	webhookId: "hook-1",
-	event: "stack.update.succeeded",
+	event: "update.succeeded",
 	url: "https://example.com/hook",
-	statusCode: 200,
+	responseStatus: 200,
 	success: true,
+	attempt: 1,
+	error: null,
 	duration: 123,
 	createdAt: new Date("2025-06-01"),
 };
@@ -213,7 +215,7 @@ describe("webhookHandlers", () => {
 			app.get("/orgs/:org/hooks/:hookId/deliveries", h.listDeliveries);
 
 			await app.request("/orgs/my-org/hooks/hook-1/deliveries?limit=999");
-			expect(listFn.mock.calls[0][2]).toBe(200);
+			expect((listFn as ReturnType<typeof mock>).mock.calls[0]?.[2]).toBe(200);
 		});
 	});
 

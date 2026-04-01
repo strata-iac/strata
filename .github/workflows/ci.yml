@@ -28,7 +28,7 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
-      - run: biome check .
+      - run: bunx biome check .
       - run: bun run typecheck
       - name: Run unit tests with coverage
         run: bun test --coverage --coverage-reporter=lcov --reporter=github packages/ apps/ scripts/

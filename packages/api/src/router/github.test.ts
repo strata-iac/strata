@@ -7,12 +7,14 @@ import { githubRouter } from "./github.js";
 // ============================================================================
 
 const mockInstallation = {
+	id: "inst-uuid-1",
 	installationId: 12345,
 	tenantId: "t-1",
 	accountLogin: "my-org",
 	accountType: "Organization" as const,
 	repositorySelection: "all" as const,
 	createdAt: new Date("2025-01-01"),
+	updatedAt: new Date("2025-01-01"),
 };
 
 function mockContext(overrides?: Partial<TRPCContext>): TRPCContext {

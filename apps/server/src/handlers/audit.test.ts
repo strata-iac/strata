@@ -21,7 +21,7 @@ const mockAuditEntry = {
 	id: "entry-1",
 	actorId: "u-1",
 	actorType: "user" as const,
-	action: "stack.create",
+	action: "stack.create" as const,
 	resourceType: "stack",
 	resourceId: "stack-1",
 	createdAt: new Date("2025-06-01"),
@@ -34,8 +34,8 @@ const mockAuditEntry = {
 function mockAuditService(overrides?: Partial<AuditService>): AuditService {
 	return {
 		log: mock(() => {}),
-		query: mock(async () => ({ entries: [mockAuditEntry], total: 1 })),
-		export: mock(async () => [mockAuditEntry]),
+		query: mock(async () => ({ entries: [mockAuditEntry], total: 1 })) as AuditService["query"],
+		export: mock(async () => [mockAuditEntry]) as AuditService["export"],
 		...overrides,
 	};
 }
@@ -77,7 +77,7 @@ describe("auditHandlers", () => {
 
 			await app.request("/orgs/my-org/auditlogs?page=2&pageSize=10&action=stack.create");
 			expect(queryFn).toHaveBeenCalledTimes(1);
-			const callArgs = queryFn.mock.calls[0];
+			const callArgs = (queryFn as ReturnType<typeof mock>).mock.calls[0] as unknown[];
 			expect(callArgs[0]).toBe("t-1");
 			expect(callArgs[1]).toMatchObject({ page: 2, pageSize: 10, action: "stack.create" });
 		});

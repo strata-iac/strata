@@ -24,9 +24,10 @@ const mockDelivery = {
 	id: "delivery-1",
 	webhookId: VALID_UUID,
 	event: "update.succeeded",
-	url: "https://example.com/hook",
-	statusCode: 200,
+	responseStatus: 200,
 	success: true,
+	attempt: 1,
+	error: null,
 	duration: 100,
 	createdAt: new Date("2025-06-01"),
 };

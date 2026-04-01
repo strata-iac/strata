@@ -252,7 +252,10 @@ describe("updateHandlers", () => {
 		// Give async webhook emit time to complete
 		await new Promise((r) => setTimeout(r, 50));
 		expect(webhookEmitAndWait).toHaveBeenCalledTimes(1);
-		const call = webhookEmitAndWait.mock.calls[0][0];
+		const call = (webhookEmitAndWait as ReturnType<typeof mock>).mock.calls[0]?.[0] as Record<
+			string,
+			unknown
+		>;
 		expect(call.event).toBe("update.succeeded");
 	});
 
@@ -278,7 +281,10 @@ describe("updateHandlers", () => {
 		expect(res.status).toBe(204);
 		await new Promise((r) => setTimeout(r, 50));
 		expect(webhookEmitAndWait).toHaveBeenCalledTimes(1);
-		const call = webhookEmitAndWait.mock.calls[0][0];
+		const call = (webhookEmitAndWait as ReturnType<typeof mock>).mock.calls[0]?.[0] as Record<
+			string,
+			unknown
+		>;
 		expect(call.event).toBe("update.failed");
 	});
 
@@ -299,7 +305,10 @@ describe("updateHandlers", () => {
 		});
 		expect(res.status).toBe(200);
 		expect(webhookEmit).toHaveBeenCalledTimes(1);
-		const call = webhookEmit.mock.calls[0][0];
+		const call = (webhookEmit as ReturnType<typeof mock>).mock.calls[0]?.[0] as Record<
+			string,
+			unknown
+		>;
 		expect(call.event).toBe("update.started");
 	});
 
@@ -320,8 +329,14 @@ describe("updateHandlers", () => {
 		});
 		const github = {
 			getInstallation: mock(async () => ({
+				id: "inst-1",
 				installationId: 999,
 				tenantId: "t-1",
+				accountLogin: "octocat",
+				accountType: "Organization" as const,
+				repositorySelection: "all" as const,
+				createdAt: new Date(),
+				updatedAt: new Date(),
 			})),
 			setCommitStatus: mock(async () => {}),
 			postPRComment: mock(async () => {}),
@@ -336,7 +351,7 @@ describe("updateHandlers", () => {
 			c.set("updateContext", { updateId: "upd-gh", stackId: "s-1" });
 			await next();
 		});
-		const h = updateHandlers(updates, stacks, webhooks, github);
+		const h = updateHandlers(updates, stacks, webhooks, github as never);
 		app.post("/stacks/:org/:project/:stack/update/:updateId/complete", h.completeUpdate);
 
 		const res = await app.request("/stacks/myorg/myproj/dev/update/upd-gh/complete", {
@@ -355,7 +370,16 @@ describe("updateHandlers", () => {
 		const updates = mockUpdatesService();
 		const stacks = mockStacksService();
 		const github = {
-			getInstallation: mock(async () => ({ installationId: 999, tenantId: "t-1" })),
+			getInstallation: mock(async () => ({
+				id: "inst-2",
+				installationId: 999,
+				tenantId: "t-1",
+				accountLogin: "octocat",
+				accountType: "Organization" as const,
+				repositorySelection: "all" as const,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			})),
 			setCommitStatus: mock(async () => {}),
 			postPRComment: mock(async () => {}),
 			handleWebhookEvent: mock(async () => {}),
@@ -368,7 +392,7 @@ describe("updateHandlers", () => {
 			c.set("updateContext", { updateId: "upd-no-gh", stackId: "s-1" });
 			await next();
 		});
-		const h = updateHandlers(updates, stacks, undefined, github);
+		const h = updateHandlers(updates, stacks, undefined, github as never);
 		app.post("/stacks/:org/:project/:stack/update/:updateId/complete", h.completeUpdate);
 
 		const res = await app.request("/stacks/myorg/myproj/dev/update/upd-no-gh/complete", {
