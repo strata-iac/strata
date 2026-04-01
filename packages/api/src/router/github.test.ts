@@ -56,7 +56,7 @@ describe("githubRouter", () => {
 
 			const result = await caller.installation();
 			expect(result).toBeDefined();
-			expect(result!.installationId).toBe(12345);
+			expect(result?.installationId).toBe(12345);
 		});
 
 		test("returns null when github not configured", async () => {
