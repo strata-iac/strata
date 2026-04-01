@@ -29,28 +29,25 @@ const SKIP_INTEGRATION =
 
 const describe_db = SKIP_INTEGRATION ? describe.skip : describe;
 
-beforeAll(async () => {
-	if (SKIP_INTEGRATION) return;
-	const result = await createDb({ url: TEST_DB_URL, max: 2 });
-	db = result.db;
-	closeDb = async () => result.client.close();
-	repo = new PostgresTrustPolicyRepository(db);
-	// Clean up any leftover test data
-	await db.delete(oidcTrustPolicies).where(eq(oidcTrustPolicies.tenantId, TENANT_ID));
-});
-
-afterAll(async () => {
-	// Clean up test data
-	await db
-		.delete(oidcTrustPolicies)
-		.where(eq(oidcTrustPolicies.tenantId, TENANT_ID))
-		.catch(() => {});
-	await closeDb();
-});
-
 describe_db("PostgresTrustPolicyRepository", () => {
 	let createdId: string;
 
+	beforeAll(async () => {
+		const result = await createDb({ url: TEST_DB_URL, max: 2 });
+		db = result.db;
+		closeDb = async () => result.client.close();
+		repo = new PostgresTrustPolicyRepository(db);
+		// Clean up any leftover test data
+		await db.delete(oidcTrustPolicies).where(eq(oidcTrustPolicies.tenantId, TENANT_ID));
+	});
+
+	afterAll(async () => {
+		await db
+			.delete(oidcTrustPolicies)
+			.where(eq(oidcTrustPolicies.tenantId, TENANT_ID))
+			.catch(() => {});
+		await closeDb();
+	});
 	test("create inserts a policy and returns it with generated id", async () => {
 		const policy = await repo.create({
 			tenantId: TENANT_ID,
