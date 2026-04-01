@@ -10,7 +10,7 @@ import type { AuditService } from "@procella/audit";
 import type { AuthConfig, AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
 import type { GitHubService } from "@procella/github";
-import type { OidcService } from "@procella/oidc";
+import type { OidcService, TrustPolicyRepository } from "@procella/oidc";
 import type { StacksService } from "@procella/stacks";
 import { tracingMiddleware } from "@procella/telemetry";
 import type { UpdatesService } from "@procella/updates";
@@ -32,6 +32,7 @@ export interface WebAppDeps {
 	webhooks: WebhooksService;
 	github: GitHubService | null;
 	oidc?: OidcService | null;
+	oidcPolicies?: TrustPolicyRepository | null;
 }
 
 export function createWebApp(deps: WebAppDeps): Hono<Env> {
@@ -107,6 +108,7 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 			updates: deps.updates,
 			webhooks: deps.webhooks,
 			github: deps.github,
+			oidcPolicies: deps.oidcPolicies ?? null,
 		};
 
 		return fetchRequestHandler({
