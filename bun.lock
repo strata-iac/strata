@@ -98,6 +98,7 @@
         "@procella/audit": "workspace:*",
         "@procella/db": "workspace:*",
         "@procella/github": "workspace:*",
+        "@procella/oidc": "workspace:*",
         "@procella/stacks": "workspace:*",
         "@procella/telemetry": "workspace:*",
         "@procella/types": "workspace:*",

@@ -78,6 +78,10 @@ export const updates = pgTable(
 		updatedAt: timestamp("updated_at").notNull().defaultNow(),
 		config: jsonb(),
 		program: jsonb(),
+		initiatedBy: text("initiated_by"),
+		initiatedByType: text("initiated_by_type"),
+		initiatedByDisplay: text("initiated_by_display"),
+		initiatedByMeta: jsonb("initiated_by_meta").$type<Record<string, unknown>>(),
 	},
 	(table) => [
 		uniqueIndex("idx_updates_active")

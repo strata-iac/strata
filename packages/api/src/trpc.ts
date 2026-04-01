@@ -3,6 +3,7 @@
 import type { AuditService } from "@procella/audit";
 import type { Database } from "@procella/db";
 import type { GitHubService } from "@procella/github";
+import type { TrustPolicyRepository } from "@procella/oidc";
 import type { StacksService } from "@procella/stacks";
 import { trpcProcedureDuration, withSpan } from "@procella/telemetry";
 import type { Caller } from "@procella/types";
@@ -24,6 +25,7 @@ export interface TRPCContext {
 	updates: UpdatesService;
 	webhooks: WebhooksService;
 	github: GitHubService | null;
+	oidcPolicies?: TrustPolicyRepository | null;
 }
 
 // ============================================================================
