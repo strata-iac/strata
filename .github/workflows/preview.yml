@@ -157,8 +157,11 @@ jobs:
       - name: Run integration tests against deployed preview
         env:
           PROCELLA_API_URL: ${{ needs.deploy.outputs.api_url }}
+          PROCELLA_APP_URL: ${{ needs.deploy.outputs.app_url }}
           PROCELLA_DESCOPE_PROJECT_ID: ${{ needs.deploy.outputs.descope_project_id }}
           PROCELLA_DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
+          # Tenant name is procella-<stage> per infra/descope.ts
+          PROCELLA_E2E_ORG_SLUG: procella-pr-${{ github.event.number }}
         run: bun run e2e:descope
 
   oidc-pulumi-deploy:
@@ -171,7 +174,7 @@ jobs:
       contents: read
     env:
       PROCELLA_API_URL: ${{ needs.deploy.outputs.api_url }}
-      ORG_SLUG: ${{ needs.deploy.outputs.descope_project_id }}
+      ORG_SLUG: procella-pr-${{ github.event.number }}
       STACK_NAME: oidc-e2e-${{ github.run_id }}
     steps:
       - uses: actions/checkout@v6

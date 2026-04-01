@@ -28,6 +28,9 @@ import { cleanupDir, createPulumiHome, pulumi } from "./helpers.js";
 // ============================================================================
 
 const API_URL = process.env.PROCELLA_API_URL ?? "";
+// tRPC routes (/trpc/*) are on the app subdomain in deployed preview,
+// falling back to API_URL for local dev where both are on the same port.
+const APP_URL = process.env.PROCELLA_APP_URL ?? API_URL;
 const DESCOPE_PROJECT_ID = process.env.PROCELLA_DESCOPE_PROJECT_ID ?? "";
 const DESCOPE_MANAGEMENT_KEY = process.env.PROCELLA_DESCOPE_MANAGEMENT_KEY ?? "";
 
@@ -88,7 +91,7 @@ async function getGitHubOidcToken(audience: string): Promise<string> {
 /** Call a tRPC mutation on the deployed API. */
 async function trpcMutation(procedure: string, input: unknown, token: string): Promise<unknown> {
 	const body = JSON.stringify({ "0": { json: input } });
-	const res = await fetch(`${API_URL}/trpc/${procedure}`, {
+	const res = await fetch(`${APP_URL}/trpc/${procedure}`, {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",
@@ -125,7 +128,15 @@ describe_descope("Descope auth (deployed preview)", () => {
 		await sdk.management.user.deleteAllTestUsers().catch(() => {});
 		accessKey = await setupTestUser(sdk, tenantId);
 		pulumiHome = await createPulumiHome();
-		orgSlug = process.env.PROCELLA_E2E_ORG_SLUG ?? tenantId;
+
+		// Resolve org slug from Descope tenant name — Procella uses the tenant
+		// name as orgSlug in JWT claims, not the tenant ID.
+		if (process.env.PROCELLA_E2E_ORG_SLUG) {
+			orgSlug = process.env.PROCELLA_E2E_ORG_SLUG;
+		} else {
+			const tenant = await sdk.management.tenant.load(tenantId);
+			orgSlug = tenant.data?.name ?? tenantId;
+		}
 	});
 
 	afterAll(async () => {
