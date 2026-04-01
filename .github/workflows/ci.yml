@@ -42,6 +42,26 @@ jobs:
           use_oidc: true
           fail_ci_if_error: true
 
+  bundle-analysis:
+    name: Bundle Analysis
+    runs-on: ubuntu-latest
+    needs: [check]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
+      - uses: actions/cache@v5
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - name: Build UI
+        run: bun run --cwd apps/ui build
+      - name: Build Docs
+        run: bun run --cwd apps/docs build
+
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest
