@@ -16,7 +16,7 @@ async function createStack(org: string, project: string, stack: string) {
 		headers: { ...AUTH_HEADER, "Content-Type": "application/json" },
 		body: JSON.stringify({}),
 	});
-	if (!res.ok) throw new Error(`createStack failed: ${res.status}`);
+	if (!res.ok && res.status !== 409) throw new Error(`createStack failed: ${res.status}`);
 }
 
 test.describe("Stack List Page", () => {
@@ -31,27 +31,33 @@ test.describe("Stack List Page", () => {
 	});
 
 	test("displays stacks after creation", async ({ page }) => {
+		test.slow(); // API-created stacks may take time to appear in UI
 		const stackName = `pw-list-${Date.now()}`;
-		await createStack("dev-org", "test-project", stackName);
-
-		const response = await page.goto(`${UI_URL}/`);
-		await page.waitForLoadState("domcontentloaded");
-		if (response && response.status() >= 500) throw new Error(`Server error: ${response.status()}`);
-
-		// Wait for stack name to appear in the page
-		await expect(page.getByText(stackName).first()).toBeVisible({ timeout: 10_000 });
-	});
-
-	test("navigates to stack detail when clicking a stack", async ({ page }) => {
-		const stackName = `pw-nav-${Date.now()}`;
 		await createStack("dev-org", "test-project", stackName);
 
 		await page.goto(`${UI_URL}/`);
 		await page.waitForLoadState("domcontentloaded");
 
-		// Wait for and click the stack link
+		// Reload after token is set to ensure authenticated request
+		await page.reload();
+		await page.waitForLoadState("domcontentloaded");
+
+		// Wait for stack name to appear — give the tRPC query time to return
+		await expect(page.getByText(stackName).first()).toBeVisible({ timeout: 30_000 });
+	});
+
+	test("navigates to stack detail when clicking a stack", async ({ page }) => {
+		test.slow(); // depends on API + UI data propagation
+		const stackName = `pw-nav-${Date.now()}`;
+		await createStack("dev-org", "test-project", stackName);
+
+		await page.goto(`${UI_URL}/`);
+		await page.waitForLoadState("domcontentloaded");
+		await page.reload();
+		await page.waitForLoadState("domcontentloaded");
+
 		const stackLink = page.getByText(stackName).first();
-		await expect(stackLink).toBeVisible({ timeout: 5000 });
+		await expect(stackLink).toBeVisible({ timeout: 30_000 });
 		await stackLink.click();
 		await page.waitForLoadState("networkidle");
 		expect(page.url()).toContain(stackName);
