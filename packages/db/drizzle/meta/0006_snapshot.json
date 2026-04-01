@@ -1,6 +1,6 @@
 {
-  "id": "499b66cf-95f1-4375-9f74-be19505c89db",
-  "prevId": "062872d3-dd15-44fa-8c0f-00329e23a292",
+  "id": "062872d3-dd15-44fa-8c0f-00329e23a292",
+  "prevId": "a7813c40-7908-48ac-9e80-7599116a523d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -847,30 +847,6 @@
         },
         "program": {
           "name": "program",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "initiated_by": {
-          "name": "initiated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "initiated_by_type": {
-          "name": "initiated_by_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "initiated_by_display": {
-          "name": "initiated_by_display",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "initiated_by_meta": {
-          "name": "initiated_by_meta",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
