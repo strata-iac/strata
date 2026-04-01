@@ -14,6 +14,14 @@ export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
 		return rows.map(mapRow);
 	}
 
+	async listByOrgSlug(orgSlug: string): Promise<OidcTrustPolicy[]> {
+		const rows = await this.db
+			.select()
+			.from(oidcTrustPolicies)
+			.where(eq(oidcTrustPolicies.orgSlug, orgSlug));
+		return rows.map(mapRow);
+	}
+
 	async create(
 		policy: Omit<OidcTrustPolicy, "id" | "createdAt" | "updatedAt">,
 	): Promise<OidcTrustPolicy> {

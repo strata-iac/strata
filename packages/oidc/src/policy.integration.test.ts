@@ -2,6 +2,9 @@
 // Requires a running PostgreSQL instance (uses TEST_DB_URL or default).
 // Run with: bun test packages/oidc/src/policy.integration.test.ts
 
+// Skip in unit test runs — this test requires a real PostgreSQL instance.
+// Run explicitly: bun test packages/oidc/src/policy.integration.test.ts
+// Or via: bun run test:integration
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { Database } from "@procella/db";
 import { createDb } from "@procella/db";
@@ -20,7 +23,14 @@ let repo: PostgresTrustPolicyRepository;
 const TENANT_ID = "integration-test-tenant";
 const ORG_SLUG = "integration-test-org";
 
+const SKIP_INTEGRATION =
+	process.env.SKIP_INTEGRATION_TESTS === "true" ||
+	(process.env.CI === "true" && !process.env.PROCELLA_DATABASE_URL);
+
+const describe_db = SKIP_INTEGRATION ? describe.skip : describe;
+
 beforeAll(async () => {
+	if (SKIP_INTEGRATION) return;
 	const result = await createDb({ url: TEST_DB_URL, max: 2 });
 	db = result.db;
 	closeDb = async () => result.client.close();
@@ -38,7 +48,7 @@ afterAll(async () => {
 	await closeDb();
 });
 
-describe("PostgresTrustPolicyRepository", () => {
+describe_db("PostgresTrustPolicyRepository", () => {
 	let createdId: string;
 
 	test("create inserts a policy and returns it with generated id", async () => {
@@ -105,6 +115,14 @@ describe("PostgresTrustPolicyRepository", () => {
 		const policies = await repo.findByOrgSlug(ORG_SLUG);
 		const found = policies.find((p) => p.id === createdId);
 		expect(found).toBeUndefined(); // inactive — should not appear
+	});
+
+	test("listByOrgSlug returns inactive policies too", async () => {
+		// Policy is still inactive from previous test
+		const all = await repo.listByOrgSlug(ORG_SLUG);
+		const found = all.find((p) => p.id === createdId);
+		expect(found).toBeDefined();
+		expect(found?.active).toBe(false);
 	});
 
 	test("update returns error when policy not found for tenant", async () => {

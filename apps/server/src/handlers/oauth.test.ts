@@ -13,11 +13,11 @@ function buildApp(oidc: OidcService | null) {
 
 function formBody(overrides?: Record<string, string>) {
 	return new URLSearchParams({
-		audience: "urn:procella:org:acme",
+		audience: "urn:pulumi:org:acme",
 		grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
 		subject_token: "jwt-token",
 		subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
-		requested_token_type: "urn:procella:oauth:token-type:access_token:org",
+		requested_token_type: "urn:pulumi:token-type:access_token:organization",
 		scope: "",
 		expiration: "600",
 		...overrides,
@@ -29,7 +29,7 @@ describe("oauthHandlers", () => {
 		const oidc: OidcService = {
 			exchange: mock(async () => ({
 				access_token: "procella-access-token",
-				issued_token_type: "urn:procella:oauth:token-type:access_token:org",
+				issued_token_type: "urn:pulumi:token-type:access_token:organization",
 				token_type: "Bearer",
 				expires_in: 600,
 				scope: "",

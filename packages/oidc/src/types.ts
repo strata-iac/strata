@@ -49,7 +49,10 @@ export interface JwksValidator {
 }
 
 export interface TrustPolicyRepository {
+	/** Active policies only — used by the exchange service to validate tokens. */
 	findByOrgSlug(orgSlug: string): Promise<OidcTrustPolicy[]>;
+	/** All policies including inactive — used by admin management UI. */
+	listByOrgSlug(orgSlug: string): Promise<OidcTrustPolicy[]>;
 	create(policy: Omit<OidcTrustPolicy, "id" | "createdAt" | "updatedAt">): Promise<OidcTrustPolicy>;
 	update(
 		id: string,

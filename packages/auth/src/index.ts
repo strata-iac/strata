@@ -358,7 +358,7 @@ export class DescopeAuthService implements AuthService {
 			userId,
 			login,
 			roles,
-			principalType: isWorkload ? "workload" : "user",
+			principalType: isWorkload ? "workload" : userId.startsWith("token:") ? "token" : "user",
 			workload,
 		};
 	}

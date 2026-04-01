@@ -92,6 +92,7 @@ describe("OidcExchangeService", () => {
 		]);
 		const policies: TrustPolicyRepository = {
 			findByOrgSlug,
+			listByOrgSlug: mock(async () => []),
 			create: mock(async () => mockPolicy()),
 			update: mock(async () => mockPolicy()),
 			delete: mock(async () => {}),
@@ -121,6 +122,7 @@ describe("OidcExchangeService", () => {
 			{ verify: mock(async () => ({})), dispose: mock(() => {}) },
 			{
 				findByOrgSlug: mock(async () => []),
+				listByOrgSlug: mock(async () => []),
 				create: mock(async () => mockPolicy()),
 				update: mock(async () => mockPolicy()),
 				delete: mock(async () => {}),
@@ -138,6 +140,7 @@ describe("OidcExchangeService", () => {
 			{ verify: mock(async () => ({})), dispose: mock(() => {}) },
 			{
 				findByOrgSlug: mock(async () => []),
+				listByOrgSlug: mock(async () => []),
 				create: mock(async () => mockPolicy()),
 				update: mock(async () => mockPolicy()),
 				delete: mock(async () => {}),
@@ -158,6 +161,7 @@ describe("OidcExchangeService", () => {
 			{ verify: mock(async () => ({})), dispose: mock(() => {}) },
 			{
 				findByOrgSlug: mock(async () => []),
+				listByOrgSlug: mock(async () => []),
 				create: mock(async () => mockPolicy()),
 				update: mock(async () => mockPolicy()),
 				delete: mock(async () => {}),
@@ -180,6 +184,7 @@ describe("OidcExchangeService", () => {
 			{ verify: mock(async () => ({})), dispose: mock(() => {}) },
 			{
 				findByOrgSlug: mock(async () => []),
+				listByOrgSlug: mock(async () => []),
 				create: mock(async () => mockPolicy()),
 				update: mock(async () => mockPolicy()),
 				delete: mock(async () => {}),
@@ -197,6 +202,7 @@ describe("OidcExchangeService", () => {
 			{ verify: mock(async () => ({})), dispose: mock(() => {}) },
 			{
 				findByOrgSlug: mock(async () => []),
+				listByOrgSlug: mock(async () => []),
 				create: mock(async () => mockPolicy()),
 				update: mock(async () => mockPolicy()),
 				delete: mock(async () => {}),
@@ -218,6 +224,7 @@ describe("OidcExchangeService", () => {
 			},
 			{
 				findByOrgSlug: mock(async () => [mockPolicy()]),
+				listByOrgSlug: mock(async () => []),
 				create: mock(async () => mockPolicy()),
 				update: mock(async () => mockPolicy()),
 				delete: mock(async () => {}),
@@ -241,6 +248,7 @@ describe("OidcExchangeService", () => {
 			},
 			{
 				findByOrgSlug: mock(async () => [mockPolicy({ id: "p1" }), mockPolicy({ id: "p2" })]),
+				listByOrgSlug: mock(async () => []),
 				create: mock(async () => mockPolicy()),
 				update: mock(async () => mockPolicy()),
 				delete: mock(async () => {}),
@@ -272,6 +280,7 @@ describe("OidcExchangeService", () => {
 			},
 			{
 				findByOrgSlug: mock(async () => [mockPolicy({ maxExpiration: 900 })]),
+				listByOrgSlug: mock(async () => []),
 				create: mock(async () => mockPolicy()),
 				update: mock(async () => mockPolicy()),
 				delete: mock(async () => {}),
@@ -298,6 +307,7 @@ describe("OidcExchangeService", () => {
 			},
 			{
 				findByOrgSlug: mock(async () => [mockPolicy({ maxExpiration: 99999 })]),
+				listByOrgSlug: mock(async () => []),
 				create: mock(async () => mockPolicy()),
 				update: mock(async () => mockPolicy()),
 				delete: mock(async () => {}),
@@ -319,6 +329,7 @@ describe("OidcExchangeService", () => {
 			},
 			{
 				findByOrgSlug: mock(async () => [mockPolicy()]),
+				listByOrgSlug: mock(async () => []),
 				create: mock(async () => mockPolicy()),
 				update: mock(async () => mockPolicy()),
 				delete: mock(async () => {}),
@@ -365,6 +376,7 @@ describe("OidcExchangeService", () => {
 			},
 			{
 				findByOrgSlug: mock(async () => [mockPolicy()]),
+				listByOrgSlug: mock(async () => []),
 				create: mock(async () => mockPolicy()),
 				update: mock(async () => mockPolicy()),
 				delete: mock(async () => {}),
@@ -415,6 +427,7 @@ describe("OidcExchangeService", () => {
 			},
 			{
 				findByOrgSlug: mock(async () => [mockPolicy()]),
+				listByOrgSlug: mock(async () => []),
 				create: mock(async () => mockPolicy()),
 				update: mock(async () => mockPolicy()),
 				delete: mock(async () => {}),
