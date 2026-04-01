@@ -1,11 +1,8 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import type { Database } from "@procella/db";
-import { NotFoundError } from "@procella/types";
 import { PostgresWebhooksService } from "@procella/webhooks";
 import { getTestDb, truncateTables } from "./setup.js";
 
-// Use google.com — universally resolvable, passes SSRF validation.
-const HOOK_URL = "https://www.google.com/webhook-test";
 
 let db: Database;
 let webhooks: PostgresWebhooksService;

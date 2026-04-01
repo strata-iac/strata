@@ -11,11 +11,12 @@ async function setDevToken(page: Page) {
 }
 
 async function createStack(org: string, project: string, stack: string) {
-	await fetch(`${API_URL}/api/stacks/${org}/${project}/${stack}`, {
+	const res = await fetch(`${API_URL}/api/stacks/${org}/${project}/${stack}`, {
 		method: "POST",
 		headers: { ...AUTH_HEADER, "Content-Type": "application/json" },
 		body: JSON.stringify({}),
 	});
+	if (!res.ok) throw new Error(`createStack failed: ${res.status}`);
 }
 
 test.describe("Stack List Page", () => {
@@ -51,13 +52,11 @@ test.describe("Stack List Page", () => {
 		await page.waitForLoadState("networkidle");
 		await page.waitForTimeout(1000);
 
-		// Click the stack name/link
+		// Wait for and click the stack link
 		const stackLink = page.getByText(stackName).first();
-		if (await stackLink.isVisible()) {
-			await stackLink.click();
-			await page.waitForLoadState("networkidle");
-			// Should navigate to stack detail
-			expect(page.url()).toContain(stackName);
-		}
+		await expect(stackLink).toBeVisible({ timeout: 5000 });
+		await stackLink.click();
+		await page.waitForLoadState("networkidle");
+		expect(page.url()).toContain(stackName);
 	});
 });

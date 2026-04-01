@@ -1,5 +1,5 @@
 // Integration test lifecycle — uses real PostgreSQL (docker-compose or CI service).
-// Pattern: resetDatabase in beforeAll, truncateTables in afterEach.
+// Pattern: runMigrations in beforeAll, truncateTables in afterEach.
 
 import { afterAll, beforeAll } from "bun:test";
 import { createDb, runMigrations, type Database, type DbClient } from "@procella/db";

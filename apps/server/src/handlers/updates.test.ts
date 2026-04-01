@@ -249,8 +249,7 @@ describe("updateHandlers", () => {
 			body: JSON.stringify({ status: "succeeded" }),
 		});
 		expect(res.status).toBe(204);
-		// Give async webhook emit time to complete
-		await new Promise((r) => setTimeout(r, 50));
+		// emitAndWait is awaited by the handler before responding 204
 		expect(webhookEmitAndWait).toHaveBeenCalledTimes(1);
 		const call = (webhookEmitAndWait as ReturnType<typeof mock>).mock.calls[0]?.[0] as Record<
 			string,
@@ -279,7 +278,7 @@ describe("updateHandlers", () => {
 			body: JSON.stringify({ status: "failed" }),
 		});
 		expect(res.status).toBe(204);
-		await new Promise((r) => setTimeout(r, 50));
+		// emitAndWait is awaited by the handler before responding 204
 		expect(webhookEmitAndWait).toHaveBeenCalledTimes(1);
 		const call = (webhookEmitAndWait as ReturnType<typeof mock>).mock.calls[0]?.[0] as Record<
 			string,

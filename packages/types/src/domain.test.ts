@@ -21,7 +21,7 @@ describe("@procella/types domain", () => {
 			expect(Role.Viewer).toBe("viewer");
 		});
 
-		test("is a frozen object", () => {
+		test("has exactly 3 role values", () => {
 			expect(Object.keys(Role)).toHaveLength(3);
 		});
 	});

@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { AesCryptoService } from "@procella/crypto";
 import type { Database } from "@procella/db";
 import { PostgresStacksService, type StackInfo } from "@procella/stacks";
@@ -13,7 +13,6 @@ import { getTestDb, truncateTables } from "./setup.js";
 let db: Database;
 let stacksService: PostgresStacksService;
 let updatesService: PostgresUpdatesService;
-let testStack: StackInfo;
 let blobDir: string;
 
 beforeAll(async () => {
@@ -25,6 +24,10 @@ beforeAll(async () => {
 	const keyHex = "a".repeat(64);
 	const crypto = new AesCryptoService(Buffer.from(keyHex, "hex"));
 	updatesService = new PostgresUpdatesService({ db, storage, crypto });
+});
+
+afterAll(async () => {
+	await import("node:fs/promises").then((fs) => fs.rm(blobDir, { recursive: true, force: true }).catch(() => {}));
 });
 
 afterEach(async () => {
@@ -58,7 +61,7 @@ describe("PostgresUpdatesService — integration", () => {
 		test("allows new update after previous completes", async () => {
 			const stack = await seedStack();
 			const first = await updatesService.createUpdate(stack.id, "update");
-			const startResult = await updatesService.startUpdate(first.updateID, {});
+			await updatesService.startUpdate(first.updateID, {});
 			await updatesService.completeUpdate(first.updateID, { status: "succeeded" });
 
 			// Second update should work now
@@ -160,7 +163,7 @@ describe("PostgresUpdatesService — integration", () => {
 		test("posts and retrieves events", async () => {
 			const stack = await seedStack();
 			const created = await updatesService.createUpdate(stack.id, "update");
-			const started = await updatesService.startUpdate(created.updateID, {});
+			await updatesService.startUpdate(created.updateID, {});
 
 			await updatesService.postEvents(created.updateID, {
 				events: [
