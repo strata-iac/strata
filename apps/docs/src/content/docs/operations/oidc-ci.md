@@ -19,8 +19,8 @@ The Pulumi CLI has supported OIDC authentication since v3.x via `--oidc-token` a
 
 Your Procella instance needs:
 
-- `PROCELLA_AUTH_MODE=descope` — OIDC is only available in Descope auth mode
-- `PROCELLA_OIDC_ENABLED=true` — explicitly enables the OIDC exchange endpoint
+- `PROCELLA_AUTH_MODE=descope` — OIDC is only available in Descope auth mode (not dev mode)
+- `PROCELLA_OIDC_ENABLED` defaults to `true` in Descope mode; set to `false` to disable the OIDC exchange endpoint
 - A Descope management key set as `PROCELLA_DESCOPE_MANAGEMENT_KEY` — required for issuing exchange tokens
 - Procella reachable from the CI environment over HTTPS
 
