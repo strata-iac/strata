@@ -33,9 +33,16 @@ const createPolicyInput = z.object({
 	issuer: z
 		.string()
 		.url()
-		.refine((u) => u.startsWith("https://"), {
-			message: "Issuer URL must use HTTPS to prevent SSRF",
-		}),
+		.refine(
+			(u) =>
+				u.startsWith("https://") ||
+				u.startsWith("http://localhost") ||
+				u.startsWith("http://127.0.0.1"),
+			{
+				message:
+					"Issuer URL must use HTTPS (http://localhost and http://127.0.0.1 are allowed for testing)",
+			},
+		),
 	maxExpiration: z.number().int().min(60).max(86400).default(7200),
 	claimConditions: z.record(z.string(), z.string()).refine((v) => Object.keys(v).length > 0, {
 		message: "At least one claim condition is required to prevent unrestricted token acceptance",
@@ -47,7 +54,12 @@ const updatePolicyInput = z.object({
 	id: z.string().uuid(),
 	displayName: z.string().min(1).max(100).optional(),
 	maxExpiration: z.number().int().min(60).max(86400).optional(),
-	claimConditions: z.record(z.string(), z.string()).optional(),
+	claimConditions: z
+		.record(z.string(), z.string())
+		.refine((v) => Object.keys(v).length > 0, {
+			message: "At least one claim condition is required to prevent unrestricted token acceptance",
+		})
+		.optional(),
 	grantedRole: z.enum(["viewer", "member", "admin"]).optional(),
 	active: z.boolean().optional(),
 });

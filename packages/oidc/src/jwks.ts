@@ -66,7 +66,6 @@ export class JwksValidatorImpl implements JwksValidator {
 	}
 
 	private async discoverJwksUri(issuer: string): Promise<string> {
-		// Guard against SSRF — only allow HTTPS issuers
 		// Guard against SSRF — only allow HTTPS issuers in production
 		if (!this.allowHttp && !issuer.startsWith("https://")) {
 			throw new JwksValidationError("invalid_issuer", `Issuer must use HTTPS, got: ${issuer}`);
