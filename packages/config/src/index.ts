@@ -51,7 +51,7 @@ const configSchema = z
 
 		oidcEnabled: z
 			.enum(["true", "false", "1", "0"])
-			.default("false")
+			.default("true")
 			.transform((v) => v === "true" || v === "1"),
 
 		githubAppId: z.string().optional(),
@@ -96,14 +96,7 @@ const configSchema = z
 				path: ["encryptionKey"],
 			});
 		}
-		if (data.oidcEnabled === true && data.authMode === "dev") {
-			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
-				message:
-					"OIDC requires PROCELLA_AUTH_MODE=descope. Token exchange uses Descope access keys and cannot work in dev mode.",
-				path: ["oidcEnabled"],
-			});
-		}
+		// OIDC enabled by default; dev mode silently disables it in bootstrap
 
 		const githubFields = [data.githubAppId, data.githubAppPrivateKey, data.githubAppWebhookSecret];
 		const githubProvided = githubFields.filter((value) => Boolean(value)).length;
