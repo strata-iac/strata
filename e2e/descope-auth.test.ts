@@ -117,9 +117,8 @@ describe_descope("Descope auth (deployed preview)", () => {
 	let accessKey: string;
 	let pulumiHome: string;
 	let orgSlug: string;
-
-	// tenantId resolved in beforeAll by searching Descope tenants by name
 	let tenantId: string;
+	let createdTenant = false; // track if we created the tenant (for cleanup)
 
 	beforeAll(async () => {
 		sdk = DescopeClient({
@@ -127,15 +126,25 @@ describe_descope("Descope auth (deployed preview)", () => {
 			managementKey: DESCOPE_MANAGEMENT_KEY,
 		});
 
-		// Resolve the real Descope tenant ID from the org slug.
-		// DESCOPE_PROJECT_ID is the Descope project ID, not a tenant ID.
-		// The preview env creates a tenant named 'procella-pr-N' per infra/descope.ts.
-		const tenantName = process.env.PROCELLA_E2E_ORG_SLUG ?? `procella-${DESCOPE_PROJECT_ID}`;
-		const tenantsResp = await sdk.management.tenant.loadAll();
-		const tenantMatch = tenantsResp.data?.tenants?.find((t) => t.name === tenantName);
-		if (!tenantMatch?.id) throw new Error(`Descope tenant '${tenantName}' not found`);
-		tenantId = tenantMatch.id;
+		// Use PROCELLA_E2E_ORG_SLUG if given, otherwise derive from project.
+		// The tenant may need to be created if it doesn't exist yet.
+		const tenantName = process.env.PROCELLA_E2E_ORG_SLUG ?? `e2e-${RUN_ID}`;
 		orgSlug = tenantName;
+
+		// Find or create the Descope tenant for this test run.
+		const tenantsResp = await sdk.management.tenant.loadAll();
+		const existing = tenantsResp.data?.tenants?.find((t) => t.name === tenantName);
+		if (existing?.id) {
+			tenantId = existing.id;
+		} else {
+			// Create a fresh ephemeral tenant.
+			const created = await sdk.management.tenant.create(tenantName, {
+				selfProvisioningDomains: [],
+			});
+			if (!created.data?.id) throw new Error(`Failed to create Descope tenant '${tenantName}'`);
+			tenantId = created.data.id;
+			createdTenant = true;
+		}
 
 		await sdk.management.user.deleteAllTestUsers().catch(() => {});
 		accessKey = await setupTestUser(sdk, tenantId);
@@ -144,6 +153,10 @@ describe_descope("Descope auth (deployed preview)", () => {
 
 	afterAll(async () => {
 		await sdk?.management.user.deleteAllTestUsers().catch(() => {});
+		// Clean up ephemeral tenant if we created it
+		if (createdTenant && tenantId) {
+			await sdk?.management.tenant.delete(tenantId).catch(() => {});
+		}
 		if (pulumiHome) await cleanupDir(pulumiHome);
 	});
 
