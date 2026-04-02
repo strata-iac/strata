@@ -248,20 +248,14 @@ jobs:
           set -euxo pipefail
           FULL_STACK="${ORG_SLUG}/replace-triggers/${STACK_NAME}"
           pulumi login --cloud-url "${PULUMI_BACKEND_URL}"
+          pulumi version
           cd examples/replace-triggers
 
-          # Create the stack — capture output for debugging
-          echo "Creating stack: ${FULL_STACK}"
-          pulumi stack init "${FULL_STACK}" 2>&1 || {
-            echo "::warning::stack init failed, trying stack select instead"
-            pulumi stack select "${FULL_STACK}" 2>&1
-          }
+          # Create + select stack (stack select --create is more reliable than stack init
+          # for service backends — it creates the stack if needed and always selects it)
+          pulumi stack select --create "${FULL_STACK}"
+          echo "Stack ready: $(pulumi stack --show-name)"
 
-          # Verify the stack is selected before running up
-          echo "Selected stack:"
-          pulumi stack --show-urns 2>&1 || true
-
-          # Run the deploy cycle (use selected stack, no --stack flag)
           pulumi up --yes --non-interactive
           pulumi destroy --yes --non-interactive
           pulumi stack rm --yes --non-interactive --force
