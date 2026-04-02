@@ -176,6 +176,8 @@ jobs:
       PROCELLA_API_URL: ${{ needs.deploy.outputs.api_url }}
       ORG_SLUG: procella-pr-${{ github.event.number }}
       STACK_NAME: oidc-e2e-${{ github.run_id }}
+      # Pulumi CLI reads PULUMI_BACKEND_URL for the service URL
+      PULUMI_BACKEND_URL: ${{ needs.deploy.outputs.api_url }}
     steps:
       - uses: actions/checkout@v6
       - uses: pulumi/setup-pulumi@v2
