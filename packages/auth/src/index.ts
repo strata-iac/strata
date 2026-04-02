@@ -195,14 +195,20 @@ export class DescopeAuthService implements AuthService {
 			{ "auth.mode": "descope" },
 			async () => {
 				try {
-					const userResp = await this.sdk.management.user.loadByUserId(caller.userId);
-					const u = userResp.ok ? userResp.data : undefined;
+					// Skip user lookup for workload principals — they have no Descope user.
+					const u =
+						caller.principalType !== "workload" && caller.userId
+							? await this.sdk.management.user
+									.loadByUserId(caller.userId)
+									.then((r) => (r.ok ? r.data : undefined))
+									.catch(() => undefined)
+							: undefined;
 					const loginId =
 						u?.email ??
 						u?.name ??
 						(u?.givenName && u?.familyName ? `${u.givenName} ${u.familyName}` : undefined) ??
 						u?.loginIds?.[0] ??
-						caller.userId;
+						caller.login; // use pre-computed login for workload callers
 					const expireTime = opts?.expireTime ?? 0;
 					const customClaims = { procellaLogin: loginId, ...opts?.customClaims };
 
@@ -211,7 +217,7 @@ export class DescopeAuthService implements AuthService {
 						expireTime,
 						undefined,
 						[{ tenantId: caller.tenantId, roleNames: [...caller.roles] }],
-						caller.userId,
+						caller.userId || undefined, // pass undefined for workload (empty string) to avoid Descope 33-char limit
 						// biome-ignore lint/suspicious/noExplicitAny: Descope SDK types use Record<string, any>
 						customClaims as Record<string, any>,
 					);

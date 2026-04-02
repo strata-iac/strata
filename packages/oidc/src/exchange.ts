@@ -99,7 +99,9 @@ export class OidcExchangeService implements OidcService {
 		const syntheticCaller: Caller = {
 			tenantId: matchedPolicy.tenantId,
 			orgSlug: matchedPolicy.orgSlug,
-			userId: `workload:${matchedPolicy.provider}:${String(claims.sub ?? "unknown")}`,
+			// Descope userId field must be ≤33 chars and is optional for workload keys.
+			// Use an empty string to avoid binding to a non-existent user.
+			userId: "",
 			login: buildWorkloadLogin(claims, matchedPolicy),
 			roles: [matchedPolicy.grantedRole],
 			principalType: "workload",
