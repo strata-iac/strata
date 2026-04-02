@@ -193,7 +193,7 @@ jobs:
           set -x
           pulumi login --cloud-url "${PULUMI_BACKEND_URL}"
           cd examples/replace-triggers
-          pulumi stack init "${ORG_SLUG}/replace-triggers/${STACK_NAME}"
+          pulumi stack init "${ORG_SLUG}/replace-triggers/${STACK_NAME}" --verbose 11 || echo "stack init exit: $?"
           pulumi up --yes --non-interactive --stack "${ORG_SLUG}/replace-triggers/${STACK_NAME}"
           pulumi destroy --yes --non-interactive --stack "${ORG_SLUG}/replace-triggers/${STACK_NAME}"
           pulumi stack rm --yes --non-interactive "${ORG_SLUG}/replace-triggers/${STACK_NAME}"
