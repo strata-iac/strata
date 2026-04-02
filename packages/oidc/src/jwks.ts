@@ -80,7 +80,7 @@ export class JwksValidatorImpl implements JwksValidator {
 		// https://auth.example.com/realms/my-realm — use string concatenation instead.
 		const base = issuer.endsWith("/") ? issuer : `${issuer}/`;
 		const configUrl = new URL(".well-known/openid-configuration", base);
-		const resp = await fetch(configUrl.toString());
+		const resp = await fetch(configUrl.toString(), { signal: AbortSignal.timeout(5000) });
 		if (!resp.ok) {
 			throw new JwksValidationError(
 				"discovery_failed",
@@ -92,6 +92,10 @@ export class JwksValidatorImpl implements JwksValidator {
 		const jwksUri = config.jwks_uri;
 		if (typeof jwksUri !== "string") {
 			throw new JwksValidationError("discovery_failed", "OIDC configuration missing jwks_uri");
+		}
+		// Guard against SSRF via jwks_uri — must also use HTTPS (or localhost for testing)
+		if (!this.allowHttp && !jwksUri.startsWith("https://")) {
+			throw new JwksValidationError("discovery_failed", `jwks_uri must use HTTPS, got: ${jwksUri}`);
 		}
 
 		this.discoveredJwksUris.set(issuer, jwksUri);

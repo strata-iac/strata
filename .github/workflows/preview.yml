@@ -60,7 +60,9 @@ jobs:
 
       - name: Deploy
         id: deploy
-        run: npx sst deploy --stage pr-${{ github.event.number }} | tee /tmp/sst-deploy.log
+        run: |
+          set -o pipefail
+          npx sst deploy --stage pr-${{ github.event.number }} | tee /tmp/sst-deploy.log
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SST_SECRET_ProcellaEncryptionKey: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}

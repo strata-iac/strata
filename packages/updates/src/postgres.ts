@@ -144,7 +144,7 @@ export class PostgresUpdatesService implements UpdatesService {
 						version,
 						config: config ?? null,
 						program: program ?? null,
-						initiatedBy: caller?.userId ?? null,
+						initiatedBy: caller?.userId || null, // use || so empty string becomes null
 						initiatedByType: caller?.principalType ?? null,
 						initiatedByDisplay: caller?.login ?? null,
 						initiatedByMeta: caller?.workload

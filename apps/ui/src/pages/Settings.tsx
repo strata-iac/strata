@@ -410,6 +410,10 @@ function OidcSettingsTab() {
 			setFormError("Expiration must be between 60 and 86400 seconds");
 			return;
 		}
+		if (Object.keys(conditions).length === 0) {
+			setFormError("At least one claim condition is required");
+			return;
+		}
 		try {
 			await createMutation.mutateAsync({
 				provider: "github-actions",
@@ -664,20 +668,28 @@ function OidcSettingsTab() {
 								<div className="flex items-center gap-2 shrink-0">
 									<button
 										type="button"
-										onClick={() =>
+										onClick={() => {
 											toggleMutation
 												.mutateAsync({ id: policy.id, active: !policy.active })
 												.then(() => refetch())
-										}
+												.catch((e: unknown) =>
+													setFormError(e instanceof Error ? e.message : "Update failed"),
+												);
+										}}
 										className="text-xs text-cloud hover:text-mist px-2 py-1 rounded border border-zinc-700 hover:border-zinc-500 transition-colors"
 									>
 										{policy.active ? "Disable" : "Enable"}
 									</button>
 									<button
 										type="button"
-										onClick={() =>
-											deleteMutation.mutateAsync({ id: policy.id }).then(() => refetch())
-										}
+										onClick={() => {
+											deleteMutation
+												.mutateAsync({ id: policy.id })
+												.then(() => refetch())
+												.catch((e: unknown) =>
+													setFormError(e instanceof Error ? e.message : "Delete failed"),
+												);
+										}}
 										className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded border border-red-900/40 hover:border-red-700 transition-colors"
 									>
 										Delete

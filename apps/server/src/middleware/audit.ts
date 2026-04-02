@@ -31,7 +31,7 @@ export function auditMiddleware(auditService: AuditService): MiddlewareHandler<E
 		const metadata = caller.workload ? { workload: caller.workload } : undefined;
 
 		void auditService.log(caller.tenantId, {
-			actorId: caller.userId,
+			actorId: caller.principalType === "workload" ? caller.login : caller.userId,
 			actorType:
 				caller.principalType === "workload"
 					? "workload"

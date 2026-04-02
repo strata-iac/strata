@@ -210,7 +210,9 @@ export class DescopeAuthService implements AuthService {
 						u?.loginIds?.[0] ??
 						caller.login; // use pre-computed login for workload callers
 					const expireTime = opts?.expireTime ?? 0;
-					const customClaims = { procellaLogin: loginId, ...opts?.customClaims };
+					// Ensure procellaLogin is never overridable by caller-provided customClaims
+					const { procellaLogin: _ignored, ...safeCustomClaims } = opts?.customClaims ?? {};
+					const customClaims = { procellaLogin: loginId, ...safeCustomClaims };
 
 					const resp = await this.sdk.management.accessKey.create(
 						name,

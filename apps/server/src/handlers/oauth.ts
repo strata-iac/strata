@@ -47,7 +47,8 @@ export function oauthHandlers(oidc: OidcService | null) {
 				return c.json(
 					{
 						error: "server_error",
-						error_description: err instanceof Error ? err.message : "Internal error",
+						// Do not echo internal error details to unauthenticated callers
+						error_description: "Token exchange failed",
 					},
 					500 as ContentfulStatusCode,
 				);
