@@ -118,7 +118,8 @@ describe_descope("Descope auth (deployed preview)", () => {
 	let pulumiHome: string;
 	let orgSlug: string;
 
-	const tenantId = process.env.PROCELLA_E2E_DESCOPE_TENANT_ID ?? DESCOPE_PROJECT_ID;
+	// tenantId resolved in beforeAll by searching Descope tenants by name
+	let tenantId: string;
 
 	beforeAll(async () => {
 		sdk = DescopeClient({
@@ -126,18 +127,19 @@ describe_descope("Descope auth (deployed preview)", () => {
 			managementKey: DESCOPE_MANAGEMENT_KEY,
 		});
 
+		// Resolve the real Descope tenant ID from the org slug.
+		// DESCOPE_PROJECT_ID is the Descope project ID, not a tenant ID.
+		// The preview env creates a tenant named 'procella-pr-N' per infra/descope.ts.
+		const tenantName = process.env.PROCELLA_E2E_ORG_SLUG ?? `procella-${DESCOPE_PROJECT_ID}`;
+		const tenantsResp = await sdk.management.tenant.loadAll();
+		const tenantMatch = tenantsResp.data?.tenants?.find((t) => t.name === tenantName);
+		if (!tenantMatch?.id) throw new Error(`Descope tenant '${tenantName}' not found`);
+		tenantId = tenantMatch.id;
+		orgSlug = tenantName;
+
 		await sdk.management.user.deleteAllTestUsers().catch(() => {});
 		accessKey = await setupTestUser(sdk, tenantId);
 		pulumiHome = await createPulumiHome();
-
-		// Resolve org slug from Descope tenant name — Procella uses the tenant
-		// name as orgSlug in JWT claims, not the tenant ID.
-		if (process.env.PROCELLA_E2E_ORG_SLUG) {
-			orgSlug = process.env.PROCELLA_E2E_ORG_SLUG;
-		} else {
-			const tenant = await sdk.management.tenant.load(tenantId);
-			orgSlug = tenant.data?.name ?? tenantId;
-		}
 	});
 
 	afterAll(async () => {
