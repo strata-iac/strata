@@ -192,7 +192,6 @@ jobs:
         run: |
           pulumi login --cloud-url "${PULUMI_BACKEND_URL}"
           cd examples/replace-triggers
-          # Stack init takes org/stack-name (project comes from Pulumi.yaml)
           pulumi stack init "${ORG_SLUG}/${STACK_NAME}" --non-interactive
           pulumi up --yes --non-interactive
           pulumi destroy --yes --non-interactive
