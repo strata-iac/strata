@@ -11,16 +11,25 @@ export function oauthHandlers(oidc: OidcService | null) {
 				return c.json({ error: "server_error", error_description: "OIDC is not enabled" }, 501);
 			}
 
-			const body = await c.req.parseBody();
+			// Accept both application/x-www-form-urlencoded (Pulumi CLI) and
+			// application/json (pulumi/auth-actions via axios)
+			const contentType = c.req.header("Content-Type") ?? "";
+			let rawBody: Record<string, string>;
+			if (contentType.includes("application/json")) {
+				rawBody = await c.req.json<Record<string, string>>();
+			} else {
+				const formBody = await c.req.parseBody();
+				rawBody = Object.fromEntries(Object.entries(formBody).map(([k, v]) => [k, String(v)]));
+			}
 
 			const req: TokenExchangeRequest = {
-				audience: String(body.audience ?? ""),
-				grantType: String(body.grant_type ?? ""),
-				subjectToken: String(body.subject_token ?? ""),
-				subjectTokenType: String(body.subject_token_type ?? ""),
-				requestedTokenType: String(body.requested_token_type ?? ""),
-				scope: String(body.scope ?? ""),
-				expiration: Number(body.expiration) || DEFAULT_EXCHANGE_EXPIRATION,
+				audience: String(rawBody.audience ?? ""),
+				grantType: String(rawBody.grant_type ?? ""),
+				subjectToken: String(rawBody.subject_token ?? ""),
+				subjectTokenType: String(rawBody.subject_token_type ?? ""),
+				requestedTokenType: String(rawBody.requested_token_type ?? ""),
+				scope: String(rawBody.scope ?? ""),
+				expiration: Number(rawBody.expiration) || DEFAULT_EXCHANGE_EXPIRATION,
 			};
 
 			try {
