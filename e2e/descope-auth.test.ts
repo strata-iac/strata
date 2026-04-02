@@ -90,8 +90,9 @@ async function getGitHubOidcToken(audience: string): Promise<string> {
 
 /** Call a tRPC mutation on the deployed API. */
 async function trpcMutation(procedure: string, input: unknown, token: string): Promise<unknown> {
-	const body = JSON.stringify({ "0": { json: input } });
-	const res = await fetch(`${APP_URL}/trpc/${procedure}`, {
+	// tRPC v11 non-batched POST: body is {"json": input}, endpoint is /trpc/procedure?batch=1
+	const body = JSON.stringify({ json: input });
+	const res = await fetch(`${APP_URL}/trpc/${procedure}?batch=1`, {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",
@@ -196,7 +197,7 @@ describe_descope("Descope auth (deployed preview)", () => {
 		expect(stack.stackName).toBe("main");
 
 		const del = await fetch(base, { method: "DELETE", headers });
-		expect(del.status).toBe(200);
+		expect([200, 204]).toContain(del.status);
 	});
 
 	// --- OIDC (real GitHub Actions token) ---

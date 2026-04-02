@@ -75,7 +75,11 @@ export class JwksValidatorImpl implements JwksValidator {
 			return cached;
 		}
 
-		const configUrl = new URL("/.well-known/openid-configuration", issuer);
+		// Append discovery path to issuer, preserving any existing issuer path segment.
+		// new URL("/.well-known/...", issuer) would reset path for issuers like
+		// https://auth.example.com/realms/my-realm — use string concatenation instead.
+		const base = issuer.endsWith("/") ? issuer : `${issuer}/`;
+		const configUrl = new URL(".well-known/openid-configuration", base);
 		const resp = await fetch(configUrl.toString());
 		if (!resp.ok) {
 			throw new JwksValidationError(

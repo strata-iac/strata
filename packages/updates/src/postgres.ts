@@ -4,6 +4,7 @@ import type { CryptoService } from "@procella/crypto";
 import type { Database } from "@procella/db";
 import { checkpoints, journalEntries, stacks, updateEvents, updates } from "@procella/db";
 import type { BlobStorage } from "@procella/storage";
+
 import {
 	activeUpdatesGauge,
 	checkpointSizeHistogram,
