@@ -283,6 +283,11 @@ describe_descope("Descope auth (deployed preview)", () => {
 			const result = await pulumi(["login", "--oidc-token", jwt, "--oidc-org", orgSlug, API_URL], {
 				pulumiHome,
 			});
+			if (result.exitCode !== 0) {
+				throw new Error(
+					`pulumi login failed (${result.exitCode}): ${result.stderr}${result.stdout}`,
+				);
+			}
 			expect(result.exitCode).toBe(0);
 		});
 
