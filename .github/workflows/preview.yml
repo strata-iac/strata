@@ -186,18 +186,10 @@ jobs:
           requested-token-type: urn:pulumi:token-type:access_token:organization
           cloud-url: ${{ env.PROCELLA_API_URL }}
 
-      - uses: pulumi/actions@v6
-        with:
-          command: up
-          stack-name: ${{ env.ORG_SLUG }}/${{ env.STACK_NAME }}
-          work-dir: examples/replace-triggers
-          cloud-url: ${{ env.PROCELLA_API_URL }}
-          upsert: true  # create stack if it doesn't exist
-
-      - uses: pulumi/actions@v6
-        if: always()
-        with:
-          command: destroy
-          stack-name: ${{ env.ORG_SLUG }}/${{ env.STACK_NAME }}
-          work-dir: examples/replace-triggers
-          cloud-url: ${{ env.PROCELLA_API_URL }}
+      - name: Create stack + deploy + destroy
+        run: |
+          cd examples/replace-triggers
+          pulumi stack init "${ORG_SLUG}/${STACK_NAME}" --non-interactive
+          pulumi up --yes --stack "${ORG_SLUG}/${STACK_NAME}" --non-interactive
+          pulumi destroy --yes --stack "${ORG_SLUG}/${STACK_NAME}" --non-interactive
+          pulumi stack rm --yes "${ORG_SLUG}/${STACK_NAME}" --non-interactive
