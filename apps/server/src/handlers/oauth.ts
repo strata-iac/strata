@@ -33,7 +33,15 @@ export function oauthHandlers(oidc: OidcService | null) {
 						err.statusCode as ContentfulStatusCode,
 					);
 				}
-				throw err;
+				// Log unexpected errors and return server_error to avoid leaking internals
+				console.error("[oauth] token exchange failed:", err);
+				return c.json(
+					{
+						error: "server_error",
+						error_description: err instanceof Error ? err.message : "Internal error",
+					},
+					500 as ContentfulStatusCode,
+				);
 			}
 		},
 	};

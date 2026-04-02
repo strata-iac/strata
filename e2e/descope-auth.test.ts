@@ -261,6 +261,10 @@ describe_descope("Descope auth (deployed preview)", () => {
 				body: body.toString(),
 			});
 
+			if (!res.ok) {
+				const errBody = await res.text();
+				throw new Error(`Exchange failed (${res.status}): ${errBody}`);
+			}
 			expect(res.status).toBe(200);
 			const data = (await res.json()) as {
 				access_token: string;
