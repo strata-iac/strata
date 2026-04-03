@@ -1,4 +1,5 @@
-// @procella/server — Shared bootstrap logic for both Bun.serve and Vercel.
+// @procella/server — Shared bootstrap logic for both Bun.serve and Lambda.
+// Build version: 2026-04-03T13:00Z (force rebuild for OIDC security fix)
 //
 // Creates all services and the Hono app. Called once at module load time
 // in both entry points (index.ts for local dev, vercel.ts for production).
