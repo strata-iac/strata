@@ -49,6 +49,11 @@ const configSchema = z
 			.default("false")
 			.transform((v) => v === "true" || v === "1"),
 
+		oidcEnabled: z
+			.enum(["true", "false", "1", "0"])
+			.default("true")
+			.transform((v) => v === "true" || v === "1"),
+
 		githubAppId: z.string().optional(),
 		githubAppPrivateKey: z
 			.string()
@@ -91,6 +96,7 @@ const configSchema = z
 				path: ["encryptionKey"],
 			});
 		}
+		// OIDC enabled by default; dev mode silently disables it in bootstrap
 
 		const githubFields = [data.githubAppId, data.githubAppPrivateKey, data.githubAppWebhookSecret];
 		const githubProvided = githubFields.filter((value) => Boolean(value)).length;
@@ -133,6 +139,7 @@ const envMapping = {
 	blobS3Region: "PROCELLA_BLOB_S3_REGION",
 	encryptionKey: "PROCELLA_ENCRYPTION_KEY",
 	otelEnabled: "PROCELLA_OTEL_ENABLED",
+	oidcEnabled: "PROCELLA_OIDC_ENABLED",
 	githubAppId: "PROCELLA_GITHUB_APP_ID",
 	githubAppPrivateKey: "PROCELLA_GITHUB_APP_PRIVATE_KEY",
 	githubAppWebhookSecret: "PROCELLA_GITHUB_APP_WEBHOOK_SECRET",

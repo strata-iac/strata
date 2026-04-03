@@ -5,5 +5,5 @@
 		"rootDir": "src"
 	},
 	"include": ["src/**/*.ts"],
-	"references": [{ "path": "../types" }, { "path": "../config" }, { "path": "../telemetry" }]
+	"references": [{ "path": "../types" }, { "path": "../config" }, { "path": "../telemetry" }, { "path": "../oidc" }]
 }

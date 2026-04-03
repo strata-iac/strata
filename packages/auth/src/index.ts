@@ -4,9 +4,10 @@
 // Dev mode uses a static token for local development.
 
 import DescopeSdk from "@descope/node-sdk";
+import { OidcClaims } from "@procella/oidc";
 import { authAuthenticateDuration, authFailureCount, withSpan } from "@procella/telemetry";
 
-import type { Caller, Role } from "@procella/types";
+import type { Caller, Role, WorkloadIdentity } from "@procella/types";
 import { ForbiddenError, UnauthorizedError } from "@procella/types";
 
 // ============================================================================
@@ -19,7 +20,11 @@ export interface AuthService {
 	/** Authenticate an update-token (lease token from StartUpdate). */
 	authenticateUpdateToken(token: string): Promise<{ updateId: string; stackId: string }>;
 	/** Create a long-lived CLI access key for the given caller. Returns the cleartext key. */
-	createCliAccessKey?(caller: Caller, name: string): Promise<string>;
+	createCliAccessKey?(
+		caller: Caller,
+		name: string,
+		opts?: { expireTime?: number; customClaims?: Record<string, unknown> },
+	): Promise<string>;
 	/** Stop background timers (e.g. cache sweep). Called on server shutdown. */
 	dispose?(): void;
 }
@@ -63,6 +68,7 @@ export class DevAuthService implements AuthService {
 					userId: this.config.userLogin,
 					login: this.config.userLogin,
 					roles: ["admin"] as const,
+					principalType: "user" as const,
 				};
 			} catch (error) {
 				authFailureCount().add(1, { "auth.mode": "dev" });
@@ -177,7 +183,11 @@ export class DescopeAuthService implements AuthService {
 		);
 	}
 
-	async createCliAccessKey(caller: Caller, name: string): Promise<string> {
+	async createCliAccessKey(
+		caller: Caller,
+		name: string,
+		opts?: { expireTime?: number; customClaims?: Record<string, unknown> },
+	): Promise<string> {
 		const start = performance.now();
 		return withSpan(
 			"procella.auth",
@@ -185,22 +195,42 @@ export class DescopeAuthService implements AuthService {
 			{ "auth.mode": "descope" },
 			async () => {
 				try {
-					const userResp = await this.sdk.management.user.loadByUserId(caller.userId);
-					const u = userResp.ok ? userResp.data : undefined;
+					// Skip user lookup for workload principals — they have no Descope user.
+					const u =
+						caller.principalType !== "workload" && caller.userId
+							? await this.sdk.management.user
+									.loadByUserId(caller.userId)
+									.then((r) => (r.ok ? r.data : undefined))
+									.catch(() => undefined)
+							: undefined;
 					const loginId =
 						u?.email ??
 						u?.name ??
 						(u?.givenName && u?.familyName ? `${u.givenName} ${u.familyName}` : undefined) ??
 						u?.loginIds?.[0] ??
-						caller.userId;
+						caller.login; // use pre-computed login for workload callers
+					const expireTime = opts?.expireTime ?? 0;
+					// Strip procellaLogin and procellaOrgSlug from caller-provided claims,
+					// then re-add them with authoritative server-side values.
+					const {
+						procellaLogin: _a,
+						procellaOrgSlug: _b,
+						...safeCustomClaims
+					} = opts?.customClaims ?? {};
+					const customClaims = {
+						procellaLogin: loginId,
+						procellaOrgSlug: caller.orgSlug,
+						...safeCustomClaims,
+					};
 
 					const resp = await this.sdk.management.accessKey.create(
 						name,
-						0,
+						expireTime,
 						undefined,
 						[{ tenantId: caller.tenantId, roleNames: [...caller.roles] }],
-						caller.userId,
-						{ procellaLogin: loginId },
+						caller.userId || undefined, // pass undefined for workload (empty string) to avoid Descope 33-char limit
+						// biome-ignore lint/suspicious/noExplicitAny: Descope SDK types use Record<string, any>
+						customClaims as Record<string, any>,
 					);
 					if (!resp.ok || !resp.data?.cleartext) {
 						throw new Error(
@@ -317,6 +347,27 @@ export class DescopeAuthService implements AuthService {
 					? claims.strataLogin
 					: userId;
 		const roles = extractRoles(claims, tenantId);
+		const principalTypeRaw = claims[OidcClaims.principalType];
+		const isWorkload = principalTypeRaw === "workload";
+
+		const workload: WorkloadIdentity | undefined = isWorkload
+			? {
+					provider: String(claims[OidcClaims.workloadProvider] ?? ""),
+					issuer: optionalString(claims[OidcClaims.workloadIssuer]) ?? "",
+					subject: String(claims[OidcClaims.workloadSub] ?? ""),
+					repository: optionalString(claims[OidcClaims.workloadRepo]),
+					repositoryId: optionalString(claims[OidcClaims.workloadRepoId]),
+					repositoryOwner: optionalString(claims[OidcClaims.workloadRepoOwner]),
+					repositoryOwnerId: optionalString(claims[OidcClaims.workloadRepoOwnerId]),
+					workflowRef: optionalString(claims[OidcClaims.workloadWorkflowRef]),
+					environment: optionalString(claims[OidcClaims.workloadEnvironment]),
+					ref: optionalString(claims[OidcClaims.workloadRef]),
+					runId: optionalString(claims[OidcClaims.workloadRunId]),
+					actor: optionalString(claims[OidcClaims.triggerActor]),
+					actorId: optionalString(claims[OidcClaims.triggerActorId]),
+					jti: optionalString(claims[OidcClaims.workloadJti]),
+				}
+			: undefined;
 
 		return {
 			tenantId,
@@ -324,6 +375,8 @@ export class DescopeAuthService implements AuthService {
 			userId,
 			login,
 			roles,
+			principalType: isWorkload ? "workload" : userId.startsWith("token:") ? "token" : "user",
+			workload,
 		};
 	}
 
@@ -335,6 +388,10 @@ export class DescopeAuthService implements AuthService {
 			}
 		}
 	}
+}
+
+function optionalString(v: unknown): string | undefined {
+	return typeof v === "string" && v ? v : undefined;
 }
 
 // ============================================================================
@@ -440,10 +497,11 @@ function extractTenantId(claims: Record<string, unknown>): string | undefined {
 		return claims.dct;
 	}
 
-	// Fallback: look in tenants object for the first (and typically only) tenant
+	// Fallback: look in tenants object — MUST have exactly one tenant.
+	// Multiple tenants would make resolution non-deterministic (Object.keys ordering varies).
 	if (claims.tenants && typeof claims.tenants === "object") {
 		const tenantIds = Object.keys(claims.tenants as Record<string, unknown>);
-		if (tenantIds.length > 0) {
+		if (tenantIds.length === 1) {
 			return tenantIds[0];
 		}
 	}
@@ -452,26 +510,32 @@ function extractTenantId(claims: Record<string, unknown>): string | undefined {
 }
 
 /**
- * Derive a URL-safe org slug from the tenant name in JWT claims.
- * Session JWTs carry `tenant_name` at the top level (mapped from `{{tenant.name}}`
- * via Descope JWT Templates). CLI access key JWTs store it in
- * `tenants.<tenantId>.name` instead. Both paths are checked.
- * Falls back to the raw tenantId if no name is available.
+ * Derive a URL-safe org slug from JWT claims.
+ *
+ * Resolution order:
+ *   1. Explicit `procellaOrgSlug` claim (set by OIDC exchange — authoritative)
+ *   2. Top-level `tenant_name` (present in session JWTs via Descope JWT Templates)
+ *   3. Nested `tenants.<tenantId>.name` (present in CLI access key JWTs)
+ *   4. Raw tenantId as last resort
  */
 export function extractOrgSlug(claims: Record<string, unknown>, tenantId: string): string {
-	// 1. Top-level tenant_name (present in session JWTs)
+	// 1. Explicit orgSlug from OIDC workload claims (authoritative, set by trust policy)
+	const explicit = claims[OidcClaims.orgSlug];
+	if (typeof explicit === "string" && explicit) return explicit;
+
+	// 2. Top-level tenant_name (present in session JWTs)
 	const topLevel =
 		typeof claims.tenant_name === "string" && claims.tenant_name ? claims.tenant_name : undefined;
 	if (topLevel) return slugify(topLevel) || tenantId;
 
-	// 2. Nested tenants.<id>.name (present in CLI access key JWTs)
+	// 3. Nested tenants.<id>.name (present in CLI access key JWTs)
 	if (claims.tenants && typeof claims.tenants === "object") {
 		const tenants = claims.tenants as Record<string, Record<string, unknown>>;
 		const name = tenants[tenantId]?.name;
 		if (typeof name === "string" && name) return slugify(name) || tenantId;
 	}
 
-	// 3. Last resort — should not happen if Descope is configured correctly
+	// 4. Last resort — should not happen if Descope is configured correctly
 	return tenantId;
 }
 

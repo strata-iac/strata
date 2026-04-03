@@ -60,6 +60,7 @@ export default defineConfig({
           label: 'Operations',
           items: [
             { label: 'Descope Setup', slug: 'operations/descope' },
+            { label: 'OIDC CI Authentication', slug: 'operations/oidc-ci' },
             { label: 'Docker Compose', slug: 'operations/docker-compose' },
             { label: 'Horizontal Scaling', slug: 'operations/horizontal-scaling' },
             { label: 'Blob Storage', slug: 'operations/blob-storage' },

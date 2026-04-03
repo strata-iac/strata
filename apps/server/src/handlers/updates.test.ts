@@ -12,6 +12,7 @@ const validCaller: Caller = {
 	userId: "u-1",
 	login: "test-user",
 	roles: ["admin"],
+	principalType: "user",
 };
 
 const mockStackInfo: StackInfo = {
@@ -108,6 +109,7 @@ describe("updateHandlers", () => {
 			"update",
 			{ key: "val" },
 			undefined,
+			validCaller,
 		);
 	});
 
@@ -129,6 +131,7 @@ describe("updateHandlers", () => {
 			"preview",
 			undefined,
 			undefined,
+			validCaller,
 		);
 	});
 

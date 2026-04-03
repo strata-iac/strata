@@ -4,6 +4,7 @@ import type { CryptoService } from "@procella/crypto";
 import type { Database } from "@procella/db";
 import { checkpoints, journalEntries, stacks, updateEvents, updates } from "@procella/db";
 import type { BlobStorage } from "@procella/storage";
+
 import {
 	activeUpdatesGauge,
 	checkpointSizeHistogram,
@@ -123,6 +124,7 @@ export class PostgresUpdatesService implements UpdatesService {
 		kind: string,
 		config?: unknown,
 		program?: unknown,
+		caller?: import("@procella/types").Caller,
 	): Promise<UpdateProgramResponse> {
 		return withDbSpan("createUpdate", { "update.kind": kind, "stack.id": stackId }, async () => {
 			const [versionRow] = await this.db
@@ -142,6 +144,12 @@ export class PostgresUpdatesService implements UpdatesService {
 						version,
 						config: config ?? null,
 						program: program ?? null,
+						initiatedBy: caller?.userId || null, // use || so empty string becomes null
+						initiatedByType: caller?.principalType ?? null,
+						initiatedByDisplay: caller?.login ?? null,
+						initiatedByMeta: caller?.workload
+							? (caller.workload as unknown as Record<string, unknown>)
+							: null,
 					})
 					.returning();
 

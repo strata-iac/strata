@@ -6,6 +6,7 @@
 	"types": "src/router/index.ts",
 	"dependencies": {
 		"@procella/audit": "workspace:*",
+		"@procella/oidc": "workspace:*",
 		"@procella/db": "workspace:*",
 		"@procella/github": "workspace:*",
 		"@procella/stacks": "workspace:*",

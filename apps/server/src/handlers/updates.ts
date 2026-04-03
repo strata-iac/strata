@@ -38,6 +38,7 @@ export function updateHandlers(
 				kind,
 				typedBody.config,
 				typedBody.program,
+				caller,
 			);
 			return c.json(result);
 		},

@@ -78,6 +78,10 @@ export const updates = pgTable(
 		updatedAt: timestamp("updated_at").notNull().defaultNow(),
 		config: jsonb(),
 		program: jsonb(),
+		initiatedBy: text("initiated_by"),
+		initiatedByType: text("initiated_by_type"),
+		initiatedByDisplay: text("initiated_by_display"),
+		initiatedByMeta: jsonb("initiated_by_meta").$type<Record<string, unknown>>(),
 	},
 	(table) => [
 		uniqueIndex("idx_updates_active")
@@ -214,6 +218,31 @@ export const githubInstallations = pgTable(
 	],
 );
 
+export const oidcTrustPolicies = pgTable(
+	"oidc_trust_policies",
+	{
+		id: uuid().primaryKey().defaultRandom(),
+		tenantId: text("tenant_id").notNull(),
+		orgSlug: text("org_slug").notNull(),
+		provider: text().notNull(),
+		displayName: text("display_name").notNull(),
+		issuer: text().notNull(),
+		maxExpiration: integer("max_expiration").notNull().default(7200),
+		claimConditions: jsonb("claim_conditions").notNull().$type<Record<string, string>>(),
+		grantedRole: text("granted_role").notNull(),
+		active: boolean().notNull().default(true),
+		createdAt: timestamp("created_at").notNull().defaultNow(),
+		updatedAt: timestamp("updated_at").notNull().defaultNow(),
+	},
+	(table) => [
+		index("idx_oidc_trust_tenant").on(table.tenantId),
+		// Include tenantId in unique constraint to prevent cross-tenant orgSlug collisions.
+		uniqueIndex("idx_oidc_trust_org_name").on(table.tenantId, table.orgSlug, table.displayName),
+		// Composite index for exchange service: find policies by (orgSlug, issuer).
+		index("idx_oidc_trust_org_issuer").on(table.orgSlug, table.issuer),
+	],
+);
+
 // ============================================================================
 // Schema export — pass to drizzle() for relational queries
 // ============================================================================
@@ -228,4 +257,5 @@ export const schema = {
 	webhooks,
 	webhookDeliveries,
 	githubInstallations,
+	oidcTrustPolicies,
 };

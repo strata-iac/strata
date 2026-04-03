@@ -10,13 +10,14 @@ import type { AuditService } from "@procella/audit";
 import type { AuthConfig, AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
 import type { GitHubService } from "@procella/github";
+import type { OidcService, TrustPolicyRepository } from "@procella/oidc";
 import type { StacksService } from "@procella/stacks";
 import { tracingMiddleware } from "@procella/telemetry";
 import type { UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
-import { healthHandlers } from "../handlers/index.js";
+import { healthHandlers, oauthHandlers } from "../handlers/index.js";
 import { decompress, errorHandler, requestLogger } from "../middleware/index.js";
 import type { Env } from "../types.js";
 
@@ -30,6 +31,8 @@ export interface WebAppDeps {
 	updates: UpdatesService;
 	webhooks: WebhooksService;
 	github: GitHubService | null;
+	oidc?: OidcService | null;
+	oidcPolicies?: TrustPolicyRepository | null;
 }
 
 export function createWebApp(deps: WebAppDeps): Hono<Env> {
@@ -70,6 +73,9 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 		return c.json({ token: cleartext });
 	});
 
+	const oauth = oauthHandlers(deps.oidc ?? null);
+	app.post("/api/oauth/token", oauth.tokenExchange);
+
 	// tRPC routes — queries, mutations, SSE subscriptions
 	app.all("/trpc/*", async (c) => {
 		let req = c.req.raw;
@@ -102,6 +108,7 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 			updates: deps.updates,
 			webhooks: deps.webhooks,
 			github: deps.github,
+			oidcPolicies: deps.oidcPolicies ?? null,
 		};
 
 		return fetchRequestHandler({

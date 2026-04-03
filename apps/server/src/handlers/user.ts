@@ -35,9 +35,17 @@ export function userHandlers(stacks: StacksService) {
 			return c.json({ stacks: mapped });
 		},
 
-		/** GET /api/user/organizations/:orgName — Pulumi CLI fetches org defaults. */
+		/**
+		 * GET /api/user/organizations/:orgName — Pulumi CLI fetches org details.
+		 * When orgName is "default", returns the caller's default org (used by the
+		 * CLI to resolve stack names that omit the org prefix).
+		 */
 		getOrganization: (c: Context<Env>) => {
 			const orgName = param(c, "orgName");
+			const caller = c.get("caller");
+			if (orgName === "default") {
+				return c.json({ githubLogin: caller.orgSlug });
+			}
 			return c.json({
 				githubLogin: orgName,
 				name: orgName,

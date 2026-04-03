@@ -15,6 +15,7 @@ const validCaller: Caller = {
 	userId: "u-1",
 	login: "test-user",
 	roles: ["admin"],
+	principalType: "user",
 };
 
 // ============================================================================
@@ -153,5 +154,59 @@ describe("auditMiddleware", () => {
 		});
 		const entry = audit.log.mock.calls[0][1];
 		expect(entry.actorType).toBe("token");
+	});
+
+	test("identifies workload actors and includes workload metadata", async () => {
+		const workloadCaller: Caller = {
+			...validCaller,
+			userId: "",
+			login: "github-actions:acme/procella",
+			principalType: "workload",
+			workload: {
+				provider: "github",
+				issuer: "https://token.actions.githubusercontent.com",
+				subject: "repo:acme/procella:ref:refs/heads/main",
+				repository: "acme/procella",
+			},
+		};
+		const audit = mockAuditService();
+		const app = new Hono<Env>();
+		app.use("*", injectCaller(workloadCaller));
+		app.use("*", auditMiddleware(audit));
+		app.post("/api/stacks/:org/:project/:stack", (c) => c.json({ id: "s-1" }));
+
+		await app.request("/api/stacks/myorg/myproj/dev", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({}),
+		});
+		const entry = audit.log.mock.calls[0][1];
+		expect(entry.actorType).toBe("workload");
+		expect(entry.actorId).toBe("github-actions:acme/procella");
+		expect(entry.metadata).toEqual({
+			workload: {
+				provider: "github",
+				issuer: "https://token.actions.githubusercontent.com",
+				subject: "repo:acme/procella:ref:refs/heads/main",
+				repository: "acme/procella",
+			},
+		});
+	});
+
+	test("user actors have no workload metadata", async () => {
+		const audit = mockAuditService();
+		const app = new Hono<Env>();
+		app.use("*", injectCaller(validCaller));
+		app.use("*", auditMiddleware(audit));
+		app.post("/api/stacks/:org/:project/:stack", (c) => c.json({ id: "s-1" }));
+
+		await app.request("/api/stacks/myorg/myproj/dev", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({}),
+		});
+		const entry = audit.log.mock.calls[0][1];
+		expect(entry.actorType).toBe("user");
+		expect(entry.metadata).toBeUndefined();
 	});
 });

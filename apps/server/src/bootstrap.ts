@@ -1,4 +1,4 @@
-// @procella/server — Shared bootstrap logic for both Bun.serve and Vercel.
+// @procella/server — Shared bootstrap logic for both Bun.serve and Lambda.
 //
 // Creates all services and the Hono app. Called once at module load time
 // in both entry points (index.ts for local dev, vercel.ts for production).
@@ -9,6 +9,12 @@ import { loadConfig } from "@procella/config";
 import { AesCryptoService, devMasterKey } from "@procella/crypto";
 import { createDb } from "@procella/db";
 import { buildGitHubAppConfig, OctokitGitHubService } from "@procella/github";
+import {
+	JwksValidatorImpl,
+	OidcExchangeService,
+	PostgresTrustPolicyRepository,
+	type TrustPolicyRepository,
+} from "@procella/oidc";
 import { PostgresStacksService } from "@procella/stacks";
 import { createBlobStorage } from "@procella/storage";
 import { initTelemetry } from "@procella/telemetry";
@@ -40,6 +46,12 @@ async function bootstrapServices() {
 					managementKey: config.descopeManagementKey,
 				};
 	const auth = createAuthService(authConfig);
+	const oidcPolicies: TrustPolicyRepository | null = config.oidcEnabled
+		? new PostgresTrustPolicyRepository(db)
+		: null;
+	const oidcService = oidcPolicies
+		? new OidcExchangeService(new JwksValidatorImpl(), oidcPolicies, auth)
+		: null;
 
 	const storage = createBlobStorage(
 		config.blobBackend === "local"
@@ -90,6 +102,8 @@ async function bootstrapServices() {
 		webhooks: webhooksService,
 		github: githubService,
 		githubWebhookSecret: githubConfig?.webhookSecret,
+		oidc: oidcService,
+		oidcPolicies,
 	};
 }
 

@@ -29,6 +29,7 @@ export interface UpdatesService {
 		kind: string,
 		config?: unknown,
 		program?: unknown,
+		caller?: import("@procella/types").Caller,
 	): Promise<UpdateProgramResponse>;
 
 	startUpdate(updateId: string, request: StartUpdateRequest): Promise<StartUpdateResponse>;

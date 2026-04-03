@@ -118,6 +118,9 @@ export const updatesRouter = router({
 			startTime: row.startedAt ? Math.floor(row.startedAt.getTime() / 1000) : 0,
 			endTime: row.completedAt ? Math.floor(row.completedAt.getTime() / 1000) : 0,
 			resourceChanges: resourceChangesMap.get(row.id) ?? {},
+			initiatedBy: row.initiatedBy ?? null,
+			initiatedByType: row.initiatedByType ?? null,
+			initiatedByDisplay: row.initiatedByDisplay ?? null,
 		}));
 	}),
 

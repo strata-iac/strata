@@ -18,7 +18,7 @@ export default $config({
 		await import("./infra/secrets");
 		await import("./infra/database");
 		await import("./infra/storage");
-		if (!$dev) await import("./infra/descope");
+		const descopeProjectId = $dev ? undefined : (await import("./infra/descope")).projectId;
 		const { router } = await import("./infra/router");
 		const { api } = await import("./infra/api");
 		await import("./infra/gc");
@@ -31,6 +31,7 @@ export default $config({
 			app: site.url,
 			docs: docs.url,
 			api: api.url,
+			...(descopeProjectId ? { descopeProjectId } : {}),
 		};
 	},
 });

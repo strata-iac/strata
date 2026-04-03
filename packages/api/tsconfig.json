@@ -7,6 +7,7 @@
 	"include": ["src/**/*.ts"],
 	"references": [
 		{ "path": "../audit" },
+		{ "path": "../oidc" },
 		{ "path": "../types" },
 		{ "path": "../db" },
 		{ "path": "../github" },
