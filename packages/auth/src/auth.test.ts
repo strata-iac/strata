@@ -16,13 +16,16 @@ import {
 // Mock @descope/node-sdk — Bun hoists this before all imports.
 const mockExchangeAccessKey = mock();
 const mockValidateJwt = mock();
+const mockLoadByUserId = mock();
+const mockAccessKeyCreate = mock();
 mock.module("@descope/node-sdk", () => ({
 	default: () => ({
 		exchangeAccessKey: mockExchangeAccessKey,
 		validateJwt: mockValidateJwt,
 		management: {
-			user: { loadByUserId: mock() },
-			accessKey: { create: mock() },
+			user: { loadByUserId: mockLoadByUserId },
+			accessKey: { create: mockAccessKeyCreate },
+			audit: { search: mock(), createEvent: mock() },
 		},
 	}),
 }));
@@ -589,5 +592,200 @@ describe("extractOrgSlug", () => {
 	test("falls through to tenant_name when procellaOrgSlug is absent", () => {
 		const claims = { tenant_name: "My Org" };
 		expect(extractOrgSlug(claims, "T3id")).toBe("my-org");
+	});
+});
+
+// ============================================================================
+// DescopeAuthService — createCliAccessKey
+// ============================================================================
+
+describe("DescopeAuthService — createCliAccessKey", () => {
+	let svc: DescopeAuthService;
+
+	const userCaller = {
+		tenantId: "tenant-1",
+		orgSlug: "my-org",
+		userId: "user-1",
+		login: "omer",
+		roles: ["admin"] as const,
+		principalType: "user" as const,
+	};
+
+	const workloadCaller = {
+		tenantId: "tenant-1",
+		orgSlug: "my-org",
+		userId: "",
+		login: "github-actions:acme/procella",
+		roles: ["member"] as const,
+		principalType: "workload" as const,
+		workload: {
+			provider: "github",
+			issuer: "https://token.actions.githubusercontent.com",
+			subject: "repo:acme/procella:ref:refs/heads/main",
+		},
+	};
+
+	beforeEach(() => {
+		mockLoadByUserId.mockReset();
+		mockAccessKeyCreate.mockReset();
+		svc = new DescopeAuthService({
+			sdk: DescopeSdk({ projectId: "test-key-create" }),
+			config: { projectId: "test-key-create" },
+		});
+	});
+
+	afterEach(() => {
+		svc.dispose();
+	});
+
+	/** Helper — createCliAccessKey is optional on the interface but always present on DescopeAuthService. */
+	const createKey = (...args: Parameters<NonNullable<DescopeAuthService["createCliAccessKey"]>>) =>
+		// biome-ignore lint/style/noNonNullAssertion: always present on DescopeAuthService
+		svc.createCliAccessKey!(...args);
+
+	test("creates access key for normal user with user lookup", async () => {
+		mockLoadByUserId.mockResolvedValueOnce({
+			ok: true,
+			data: { email: "omer@acme.com", name: "Omer", loginIds: ["omer"] },
+		});
+		mockAccessKeyCreate.mockResolvedValueOnce({
+			ok: true,
+			data: { cleartext: "ak_cleartext_token" },
+		});
+
+		const key = await createKey(userCaller, "my-key");
+
+		expect(key).toBe("ak_cleartext_token");
+		expect(mockLoadByUserId).toHaveBeenCalledTimes(1);
+		expect(mockAccessKeyCreate).toHaveBeenCalledTimes(1);
+		// Verify customClaims include authoritative login and orgSlug
+		const createCall = mockAccessKeyCreate.mock.calls[0];
+		const customClaims = createCall[5];
+		expect(customClaims.procellaLogin).toBe("omer@acme.com");
+		expect(customClaims.procellaOrgSlug).toBe("my-org");
+	});
+
+	test("skips user lookup for workload principals", async () => {
+		mockAccessKeyCreate.mockResolvedValueOnce({
+			ok: true,
+			data: { cleartext: "ak_workload_token" },
+		});
+
+		const key = await createKey(workloadCaller, "ci-key");
+
+		expect(key).toBe("ak_workload_token");
+		expect(mockLoadByUserId).not.toHaveBeenCalled();
+		// Login falls back to caller.login for workload
+		const createCall = mockAccessKeyCreate.mock.calls[0];
+		const customClaims = createCall[5];
+		expect(customClaims.procellaLogin).toBe("github-actions:acme/procella");
+	});
+
+	test("passes undefined userId for workload (empty string)", async () => {
+		mockAccessKeyCreate.mockResolvedValueOnce({
+			ok: true,
+			data: { cleartext: "ak_t" },
+		});
+
+		await createKey(workloadCaller, "ci-key");
+
+		const createCall = mockAccessKeyCreate.mock.calls[0];
+		// 5th arg is userId — empty string should become undefined
+		expect(createCall[4]).toBeUndefined();
+	});
+
+	test("passes expireTime and strips caller-provided procellaLogin", async () => {
+		mockLoadByUserId.mockResolvedValueOnce({
+			ok: true,
+			data: { email: "omer@acme.com" },
+		});
+		mockAccessKeyCreate.mockResolvedValueOnce({
+			ok: true,
+			data: { cleartext: "ak_exp" },
+		});
+
+		await createKey(userCaller, "key", {
+			expireTime: 86400,
+			customClaims: {
+				procellaLogin: "attacker-override",
+				procellaOrgSlug: "attacker-org",
+				customField: "preserved",
+			},
+		});
+
+		const createCall = mockAccessKeyCreate.mock.calls[0];
+		// expireTime is 2nd arg
+		expect(createCall[1]).toBe(86400);
+		const customClaims = createCall[5];
+		// Server-side values override caller-provided
+		expect(customClaims.procellaLogin).toBe("omer@acme.com");
+		expect(customClaims.procellaOrgSlug).toBe("my-org");
+		// Non-restricted claims preserved
+		expect(customClaims.customField).toBe("preserved");
+	});
+
+	test("throws when access key creation fails", async () => {
+		mockLoadByUserId.mockResolvedValueOnce({
+			ok: true,
+			data: { email: "omer@acme.com" },
+		});
+		mockAccessKeyCreate.mockResolvedValueOnce({
+			ok: false,
+			error: { errorMessage: "Key creation denied" },
+		});
+
+		await expect(createKey(userCaller, "key")).rejects.toThrow("Key creation denied");
+	});
+
+	test("falls through user lookup fields (name, givenName+familyName, loginIds)", async () => {
+		// No email — falls to name
+		mockLoadByUserId.mockResolvedValueOnce({
+			ok: true,
+			data: { name: "Omer Cohen" },
+		});
+		mockAccessKeyCreate.mockResolvedValueOnce({
+			ok: true,
+			data: { cleartext: "t" },
+		});
+
+		await createKey(userCaller, "key");
+		expect(mockAccessKeyCreate.mock.calls[0][5].procellaLogin).toBe("Omer Cohen");
+
+		// No email, no name — falls to givenName+familyName
+		mockLoadByUserId.mockResolvedValueOnce({
+			ok: true,
+			data: { givenName: "Omer", familyName: "Cohen" },
+		});
+		mockAccessKeyCreate.mockResolvedValueOnce({
+			ok: true,
+			data: { cleartext: "t" },
+		});
+
+		await createKey(userCaller, "key");
+		expect(mockAccessKeyCreate.mock.calls[1][5].procellaLogin).toBe("Omer Cohen");
+
+		// No email, no name, no givenName+familyName — falls to loginIds[0]
+		mockLoadByUserId.mockResolvedValueOnce({
+			ok: true,
+			data: { loginIds: ["omer-login"] },
+		});
+		mockAccessKeyCreate.mockResolvedValueOnce({
+			ok: true,
+			data: { cleartext: "t" },
+		});
+
+		await createKey(userCaller, "key");
+		expect(mockAccessKeyCreate.mock.calls[2][5].procellaLogin).toBe("omer-login");
+	});
+
+	test("user lookup failure falls back to caller.login", async () => {
+		mockLoadByUserId.mockResolvedValueOnce({ ok: false });
+		mockAccessKeyCreate.mockResolvedValueOnce({
+			ok: true,
+			data: { cleartext: "t" },
+		});
+
+		await createKey(userCaller, "key");
+		expect(mockAccessKeyCreate.mock.calls[0][5].procellaLogin).toBe("omer");
 	});
 });

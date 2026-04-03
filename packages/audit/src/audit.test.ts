@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { AuditAction, extractResourceId, mapActionToType, mapRouteToAction } from "./index.js";
+import {
+	AuditAction,
+	extractResourceId,
+	extractResourceType,
+	mapActionToType,
+	mapRouteToAction,
+} from "./index.js";
 
 describe("@procella/audit", () => {
 	test("mapRouteToAction maps known routes", () => {
@@ -59,5 +65,32 @@ describe("@procella/audit", () => {
 		expect(mapActionToType("token.revoke")).toBe("warn");
 		expect(mapActionToType("update.cancel")).toBe("warn");
 		expect(mapActionToType("stack.create")).toBe("info");
+	});
+
+	test("mapRouteToAction maps webhook routes", () => {
+		expect(mapRouteToAction("POST", "/api/orgs/org/hooks")).toBe(AuditAction.WEBHOOK_CREATE);
+		expect(mapRouteToAction("DELETE", "/api/orgs/org/hooks/h1")).toBe(AuditAction.WEBHOOK_DELETE);
+	});
+
+	test("extractResourceType identifies resource types", () => {
+		expect(extractResourceType("/api/stacks/org/proj/dev")).toBe("stack");
+		expect(extractResourceType("/api/stacks/org/proj/dev/update/u1")).toBe("update");
+		expect(extractResourceType("/api/orgs/org/tokens")).toBe("token");
+		expect(extractResourceType("/api/orgs/org/tokens/tok1")).toBe("token");
+		expect(extractResourceType("/api/orgs/org/hooks")).toBe("webhook");
+		expect(extractResourceType("/api/orgs/org/hooks/h1")).toBe("webhook");
+		expect(extractResourceType("/api/unknown")).toBe("unknown");
+	});
+
+	test("extractResourceId falls back to path for unknown patterns", () => {
+		expect(extractResourceId("/api/unknown/path")).toBe("/api/unknown/path");
+	});
+
+	test("mapActionToType returns info for non-destructive actions", () => {
+		expect(mapActionToType("stack.update")).toBe("info");
+		expect(mapActionToType("stack.import")).toBe("info");
+		expect(mapActionToType("token.create")).toBe("info");
+		expect(mapActionToType("webhook.create")).toBe("info");
+		expect(mapActionToType("webhook.delete")).toBe("warn");
 	});
 });

@@ -172,4 +172,58 @@ describe("oauthHandlers", () => {
 
 		expect(res.headers.get("content-type")).toContain("application/json");
 	});
+
+	test("accepts application/json body (pulumi/auth-actions via axios)", async () => {
+		const oidc: OidcService = {
+			exchange: mock(async () => ({
+				access_token: "json-token",
+				issued_token_type: "urn:pulumi:token-type:access_token:organization",
+				token_type: "Bearer",
+				expires_in: 300,
+				scope: "",
+			})),
+		};
+		const app = buildApp(oidc);
+
+		const res = await app.request("/api/oauth/token", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				audience: "urn:pulumi:org:acme",
+				grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+				subject_token: "jwt-token",
+				subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
+				requested_token_type: "urn:pulumi:token-type:access_token:organization",
+				scope: "",
+				expiration: "300",
+			}),
+		});
+
+		expect(res.status).toBe(200);
+		const body = await res.json();
+		expect(body.access_token).toBe("json-token");
+		expect(oidc.exchange).toHaveBeenCalledTimes(1);
+	});
+
+	test("returns 500 for unexpected (non-OidcExchangeError) errors", async () => {
+		const oidc: OidcService = {
+			exchange: mock(async () => {
+				throw new TypeError("unexpected internal failure");
+			}),
+		};
+		const app = buildApp(oidc);
+
+		const res = await app.request("/api/oauth/token", {
+			method: "POST",
+			headers: { "Content-Type": "application/x-www-form-urlencoded" },
+			body: formBody(),
+		});
+
+		expect(res.status).toBe(500);
+		const body = await res.json();
+		expect(body.error).toBe("server_error");
+		expect(body.error_description).toBe("Token exchange failed");
+		// Must NOT leak internal error message
+		expect(body.error_description).not.toContain("unexpected internal failure");
+	});
 });
