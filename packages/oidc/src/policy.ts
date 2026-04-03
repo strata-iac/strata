@@ -1,6 +1,6 @@
 import type { Database } from "@procella/db";
 import { oidcTrustPolicies } from "@procella/db/src/schema.js";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import type { OidcTrustPolicy, TrustPolicyRepository } from "./types.js";
 
 export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
@@ -49,6 +49,19 @@ export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
 	async create(
 		policy: Omit<OidcTrustPolicy, "id" | "createdAt" | "updatedAt">,
 	): Promise<OidcTrustPolicy> {
+		// Clean up stale policies from OTHER tenants for this (orgSlug, issuer).
+		// This handles the case where a Descope project is recreated (e.g. sst remove → deploy)
+		// and old policies with defunct tenantIds remain in the DB.
+		await this.db
+			.delete(oidcTrustPolicies)
+			.where(
+				and(
+					eq(oidcTrustPolicies.orgSlug, policy.orgSlug),
+					eq(oidcTrustPolicies.issuer, policy.issuer),
+					ne(oidcTrustPolicies.tenantId, policy.tenantId),
+				),
+			);
+
 		const [row] = await this.db
 			.insert(oidcTrustPolicies)
 			.values({
