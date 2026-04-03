@@ -50,11 +50,11 @@ describe("matchPolicy", () => {
 		expect(matchPolicy(policy, claims)).toBe(true);
 	});
 
-	test("empty conditions matches all jwt claim sets", () => {
+	test("empty conditions REJECTS all jwt claim sets (security: prevents unrestricted access)", () => {
 		const policy = makePolicy({});
 
-		expect(matchPolicy(policy, {})).toBe(true);
-		expect(matchPolicy(policy, { any: "value", n: 1 })).toBe(true);
+		expect(matchPolicy(policy, {})).toBe(false);
+		expect(matchPolicy(policy, { any: "value", n: 1 })).toBe(false);
 	});
 
 	test("missing claim in jwt does not match", () => {

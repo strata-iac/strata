@@ -6,6 +6,20 @@ import type { OidcTrustPolicy, TrustPolicyRepository } from "./types.js";
 export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
 	constructor(private readonly db: Database) {}
 
+	async findByOrgSlugAndIssuer(orgSlug: string, issuer: string): Promise<OidcTrustPolicy[]> {
+		const rows = await this.db
+			.select()
+			.from(oidcTrustPolicies)
+			.where(
+				and(
+					eq(oidcTrustPolicies.orgSlug, orgSlug),
+					eq(oidcTrustPolicies.issuer, issuer),
+					eq(oidcTrustPolicies.active, true),
+				),
+			);
+		return rows.map(mapRow);
+	}
+
 	async findByOrgSlug(orgSlug: string, tenantId?: string): Promise<OidcTrustPolicy[]> {
 		const rows = await this.db
 			.select()
@@ -99,11 +113,14 @@ function mapRow(row: typeof oidcTrustPolicies.$inferSelect): OidcTrustPolicy {
 }
 
 export function matchPolicy(policy: OidcTrustPolicy, jwtClaims: Record<string, unknown>): boolean {
+	if (Object.keys(policy.claimConditions).length === 0) return false;
 	for (const [key, expectedValue] of Object.entries(policy.claimConditions)) {
 		const actualValue = jwtClaims[key];
+		// Strict: claim must exist and be a string or number. Reject undefined/null/object.
+		if (actualValue === undefined || actualValue === null) return false;
+		if (typeof actualValue !== "string" && typeof actualValue !== "number") return false;
 		if (String(actualValue) !== expectedValue) return false;
 	}
-
 	return true;
 }
 

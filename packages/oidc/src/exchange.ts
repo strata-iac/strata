@@ -54,16 +54,28 @@ export class OidcExchangeService implements OidcService {
 		if (!orgSlug) {
 			throw new OidcExchangeError("invalid_target", "audience missing org name");
 		}
-
-		const policies = await this.policies.findByOrgSlug(orgSlug);
-		if (policies.length === 0) {
-			throw new OidcExchangeError(
-				"access_denied",
-				"No trust policies configured for this organization",
-				403,
-			);
+		// Extract the issuer from the JWT header WITHOUT full verification.
+		// This is safe because we only use it for policy lookup, not for trust.
+		// The actual JWT verification happens below with the policy's expected issuer.
+		const tokenIssuer = this.extractIssuerFromToken(req.subjectToken);
+		if (!tokenIssuer) {
+			throw new OidcExchangeError("invalid_request", "subject_token missing issuer claim");
 		}
 
+		// Resolve candidate policies by (orgSlug, issuer) — scoped lookup.
+		const policies = await this.policies.findByOrgSlugAndIssuer(orgSlug, tokenIssuer);
+		if (policies.length === 0) {
+			throw new OidcExchangeError("access_denied", "Token exchange not available", 403);
+		}
+
+		// Tenant isolation: all candidate policies MUST belong to exactly one tenant.
+		// If the same (orgSlug, issuer) spans multiple tenants, fail closed.
+		const tenantIds = new Set(policies.map((p) => p.tenantId));
+		if (tenantIds.size !== 1) {
+			throw new OidcExchangeError("access_denied", "Token exchange not available", 403);
+		}
+
+		// Now verify the JWT and evaluate claim conditions.
 		let claims: Record<string, unknown> | null = null;
 		let matchedPolicy: OidcTrustPolicy | null = null;
 
@@ -84,7 +96,7 @@ export class OidcExchangeService implements OidcService {
 		}
 
 		if (!matchedPolicy || !claims) {
-			throw new OidcExchangeError("access_denied", "No matching trust policy for this token", 403);
+			throw new OidcExchangeError("access_denied", "Token exchange not available", 403);
 		}
 
 		const requestedExpiration = req.expiration ?? DEFAULT_EXCHANGE_EXPIRATION;
@@ -123,6 +135,21 @@ export class OidcExchangeService implements OidcService {
 			expires_in: expiration,
 			scope: "",
 		};
+	}
+
+	/**
+	 * Extract the `iss` claim from a JWT WITHOUT verification.
+	 * Used only for policy routing — the JWT is fully verified later.
+	 */
+	private extractIssuerFromToken(jwt: string): string | undefined {
+		try {
+			const parts = jwt.split(".");
+			if (parts.length !== 3) return undefined;
+			const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString());
+			return typeof payload.iss === "string" ? payload.iss : undefined;
+		} catch {
+			return undefined;
+		}
 	}
 }
 

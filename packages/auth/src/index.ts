@@ -210,13 +210,18 @@ export class DescopeAuthService implements AuthService {
 						u?.loginIds?.[0] ??
 						caller.login; // use pre-computed login for workload callers
 					const expireTime = opts?.expireTime ?? 0;
-					// Ensure procellaLogin and procellaOrgSlug are never overridable by caller-provided customClaims
+					// Strip procellaLogin and procellaOrgSlug from caller-provided claims,
+					// then re-add them with authoritative server-side values.
 					const {
 						procellaLogin: _a,
 						procellaOrgSlug: _b,
 						...safeCustomClaims
 					} = opts?.customClaims ?? {};
-					const customClaims = { procellaLogin: loginId, ...safeCustomClaims };
+					const customClaims = {
+						procellaLogin: loginId,
+						procellaOrgSlug: caller.orgSlug,
+						...safeCustomClaims,
+					};
 
 					const resp = await this.sdk.management.accessKey.create(
 						name,
@@ -492,10 +497,11 @@ function extractTenantId(claims: Record<string, unknown>): string | undefined {
 		return claims.dct;
 	}
 
-	// Fallback: look in tenants object for the first (and typically only) tenant
+	// Fallback: look in tenants object — MUST have exactly one tenant.
+	// Multiple tenants would make resolution non-deterministic (Object.keys ordering varies).
 	if (claims.tenants && typeof claims.tenants === "object") {
 		const tenantIds = Object.keys(claims.tenants as Record<string, unknown>);
-		if (tenantIds.length > 0) {
+		if (tenantIds.length === 1) {
 			return tenantIds[0];
 		}
 	}

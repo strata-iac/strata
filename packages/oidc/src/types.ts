@@ -49,7 +49,9 @@ export interface JwksValidator {
 }
 
 export interface TrustPolicyRepository {
-	/** Active policies only — used by the exchange service to validate tokens. */
+	/** Active policies for a given org+issuer — used by the exchange service. */
+	findByOrgSlugAndIssuer(orgSlug: string, issuer: string): Promise<OidcTrustPolicy[]>;
+	/** @deprecated Use findByOrgSlugAndIssuer for exchange. This is kept for admin listing. */
 	findByOrgSlug(orgSlug: string, tenantId?: string): Promise<OidcTrustPolicy[]>;
 	/** All policies including inactive — used by admin management UI. */
 	listByOrgSlug(orgSlug: string, tenantId?: string): Promise<OidcTrustPolicy[]>;

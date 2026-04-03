@@ -30,6 +30,7 @@ const mockPolicy: OidcTrustPolicy = {
 
 function mockPolicies(overrides?: Partial<TrustPolicyRepository>): TrustPolicyRepository {
 	return {
+		findByOrgSlugAndIssuer: mock(async () => [mockPolicy]),
 		findByOrgSlug: mock(async () => [mockPolicy]),
 		listByOrgSlug: mock(async () => [mockPolicy]),
 		create: mock(async () => mockPolicy),
