@@ -65,6 +65,8 @@ export class OidcExchangeService implements OidcService {
 		// Resolve candidate policies by (orgSlug, issuer) — scoped lookup.
 		const policies = await this.policies.findByOrgSlugAndIssuer(orgSlug, tokenIssuer);
 		if (policies.length === 0) {
+			// biome-ignore lint/suspicious/noConsole: security diagnostics
+			console.warn(`[oidc] no policies found for orgSlug=${orgSlug} issuer=${tokenIssuer}`);
 			throw new OidcExchangeError("access_denied", "Token exchange not available", 403);
 		}
 
@@ -72,6 +74,10 @@ export class OidcExchangeService implements OidcService {
 		// If the same (orgSlug, issuer) spans multiple tenants, fail closed.
 		const tenantIds = new Set(policies.map((p) => p.tenantId));
 		if (tenantIds.size !== 1) {
+			// biome-ignore lint/suspicious/noConsole: security diagnostics
+			console.warn(
+				`[oidc] ambiguous tenant resolution: ${tenantIds.size} tenants for orgSlug=${orgSlug} issuer=${tokenIssuer}`,
+			);
 			throw new OidcExchangeError("access_denied", "Token exchange not available", 403);
 		}
 
