@@ -230,7 +230,6 @@ export function createApp(deps: {
 	// User
 	api.get("/user", user.getCurrentUser);
 	api.get("/user/stacks", user.getUserStacks);
-	api.get("/user/organizations/default", user.getDefaultOrganization);
 	api.get("/user/organizations/:orgName", user.getOrganization);
 	api.get("/orgs/:org/auditlogs", requireRoleMiddleware("admin"), auditH.queryAuditLogs);
 	api.get("/orgs/:org/auditlogs/export", requireRoleMiddleware("admin"), auditH.exportAuditLogs);
