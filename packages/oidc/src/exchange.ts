@@ -66,8 +66,18 @@ export class OidcExchangeService implements OidcService {
 		const policies = await this.policies.findByOrgSlugAndIssuer(orgSlug, tokenIssuer);
 		if (policies.length === 0) {
 			// biome-ignore lint/suspicious/noConsole: security diagnostics
-			console.warn(`[oidc] no policies found for orgSlug=${orgSlug} issuer=${tokenIssuer}`);
-			throw new OidcExchangeError("access_denied", "Token exchange not available", 403);
+			console.warn(`[oidc] no policies for orgSlug=${orgSlug} issuer=${tokenIssuer}`);
+			// Also try the old method to see if it's an issuer mismatch
+			const allPolicies = await this.policies.findByOrgSlug(orgSlug);
+			// biome-ignore lint/suspicious/noConsole: security diagnostics
+			console.warn(
+				`[oidc] fallback findByOrgSlug found ${allPolicies.length} policies: ${JSON.stringify(allPolicies.map((p) => ({ issuer: p.issuer, active: p.active, tenantId: p.tenantId.slice(0, 8) })))}`,
+			);
+			throw new OidcExchangeError(
+				"access_denied",
+				`Token exchange not available (org=${orgSlug} iss=${tokenIssuer.slice(0, 40)} found=${allPolicies.length})`,
+				403,
+			);
 		}
 
 		// Tenant isolation: all candidate policies MUST belong to exactly one tenant.
