@@ -47,7 +47,7 @@ jobs:
           fail_ci_if_error: true
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v5
+        uses: codecov/test-results-action@v1
         with:
           files: test-results/unit.junit.xml
           flags: unit
@@ -115,7 +115,7 @@ jobs:
           bun test --reporter=junit --timeout 30000 --preload ./integration/setup.ts integration/ > test-results/integration.junit.xml 2>/dev/null || true
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v5
+        uses: codecov/test-results-action@v1
         with:
           files: test-results/integration.junit.xml
           flags: integration
@@ -210,7 +210,7 @@ jobs:
           bun test --reporter=junit --timeout 120000 --preload ./e2e/setup.ts e2e/*.test.ts > test-results/e2e.junit.xml 2>/dev/null || true
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v5
+        uses: codecov/test-results-action@v1
         with:
           files: test-results/e2e.junit.xml
           flags: e2e
