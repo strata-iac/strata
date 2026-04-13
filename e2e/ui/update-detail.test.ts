@@ -36,6 +36,7 @@ function runCmd(
 		const stderrChunks: Buffer[] = [];
 		proc.stdout?.resume(); // drain stdout to prevent pipe-buffer deadlock
 		proc.stderr?.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
+		proc.on("error", reject);
 		proc.on("close", (code) => {
 			if (code === 0) return resolve();
 			const stderr = Buffer.concat(stderrChunks).toString().trim();
