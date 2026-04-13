@@ -17,6 +17,11 @@ name: Renovate
 on:
   schedule:
     - cron: "0 * * * *" # every hour
+  pull_request:
+    paths:
+      - renovate.json
+      - .github/renovate-global.js
+      - .github/workflows/renovate.yml
   workflow_dispatch:
     inputs:
       dry_run:
@@ -68,4 +73,4 @@ jobs:
           token: ${{ steps.get_token.outputs.token }}
         env:
           LOG_LEVEL: ${{ inputs.log_level || 'info' }}
-          RENOVATE_DRY_RUN: ${{ inputs.dry_run == true && 'full' || '' }}
+          RENOVATE_DRY_RUN: ${{ github.event_name == 'pull_request' && 'full' || (inputs.dry_run == true && 'full' || '') }}
