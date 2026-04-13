@@ -7,6 +7,19 @@
   "prConcurrentLimit": 5,
   "packageRules": [
     {
+      "description": "Regenerate TypeScript types after Pulumi Go SDK bumps",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["github.com/pulumi/pulumi/sdk/v3"],
+      "postUpgradeTasks": {
+        "commands": [
+          "bun install --frozen-lockfile",
+          "bun run types:generate"
+        ],
+        "fileFilters": ["packages/types/**"],
+        "executionMode": "branch"
+      }
+    },
+    {
       "matchPackageNames": ["astro", "@astrojs/starlight", "zod"],
       "groupName": "astro + starlight + zod"
     },
