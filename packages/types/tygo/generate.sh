@@ -9,7 +9,7 @@ export PATH="${PATH}:$(go env GOPATH)/bin"
 # Install tygo if not already available
 if ! command -v tygo >/dev/null 2>&1; then
   echo "Installing tygo..."
-  go install github.com/gzuidhof/tygo@latest
+  go install github.com/gzuidhof/tygo@v0.2.21
 fi
 
 TYGO_DIR="$(cd "$(dirname "$0")" && pwd)"
