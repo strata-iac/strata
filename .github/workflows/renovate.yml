@@ -1,0 +1,76 @@
+# Self-hosted Renovate — runs on a schedule instead of the hosted GitHub App.
+# This enables postUpgradeTasks (e.g. regenerating Pulumi types after SDK bumps),
+# which the hosted app cannot do for security reasons.
+#
+# Prerequisites:
+#   1. Uninstall the hosted Renovate GitHub App from the repository
+#   2. Create a GitHub App with these repository permissions:
+#        contents: write, pull_requests: write, issues: write, workflows: write
+#   3. Install the app on the procella-dev org / procella repo
+#   4. Add the app's ID and private key as repository secrets:
+#        RENOVATE_APP_ID, RENOVATE_APP_PRIVATE_KEY
+#
+# A GitHub App is preferred over a PAT: permissions are scoped to the app,
+# tokens are short-lived, and commits show as the app (not a personal account).
+name: Renovate
+
+on:
+  schedule:
+    - cron: "0 * * * *" # every hour
+  pull_request:
+    paths:
+      - renovate.json
+      - .github/renovate-global.js
+      - .github/workflows/renovate.yml
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run in dry-run mode (no PRs created/updated)"
+        type: boolean
+        default: false
+      log_level:
+        description: "Log level"
+        type: choice
+        options:
+          - info
+          - debug
+          - trace
+        default: info
+
+concurrency:
+  group: renovate
+  # NEVER cancel-in-progress — Renovate is not idempotent mid-run
+  # and cancellation can leave PRs in inconsistent state
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Get GitHub App token
+        id: get_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.RENOVATE_APP_ID }}
+          private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
+
+      # Go + Bun must be on PATH for postUpgradeTasks (bun run types:generate)
+      - uses: jdx/mise-action@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: packages/types/tygo/go.mod
+          cache: false # no Go build cache needed — tygo install is fast
+
+      - name: Run Renovate
+        uses: renovatebot/github-action@v46.1.9
+        with:
+          configurationFile: .github/renovate-global.js
+          token: ${{ steps.get_token.outputs.token }}
+        env:
+          LOG_LEVEL: ${{ inputs.log_level || 'info' }}
+          RENOVATE_DRY_RUN: ${{ github.event_name == 'pull_request' && 'full' || (inputs.dry_run == true && 'full' || '') }}
