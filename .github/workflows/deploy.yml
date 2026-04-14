@@ -1,8 +1,17 @@
-name: Deploy Production (Manual)
+name: Deploy
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
+      stage:
+        description: "SST stage to deploy (e.g. production, dev, staging)"
+        required: true
+        type: choice
+        options:
+          - production
+          - dev
       ref:
         description: "Git ref to deploy (tag, branch, or SHA). Defaults to current default branch HEAD."
         required: false
@@ -12,8 +21,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-production
-  cancel-in-progress: false
+  group: deploy-${{ inputs.stage || 'dev' }}
+  cancel-in-progress: ${{ (inputs.stage || 'dev') != 'production' }}
 
 jobs:
   deploy:
@@ -22,7 +31,7 @@ jobs:
       id-token: write
       contents: read
     with:
-      stage: production
-      environment: production
+      stage: ${{ inputs.stage || 'dev' }}
+      environment: ${{ inputs.stage || 'dev' }}
       ref: ${{ inputs.ref || '' }}
     secrets: inherit
