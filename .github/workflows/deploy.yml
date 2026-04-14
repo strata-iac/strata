@@ -1,8 +1,8 @@
 name: Deploy Production
 
 on:
-  push:
-    branches: [main]
+  release:
+    types: [published]
   workflow_dispatch: {}
 
 permissions:
@@ -21,6 +21,8 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name || github.sha }}
       - uses: jdx/mise-action@v4
       - uses: actions/cache@v5
         with:
@@ -73,6 +75,7 @@ jobs:
           echo "| Status | \`${{ job.status }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Region | \`us-east-1\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | \`${{ github.event.release.tag_name || 'manual' }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Triggered by | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**URLs:**" >> $GITHUB_STEP_SUMMARY
