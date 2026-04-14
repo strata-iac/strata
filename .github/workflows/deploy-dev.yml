@@ -5,6 +5,10 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
+permissions:
+  id-token: write
+  contents: read
+
 concurrency:
   group: deploy-dev
   cancel-in-progress: true
@@ -12,13 +16,10 @@ concurrency:
 jobs:
   deploy:
     uses: ./.github/workflows/deploy-sst.yml
+    permissions:
+      id-token: write
+      contents: read
     with:
       stage: dev
       environment: dev
-    secrets:
-      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
-      PROCELLA_ENCRYPTION_KEY: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
-      PROCELLA_DEV_AUTH_TOKEN: ${{ secrets.PROCELLA_DEV_AUTH_TOKEN }}
-      DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
-      OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+    secrets: inherit

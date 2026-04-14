@@ -6,8 +6,12 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Git ref to deploy (tag, branch, or SHA). Defaults to latest release tag."
+        description: "Git ref to deploy (tag, branch, or SHA). Defaults to current default branch HEAD."
         required: false
+
+permissions:
+  id-token: write
+  contents: read
 
 concurrency:
   group: deploy-production
@@ -16,14 +20,11 @@ concurrency:
 jobs:
   deploy:
     uses: ./.github/workflows/deploy-sst.yml
+    permissions:
+      id-token: write
+      contents: read
     with:
       stage: production
       environment: production
-      ref: ${{ github.event.release.tag_name || inputs.ref || '' }}
-    secrets:
-      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
-      PROCELLA_ENCRYPTION_KEY: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
-      PROCELLA_DEV_AUTH_TOKEN: ${{ secrets.PROCELLA_DEV_AUTH_TOKEN }}
-      DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
-      OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+      ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.ref || '' }}
+    secrets: inherit
