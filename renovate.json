@@ -44,5 +44,10 @@
       "matchPackageNames": ["/^oven(-sh)?\\/bun$/"],
       "groupName": "bun"
     }
+    },
+    {
+      "matchPackageNames": ["@trpc/server", "@trpc/client", "@trpc/react-query"],
+      "groupName": "trpc"
+    }
   ]
 }
