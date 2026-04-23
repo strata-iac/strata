@@ -6,8 +6,9 @@ import {
 	escProjects,
 	escSessions,
 } from "@procella/db";
+import { withSpan } from "@procella/telemetry";
 import { BadRequestError, ConflictError, NotFoundError, ProcellaError } from "@procella/types";
-import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, lt, sql } from "drizzle-orm";
 import type { EvaluateDiagnostic, EvaluatorClient } from "./evaluator-client.js";
 import type {
 	CreateEnvironmentInput,
@@ -60,6 +61,8 @@ export interface EscService {
 		envName: string,
 		sessionId: string,
 	): Promise<OpenSessionResult | null>;
+
+	gcSweep(): Promise<{ closedCount: number }>;
 }
 
 export interface PostgresEscServiceDeps {
@@ -255,50 +258,61 @@ export class PostgresEscService implements EscService {
 			throw new BadRequestError("yamlBody must be a string");
 		}
 
-		try {
-			return await this.db.transaction(async (tx) => {
-				await tx
-					.insert(escProjects)
-					.values({ tenantId, name: input.projectName })
-					.onConflictDoNothing({
-						target: [escProjects.tenantId, escProjects.name],
+		return withSpan(
+			"procella.esc",
+			"esc.createEnvironment",
+			{ "tenant.id": tenantId, "project.name": input.projectName, "env.name": input.name },
+			async () => {
+				try {
+					return await this.db.transaction(async (tx) => {
+						await tx
+							.insert(escProjects)
+							.values({ tenantId, name: input.projectName })
+							.onConflictDoNothing({
+								target: [escProjects.tenantId, escProjects.name],
+							});
+
+						const [proj] = await tx
+							.select({ id: escProjects.id })
+							.from(escProjects)
+							.where(
+								and(eq(escProjects.tenantId, tenantId), eq(escProjects.name, input.projectName)),
+							);
+
+						if (!proj) {
+							throw new Error("esc_projects row disappeared after upsert");
+						}
+
+						const [env] = await tx
+							.insert(escEnvironments)
+							.values({
+								projectId: proj.id,
+								name: input.name,
+								yamlBody: input.yamlBody,
+								currentRevisionNumber: 1,
+								createdBy,
+							})
+							.returning();
+
+						await tx.insert(escEnvironmentRevisions).values({
+							environmentId: env.id,
+							revisionNumber: 1,
+							yamlBody: input.yamlBody,
+							createdBy,
+						});
+
+						return toEnvInfo(env);
 					});
-
-				const [proj] = await tx
-					.select({ id: escProjects.id })
-					.from(escProjects)
-					.where(and(eq(escProjects.tenantId, tenantId), eq(escProjects.name, input.projectName)));
-
-				if (!proj) {
-					throw new Error("esc_projects row disappeared after upsert");
+				} catch (err: unknown) {
+					if (pgErrorCode(err) === "23505") {
+						throw new ConflictError(
+							`Environment ${input.projectName}/${input.name} already exists`,
+						);
+					}
+					throw err;
 				}
-
-				const [env] = await tx
-					.insert(escEnvironments)
-					.values({
-						projectId: proj.id,
-						name: input.name,
-						yamlBody: input.yamlBody,
-						currentRevisionNumber: 1,
-						createdBy,
-					})
-					.returning();
-
-				await tx.insert(escEnvironmentRevisions).values({
-					environmentId: env.id,
-					revisionNumber: 1,
-					yamlBody: input.yamlBody,
-					createdBy,
-				});
-
-				return toEnvInfo(env);
-			});
-		} catch (err: unknown) {
-			if (pgErrorCode(err) === "23505") {
-				throw new ConflictError(`Environment ${input.projectName}/${input.name} already exists`);
-			}
-			throw err;
-		}
+			},
+		);
 	}
 
 	async listEnvironments(tenantId: string, projectName: string): Promise<EscEnvironment[]> {
@@ -338,65 +352,77 @@ export class PostgresEscService implements EscService {
 			throw new BadRequestError("yamlBody must be a string");
 		}
 
-		return await this.db.transaction(async (tx) => {
-			const [locked] = await tx
-				.select({ env: escEnvironments })
-				.from(escEnvironments)
-				.innerJoin(escProjects, eq(escEnvironments.projectId, escProjects.id))
-				.where(
-					and(
-						eq(escProjects.tenantId, tenantId),
-						eq(escProjects.name, projectName),
-						eq(escEnvironments.name, envName),
-						isNull(escEnvironments.deletedAt),
-					),
-				)
-				.limit(1)
-				.for("update", { of: escEnvironments });
+		return withSpan(
+			"procella.esc",
+			"esc.updateEnvironment",
+			{ "tenant.id": tenantId, "project.name": projectName, "env.name": envName },
+			() =>
+				this.db.transaction(async (tx) => {
+					const [locked] = await tx
+						.select({ env: escEnvironments })
+						.from(escEnvironments)
+						.innerJoin(escProjects, eq(escEnvironments.projectId, escProjects.id))
+						.where(
+							and(
+								eq(escProjects.tenantId, tenantId),
+								eq(escProjects.name, projectName),
+								eq(escEnvironments.name, envName),
+								isNull(escEnvironments.deletedAt),
+							),
+						)
+						.limit(1)
+						.for("update", { of: escEnvironments });
 
-			if (!locked) {
-				throw new NotFoundError("Environment", `${projectName}/${envName}`);
-			}
-			const row = locked.env;
+					if (!locked) {
+						throw new NotFoundError("Environment", `${projectName}/${envName}`);
+					}
+					const row = locked.env;
 
-			const nextRevision = row.currentRevisionNumber + 1;
-			const now = new Date();
+					const nextRevision = row.currentRevisionNumber + 1;
+					const now = new Date();
 
-			const [updated] = await tx
-				.update(escEnvironments)
-				.set({
-					yamlBody: input.yamlBody,
-					currentRevisionNumber: nextRevision,
-					updatedAt: now,
-				})
-				.where(eq(escEnvironments.id, row.id))
-				.returning();
+					const [updated] = await tx
+						.update(escEnvironments)
+						.set({
+							yamlBody: input.yamlBody,
+							currentRevisionNumber: nextRevision,
+							updatedAt: now,
+						})
+						.where(eq(escEnvironments.id, row.id))
+						.returning();
 
-			await tx.insert(escEnvironmentRevisions).values({
-				environmentId: row.id,
-				revisionNumber: nextRevision,
-				yamlBody: input.yamlBody,
-				createdBy: updatedBy,
-			});
+					await tx.insert(escEnvironmentRevisions).values({
+						environmentId: row.id,
+						revisionNumber: nextRevision,
+						yamlBody: input.yamlBody,
+						createdBy: updatedBy,
+					});
 
-			return toEnvInfo(updated);
-		});
+					return toEnvInfo(updated);
+				}),
+		);
 	}
 
 	async deleteEnvironment(tenantId: string, projectName: string, envName: string): Promise<void> {
-		await this.db.transaction(async (tx) => {
-			const row = await findEnvRow(tx, tenantId, projectName, envName);
-			if (!row) {
-				throw new NotFoundError("Environment", `${projectName}/${envName}`);
-			}
-			const result = await tx
-				.update(escEnvironments)
-				.set({ deletedAt: new Date() })
-				.where(and(eq(escEnvironments.id, row.id), isNull(escEnvironments.deletedAt)));
-			if (result.rowCount === 0) {
-				throw new NotFoundError("Environment", `${projectName}/${envName}`);
-			}
-		});
+		return withSpan(
+			"procella.esc",
+			"esc.deleteEnvironment",
+			{ "tenant.id": tenantId, "project.name": projectName, "env.name": envName },
+			() =>
+				this.db.transaction(async (tx) => {
+					const row = await findEnvRow(tx, tenantId, projectName, envName);
+					if (!row) {
+						throw new NotFoundError("Environment", `${projectName}/${envName}`);
+					}
+					const result = await tx
+						.update(escEnvironments)
+						.set({ deletedAt: new Date() })
+						.where(and(eq(escEnvironments.id, row.id), isNull(escEnvironments.deletedAt)));
+					if (result.rowCount === 0) {
+						throw new NotFoundError("Environment", `${projectName}/${envName}`);
+					}
+				}),
+		);
 	}
 
 	async listRevisions(
@@ -444,77 +470,107 @@ export class PostgresEscService implements EscService {
 		projectName: string,
 		envName: string,
 	): Promise<OpenSessionResult> {
-		const envRow = await findEnvRow(this.db, tenantId, projectName, envName);
-		if (!envRow) {
-			throw new NotFoundError("Environment", `${projectName}/${envName}`);
-		}
+		return withSpan(
+			"procella.esc",
+			"esc.openSession",
+			{ "tenant.id": tenantId, "project.name": projectName, "env.name": envName },
+			async () => {
+				const envRow = await findEnvRow(this.db, tenantId, projectName, envName);
+				if (!envRow) {
+					throw new NotFoundError("Environment", `${projectName}/${envName}`);
+				}
 
-		const [revisionRow] = await this.db
-			.select()
-			.from(escEnvironmentRevisions)
-			.where(
-				and(
-					eq(escEnvironmentRevisions.environmentId, envRow.id),
-					eq(escEnvironmentRevisions.revisionNumber, envRow.currentRevisionNumber),
-				),
-			)
-			.limit(1);
-		if (!revisionRow) {
-			throw new NotFoundError(
-				"EnvironmentRevision",
-				`${projectName}/${envName}#${envRow.currentRevisionNumber}`,
-			);
-		}
+				const [revisionRow] = await this.db
+					.select()
+					.from(escEnvironmentRevisions)
+					.where(
+						and(
+							eq(escEnvironmentRevisions.environmentId, envRow.id),
+							eq(escEnvironmentRevisions.revisionNumber, envRow.currentRevisionNumber),
+						),
+					)
+					.limit(1);
+				if (!revisionRow) {
+					throw new NotFoundError(
+						"EnvironmentRevision",
+						`${projectName}/${envName}#${envRow.currentRevisionNumber}`,
+					);
+				}
 
-		const resolvedImports = await this.resolveImports(
-			this.db,
-			tenantId,
-			projectName,
-			envRow.yamlBody,
-			new Set<string>(),
-			0,
+				const importRefs = extractImports(envRow.yamlBody);
+				const resolvedImports = await withSpan(
+					"procella.esc",
+					"esc.resolveImports",
+					{ "imports.count": importRefs.length, "imports.depth": 0 },
+					async () =>
+						this.resolveImports(
+							this.db,
+							tenantId,
+							projectName,
+							envRow.yamlBody,
+							new Set<string>(),
+							0,
+						),
+				);
+
+				const result = await withSpan(
+					"procella.esc",
+					"esc.evaluator.invoke",
+					{
+						"env.name": envName,
+						"imports.count": Object.keys(resolvedImports).length,
+					},
+					async () =>
+						this.evaluator.evaluate({
+							definition: envRow.yamlBody,
+							imports: resolvedImports,
+							encryptionKeyHex: this.encryptionKeyHex,
+						}),
+				);
+
+				const errorDiags = result.diagnostics.filter((d) => d.severity === "error");
+				if (errorDiags.length > 0 && !result.values) {
+					throw new EscEvaluationError(errorDiags);
+				}
+
+				const [session] = await withSpan(
+					"procella.esc",
+					"esc.session.store",
+					{ "secrets.count": result.secrets.length },
+					async () => {
+						const cryptoSvc = new AesCryptoService(this.encryptionKeyHex);
+						const envFQN = `${tenantId}/${projectName}/${envName}`;
+						const plaintext = new TextEncoder().encode(JSON.stringify(result.values));
+						const cipherBytes = await cryptoSvc.encrypt(plaintext, envFQN);
+						const ciphertextBase64 = Buffer.from(cipherBytes).toString("base64");
+
+						const expiresAt = new Date(Date.now() + this.sessionTtlSeconds * 1000);
+
+						return this.db
+							.insert(escSessions)
+							.values({
+								environmentId: envRow.id,
+								revisionId: revisionRow.id,
+								resolvedValuesCiphertext: ciphertextBase64,
+								secretPaths: result.secrets,
+								expiresAt,
+							})
+							.returning();
+					},
+				);
+
+				if (errorDiags.length > 0) {
+					throw new EscEvaluationError(errorDiags);
+				}
+
+				return {
+					sessionId: session.id,
+					values: result.values,
+					secrets: result.secrets,
+					expiresAt: session.expiresAt,
+				};
+			},
 		);
-
-		const result = await this.evaluator.evaluate({
-			definition: envRow.yamlBody,
-			imports: resolvedImports,
-			encryptionKeyHex: this.encryptionKeyHex,
-		});
-
-		const errorDiags = result.diagnostics.filter((d) => d.severity === "error");
-		if (errorDiags.length > 0 && !result.values) {
-			throw new EscEvaluationError(errorDiags);
-		}
-
-		const crypto = new AesCryptoService(this.encryptionKeyHex);
-		const envFQN = `${tenantId}/${projectName}/${envName}`;
-		const plaintext = new TextEncoder().encode(JSON.stringify(result.values));
-		const cipherBytes = await crypto.encrypt(plaintext, envFQN);
-		const ciphertextBase64 = Buffer.from(cipherBytes).toString("base64");
-
-		const expiresAt = new Date(Date.now() + this.sessionTtlSeconds * 1000);
-
-		const [session] = await this.db
-			.insert(escSessions)
-			.values({
-				environmentId: envRow.id,
-				revisionId: revisionRow.id,
-				resolvedValuesCiphertext: ciphertextBase64,
-				secretPaths: result.secrets,
-				expiresAt,
-			})
-			.returning();
-
-		if (errorDiags.length > 0) {
-			throw new EscEvaluationError(errorDiags);
-		}
-
-		return {
-			sessionId: session.id,
-			values: result.values,
-			secrets: result.secrets,
-			expiresAt: session.expiresAt,
-		};
 	}
 
 	async getSession(
@@ -523,40 +579,46 @@ export class PostgresEscService implements EscService {
 		envName: string,
 		sessionId: string,
 	): Promise<OpenSessionResult | null> {
-		const envRow = await findEnvRow(this.db, tenantId, projectName, envName);
-		if (!envRow) {
-			return null;
-		}
+		return withSpan("procella.esc", "esc.getSession", { "session.id": sessionId }, async () => {
+			const envRow = await findEnvRow(this.db, tenantId, projectName, envName);
+			if (!envRow) {
+				return null;
+			}
 
-		const [row] = await this.db
-			.select()
-			.from(escSessions)
-			.where(
-				and(
-					eq(escSessions.id, sessionId),
-					eq(escSessions.environmentId, envRow.id),
-					isNull(escSessions.closedAt),
-					gt(escSessions.expiresAt, new Date()),
-				),
-			)
-			.limit(1);
+			const [row] = await this.db
+				.select()
+				.from(escSessions)
+				.where(
+					and(
+						eq(escSessions.id, sessionId),
+						eq(escSessions.environmentId, envRow.id),
+						isNull(escSessions.closedAt),
+						gt(escSessions.expiresAt, new Date()),
+					),
+				)
+				.limit(1);
 
-		if (!row) {
-			return null;
-		}
+			if (!row) {
+				return null;
+			}
 
-		const crypto = new AesCryptoService(this.encryptionKeyHex);
-		const envFQN = `${tenantId}/${projectName}/${envName}`;
-		const cipherBytes = Buffer.from(row.resolvedValuesCiphertext, "base64");
-		const plainBytes = await crypto.decrypt(new Uint8Array(cipherBytes), envFQN);
-		const values = JSON.parse(new TextDecoder().decode(plainBytes)) as Record<string, unknown>;
+			const cryptoSvc = new AesCryptoService(this.encryptionKeyHex);
+			const envFQN = `${tenantId}/${projectName}/${envName}`;
+			const cipherBytes = Buffer.from(row.resolvedValuesCiphertext, "base64");
+			const plainBytes = await cryptoSvc.decrypt(new Uint8Array(cipherBytes), envFQN);
+			const values = JSON.parse(new TextDecoder().decode(plainBytes)) as Record<string, unknown>;
 
-		return {
-			sessionId: row.id,
-			values,
-			secrets: row.secretPaths,
-			expiresAt: row.expiresAt,
-		};
+			return {
+				sessionId: row.id,
+				values,
+				secrets: row.secretPaths,
+				expiresAt: row.expiresAt,
+			};
+		});
+	}
+
+	async gcSweep(): Promise<{ closedCount: number }> {
+		return escGcSweep(this.db);
 	}
 
 	private async resolveImports(
@@ -622,6 +684,53 @@ export class PostgresEscService implements EscService {
 
 		return result;
 	}
+}
+
+// ============================================================================
+// ESC Session GC — standalone function for use by cron lambdas
+// ============================================================================
+
+/** Advisory lock ID for ESC session GC (ASCII "ESCG_ESC"). Distinct from updates GC lock. */
+const ESC_GC_ADVISORY_LOCK_ID = 0x455343475f455343n;
+
+/**
+ * Sweep expired ESC sessions. Uses pg_try_advisory_lock for cluster safety.
+ * Soft-closes (sets closed_at) up to 1000 expired sessions per sweep.
+ * Returns { closedCount: 0 } if lock not acquired (another replica handles it).
+ */
+export async function escGcSweep(db: Database): Promise<{ closedCount: number }> {
+	return withSpan("procella.esc", "esc.gc.sweep", {}, async () => {
+		const lockResult = await db.execute(
+			sql`SELECT pg_try_advisory_lock(${ESC_GC_ADVISORY_LOCK_ID}) as acquired`,
+		);
+		const rows = "rows" in lockResult ? lockResult.rows : lockResult;
+		const acquired = (rows[0] as { acquired?: boolean })?.acquired;
+		if (!acquired) {
+			return { closedCount: 0 };
+		}
+
+		try {
+			const expired = await db
+				.select({ id: escSessions.id })
+				.from(escSessions)
+				.where(and(lt(escSessions.expiresAt, sql`now()`), isNull(escSessions.closedAt)))
+				.limit(1000);
+
+			if (expired.length === 0) {
+				return { closedCount: 0 };
+			}
+
+			const ids = expired.map((s) => s.id);
+			await db
+				.update(escSessions)
+				.set({ closedAt: sql`now()` })
+				.where(inArray(escSessions.id, ids));
+
+			return { closedCount: ids.length };
+		} finally {
+			await db.execute(sql`SELECT pg_advisory_unlock(${ESC_GC_ADVISORY_LOCK_ID})`);
+		}
+	});
 }
 
 export type {

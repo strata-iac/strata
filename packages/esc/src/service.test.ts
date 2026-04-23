@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { AesCryptoService } from "@procella/crypto";
-import { createDb, escProjects, escSessions } from "@procella/db";
+import { createDb, type Database, escProjects, escSessions } from "@procella/db";
 import { ConflictError, NotFoundError } from "@procella/types";
 import { eq } from "drizzle-orm";
 import type { EvaluatePayload, EvaluateResult, EvaluatorClient } from "./evaluator-client.js";
@@ -425,5 +425,111 @@ describe.skipIf(!(await hasDb()))("PostgresEscService — sessions", () => {
 
 		const fetched = await service.getSession(tenant, "proj", "missing", crypto.randomUUID());
 		expect(fetched).toBeNull();
+	});
+});
+
+// ============================================================================
+// GC sweep tests — escGcSweep / gcSweep
+// ============================================================================
+
+describe.skipIf(!(await hasDb()))("PostgresEscService — GC sweep", () => {
+	const tenant = `t-gc-${crypto.randomUUID().slice(0, 8)}`;
+	const user = "test-user";
+	const encryptionKeyHex = "00".repeat(32);
+
+	let mockEval: MockEvaluatorClient;
+	let service: PostgresEscService;
+	let db: Database;
+	let dbClient: { close(): Promise<void> };
+
+	beforeAll(async () => {
+		const result = await createDb({ url: DB_URL });
+		db = result.db;
+		dbClient = result.client;
+		mockEval = new MockEvaluatorClient();
+		service = new PostgresEscService({ db, evaluator: mockEval, encryptionKeyHex });
+	});
+
+	afterAll(async () => {
+		await dbClient.close();
+	});
+
+	beforeEach(async () => {
+		const { db: cleanDb, client: cleanClient } = await createDb({ url: DB_URL });
+		try {
+			mockEval.result = { values: { foo: "bar" }, secrets: [], diagnostics: [] };
+			mockEval.lastPayload = null;
+			await cleanDb.delete(escProjects).where(eq(escProjects.tenantId, tenant));
+		} finally {
+			await cleanClient.close();
+		}
+	});
+
+	test("gcSweep closes expired+open sessions, leaves others unchanged", async () => {
+		// Pre-clean: sweep any pre-existing stale sessions from other test runs
+		await service.gcSweep();
+
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "gc-proj", name: "dev", yamlBody: "values:\n  a: 1\n" },
+			user,
+		);
+
+		const shortTtlService = new PostgresEscService({
+			db,
+			evaluator: mockEval,
+			encryptionKeyHex,
+			sessionTtlSeconds: 0,
+		});
+
+		// Session 1: expired + open (should be closed by GC)
+		const session1 = await shortTtlService.openSession(tenant, "gc-proj", "dev");
+		await new Promise((r) => setTimeout(r, 50));
+
+		// Session 2: expired + already closed (should be unchanged)
+		const session2 = await shortTtlService.openSession(tenant, "gc-proj", "dev");
+		await new Promise((r) => setTimeout(r, 50));
+		const { db: updateDb, client: updateClient } = await createDb({ url: DB_URL });
+		try {
+			await updateDb
+				.update(escSessions)
+				.set({ closedAt: new Date() })
+				.where(eq(escSessions.id, session2.sessionId));
+		} finally {
+			await updateClient.close();
+		}
+
+		// Session 3: active (default 1hr TTL, should be unchanged)
+		const session3 = await service.openSession(tenant, "gc-proj", "dev");
+
+		const result = await service.gcSweep();
+		expect(result.closedCount).toBe(1);
+
+		// Verify DB state of each session
+		const { db: checkDb, client: checkClient } = await createDb({ url: DB_URL });
+		try {
+			const [s1] = await checkDb
+				.select()
+				.from(escSessions)
+				.where(eq(escSessions.id, session1.sessionId))
+				.limit(1);
+			expect(s1.closedAt).not.toBeNull();
+
+			const [s2] = await checkDb
+				.select()
+				.from(escSessions)
+				.where(eq(escSessions.id, session2.sessionId))
+				.limit(1);
+			expect(s2.closedAt).not.toBeNull();
+
+			const [s3] = await checkDb
+				.select()
+				.from(escSessions)
+				.where(eq(escSessions.id, session3.sessionId))
+				.limit(1);
+			expect(s3.closedAt).toBeNull();
+		} finally {
+			await checkClient.close();
+		}
 	});
 });

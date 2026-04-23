@@ -6,7 +6,9 @@
 	"types": "src/index.ts",
 	"dependencies": {
 		"@aws-sdk/client-lambda": "^3.883.0",
+		"@procella/crypto": "workspace:*",
 		"@procella/db": "workspace:*",
+		"@procella/telemetry": "workspace:*",
 		"@procella/types": "workspace:*",
 		"drizzle-orm": "catalog:"
 	}

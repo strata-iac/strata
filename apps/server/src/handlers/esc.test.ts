@@ -58,6 +58,7 @@ function mockEscService(overrides?: Partial<EscService>): EscService {
 			secrets: [],
 			expiresAt: new Date("2025-01-02"),
 		})),
+		gcSweep: mock(async () => ({ closedCount: 0 })),
 		...overrides,
 	};
 }

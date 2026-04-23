@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"strings"
@@ -162,5 +163,60 @@ func TestHandleRejectsMalformedYAML(t *testing.T) {
 	}
 	if !hasError {
 		t.Fatal("expected error or error-severity diagnostic for malformed YAML")
+	}
+}
+
+func TestRunStdioSuccess(t *testing.T) {
+	req := EvaluateRequest{
+		Definition:       "values:\n  foo: bar\n",
+		EncryptionKeyHex: validKey,
+	}
+	input, _ := json.Marshal(req)
+
+	var out bytes.Buffer
+	if err := runStdio(bytes.NewReader(input), &out); err != nil {
+		t.Fatalf("runStdio returned error: %v", err)
+	}
+
+	var resp EvaluateResponse
+	if err := json.Unmarshal(out.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v (raw: %s)", err, out.String())
+	}
+	if resp.Values["foo"] != "bar" {
+		t.Errorf("Values.foo = %v, want bar", resp.Values["foo"])
+	}
+}
+
+func TestRunStdioHandlerError(t *testing.T) {
+	req := EvaluateRequest{
+		Definition:       "",
+		EncryptionKeyHex: validKey,
+	}
+	input, _ := json.Marshal(req)
+
+	var out bytes.Buffer
+	if err := runStdio(bytes.NewReader(input), &out); err != nil {
+		t.Fatalf("runStdio returned error: %v", err)
+	}
+
+	var errResp struct{ Error string }
+	if err := json.Unmarshal(out.Bytes(), &errResp); err != nil {
+		t.Fatalf("failed to unmarshal error response: %v (raw: %s)", err, out.String())
+	}
+	if errResp.Error == "" {
+		t.Fatal("expected non-empty error field")
+	}
+	if !strings.Contains(errResp.Error, "definition") {
+		t.Errorf("expected definition error, got: %s", errResp.Error)
+	}
+}
+
+func TestRunStdioMalformedJSON(t *testing.T) {
+	err := runStdio(strings.NewReader("{bad json"), &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("expected error for malformed JSON input")
+	}
+	if !strings.Contains(err.Error(), "unmarshal") {
+		t.Errorf("expected unmarshal error, got: %v", err)
 	}
 }

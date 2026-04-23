@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/aws/aws-lambda-go/lambda"
@@ -142,6 +145,39 @@ func collectSecretPaths(v esc.Value, prefix string, paths *[]string) {
 	}
 }
 
+// runStdio reads a single JSON EvaluateRequest from stdin, calls handle(),
+// and writes the JSON response to stdout. Used by integration tests to exercise
+// the real Go evaluator without the AWS Lambda runtime.
+func runStdio(r io.Reader, w io.Writer) error {
+	input, err := io.ReadAll(r)
+	if err != nil {
+		return fmt.Errorf("read stdin: %w", err)
+	}
+
+	var req EvaluateRequest
+	if err := json.Unmarshal(input, &req); err != nil {
+		return fmt.Errorf("unmarshal request: %w", err)
+	}
+
+	resp, err := handle(context.Background(), req)
+	if err != nil {
+		// Return structured error response for handler errors (validation, eval failures).
+		errResp := struct {
+			Error string `json:"error"`
+		}{Error: err.Error()}
+		return json.NewEncoder(w).Encode(errResp)
+	}
+
+	return json.NewEncoder(w).Encode(resp)
+}
+
 func main() {
+	if os.Getenv("PROCELLA_ESC_STDIO") == "1" {
+		if err := runStdio(os.Stdin, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "stdio error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 	lambda.Start(handle)
 }
