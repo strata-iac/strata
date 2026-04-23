@@ -277,6 +277,7 @@ export const escEnvironments = pgTable(
 		yamlBody: text("yaml_body").notNull(),
 		currentRevisionNumber: integer("current_revision_number").notNull().default(1),
 		createdBy: text("created_by").notNull(),
+		tags: jsonb().$type<Record<string, string>>().notNull().default({}),
 		deletedAt: timestamp("deleted_at"),
 		createdAt: timestamp("created_at").notNull().defaultNow(),
 		updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -339,6 +340,60 @@ export const escSessions = pgTable(
 );
 
 // ============================================================================
+// esc_revision_tags — Named references to specific revisions (e.g. "stable").
+// Unique per (environment_id, name) so one tag name maps to exactly one
+// revision within an environment. Applying a tag to a new revision uses upsert.
+// ============================================================================
+
+export const escRevisionTags = pgTable(
+	"esc_revision_tags",
+	{
+		id: uuid().primaryKey().defaultRandom(),
+		environmentId: uuid("environment_id")
+			.notNull()
+			.references(() => escEnvironments.id, { onDelete: "cascade" }),
+		revisionId: uuid("revision_id")
+			.notNull()
+			.references(() => escEnvironmentRevisions.id, { onDelete: "cascade" }),
+		name: text().notNull(),
+		createdBy: text("created_by").notNull(),
+		createdAt: timestamp("created_at").notNull().defaultNow(),
+	},
+	(table) => [
+		uniqueIndex("idx_esc_rev_tags_env_name").on(table.environmentId, table.name),
+		index("idx_esc_rev_tags_revision").on(table.revisionId),
+	],
+);
+
+// ============================================================================
+// esc_drafts — Proposed changes that require review before applying.
+// Status transitions: open → applied | discarded. Once applied, the
+// applied_revision_id links to the revision created by applyDraft.
+// ============================================================================
+
+export const escDrafts = pgTable(
+	"esc_drafts",
+	{
+		id: uuid().primaryKey().defaultRandom(),
+		environmentId: uuid("environment_id")
+			.notNull()
+			.references(() => escEnvironments.id, { onDelete: "cascade" }),
+		yamlBody: text("yaml_body").notNull(),
+		description: text().notNull().default(""),
+		createdBy: text("created_by").notNull(),
+		status: text().notNull().default("open"),
+		appliedRevisionId: uuid("applied_revision_id").references(() => escEnvironmentRevisions.id),
+		appliedAt: timestamp("applied_at"),
+		createdAt: timestamp("created_at").notNull().defaultNow(),
+		updatedAt: timestamp("updated_at").notNull().defaultNow(),
+	},
+	(table) => [
+		index("idx_esc_drafts_env").on(table.environmentId),
+		index("idx_esc_drafts_status").on(table.environmentId, table.status),
+	],
+);
+
+// ============================================================================
 // Schema export — pass to drizzle() for relational queries
 // ============================================================================
 
@@ -357,4 +412,6 @@ export const schema = {
 	escEnvironments,
 	escEnvironmentRevisions,
 	escSessions,
+	escRevisionTags,
+	escDrafts,
 };

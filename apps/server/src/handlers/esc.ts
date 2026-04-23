@@ -1,4 +1,9 @@
-import type { CreateEnvironmentInput, EscService, UpdateEnvironmentInput } from "@procella/esc";
+import type {
+	CreateEnvironmentInput,
+	DraftStatus,
+	EscService,
+	UpdateEnvironmentInput,
+} from "@procella/esc";
 import { BadRequestError, NotFoundError } from "@procella/types";
 import type { Context } from "hono";
 import { z } from "zod/v4";
@@ -6,6 +11,13 @@ import type { Env } from "../types.js";
 import { param } from "./params.js";
 
 const yamlBodySchema = z.object({ yamlBody: z.string() });
+
+const envTagsSchema = z.record(z.string(), z.string());
+const envTagsPatchSchema = z.record(z.string(), z.string().nullable());
+const draftCreateSchema = z.object({
+	yamlBody: z.string(),
+	description: z.string().optional().default(""),
+});
 
 export function escHandlers(deps: { esc: EscService }) {
 	const requireOrgMatch = (c: Context<Env>): string => {
@@ -120,6 +132,137 @@ export function escHandlers(deps: { esc: EscService }) {
 				throw new NotFoundError("EscSession", sessionId);
 			}
 			return c.json(result);
+		},
+
+		listRevisionTags: async (c: Context<Env>) => {
+			const tenantId = requireOrgMatch(c);
+			const projectName = param(c, "project");
+			const envName = param(c, "envName");
+			const tags = await deps.esc.listRevisionTags(tenantId, projectName, envName);
+			return c.json({ tags });
+		},
+
+		tagRevision: async (c: Context<Env>) => {
+			const tenantId = requireOrgMatch(c);
+			const caller = c.get("caller");
+			const projectName = param(c, "project");
+			const envName = param(c, "envName");
+			const versionStr = param(c, "version");
+			const tagName = param(c, "tagName");
+			const revisionNumber = Number.parseInt(versionStr, 10);
+			if (!Number.isInteger(revisionNumber) || revisionNumber < 1) {
+				throw new BadRequestError("version must be a positive integer");
+			}
+			await deps.esc.tagRevision(
+				tenantId,
+				projectName,
+				envName,
+				revisionNumber,
+				tagName,
+				caller.userId,
+			);
+			return c.body(null, 204);
+		},
+
+		untagRevision: async (c: Context<Env>) => {
+			const tenantId = requireOrgMatch(c);
+			const projectName = param(c, "project");
+			const envName = param(c, "envName");
+			const tagName = param(c, "tagName");
+			await deps.esc.untagRevision(tenantId, projectName, envName, tagName);
+			return c.body(null, 204);
+		},
+
+		getEnvironmentTags: async (c: Context<Env>) => {
+			const tenantId = requireOrgMatch(c);
+			const projectName = param(c, "project");
+			const envName = param(c, "envName");
+			const tags = await deps.esc.getEnvironmentTags(tenantId, projectName, envName);
+			return c.json({ tags });
+		},
+
+		setEnvironmentTags: async (c: Context<Env>) => {
+			const tenantId = requireOrgMatch(c);
+			const projectName = param(c, "project");
+			const envName = param(c, "envName");
+			const body = await c.req.json().catch(() => ({}));
+			const tags = envTagsSchema.parse(body);
+			await deps.esc.setEnvironmentTags(tenantId, projectName, envName, tags);
+			return c.body(null, 204);
+		},
+
+		updateEnvironmentTags: async (c: Context<Env>) => {
+			const tenantId = requireOrgMatch(c);
+			const projectName = param(c, "project");
+			const envName = param(c, "envName");
+			const body = await c.req.json().catch(() => ({}));
+			const patch = envTagsPatchSchema.parse(body);
+			await deps.esc.updateEnvironmentTags(tenantId, projectName, envName, patch);
+			return c.body(null, 204);
+		},
+
+		createDraft: async (c: Context<Env>) => {
+			const tenantId = requireOrgMatch(c);
+			const caller = c.get("caller");
+			const projectName = param(c, "project");
+			const envName = param(c, "envName");
+			const body = await c.req.json().catch(() => ({}));
+			const parsed = draftCreateSchema.parse(body);
+			const draft = await deps.esc.createDraft(
+				tenantId,
+				projectName,
+				envName,
+				parsed.yamlBody,
+				parsed.description,
+				caller.userId,
+			);
+			return c.json(draft, 201);
+		},
+
+		listDrafts: async (c: Context<Env>) => {
+			const tenantId = requireOrgMatch(c);
+			const projectName = param(c, "project");
+			const envName = param(c, "envName");
+			const status = c.req.query("status") as DraftStatus | undefined;
+			const drafts = await deps.esc.listDrafts(tenantId, projectName, envName, status);
+			return c.json({ drafts });
+		},
+
+		getDraft: async (c: Context<Env>) => {
+			const tenantId = requireOrgMatch(c);
+			const projectName = param(c, "project");
+			const envName = param(c, "envName");
+			const draftId = param(c, "draftId");
+			const draft = await deps.esc.getDraft(tenantId, projectName, envName, draftId);
+			if (!draft) {
+				throw new NotFoundError("Draft", draftId);
+			}
+			return c.json(draft);
+		},
+
+		applyDraft: async (c: Context<Env>) => {
+			const tenantId = requireOrgMatch(c);
+			const caller = c.get("caller");
+			const projectName = param(c, "project");
+			const envName = param(c, "envName");
+			const draftId = param(c, "draftId");
+			const draft = await deps.esc.applyDraft(
+				tenantId,
+				projectName,
+				envName,
+				draftId,
+				caller.userId,
+			);
+			return c.json(draft);
+		},
+
+		discardDraft: async (c: Context<Env>) => {
+			const tenantId = requireOrgMatch(c);
+			const projectName = param(c, "project");
+			const envName = param(c, "envName");
+			const draftId = param(c, "draftId");
+			await deps.esc.discardDraft(tenantId, projectName, envName, draftId);
+			return c.body(null, 204);
 		},
 	};
 }

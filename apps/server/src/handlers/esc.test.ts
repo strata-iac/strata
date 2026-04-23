@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import type { EscEnvironment, EscEnvironmentRevision, EscService } from "@procella/esc";
+import type { EscDraft, EscEnvironment, EscEnvironmentRevision, EscService } from "@procella/esc";
 import type { Caller } from "@procella/types";
 import { Hono } from "hono";
 import type { Env } from "../types.js";
@@ -36,6 +36,19 @@ const mockRevision: EscEnvironmentRevision = {
 	createdAt: now,
 };
 
+const mockDraft: EscDraft = {
+	id: "draft-1",
+	environmentId: "env-1",
+	yamlBody: "values:\n  key: new-val",
+	description: "test draft",
+	createdBy: "u-1",
+	status: "open",
+	appliedRevisionId: null,
+	appliedAt: null,
+	createdAt: now,
+	updatedAt: now,
+};
+
 function mockEscService(overrides?: Partial<EscService>): EscService {
 	return {
 		listProjects: mock(async () => []),
@@ -59,6 +72,17 @@ function mockEscService(overrides?: Partial<EscService>): EscService {
 			expiresAt: new Date("2025-01-02"),
 		})),
 		gcSweep: mock(async () => ({ closedCount: 0 })),
+		listRevisionTags: mock(async () => []),
+		tagRevision: mock(async () => {}),
+		untagRevision: mock(async () => {}),
+		getEnvironmentTags: mock(async () => ({})),
+		setEnvironmentTags: mock(async () => {}),
+		updateEnvironmentTags: mock(async () => {}),
+		createDraft: mock(async () => mockDraft),
+		listDrafts: mock(async () => [mockDraft]),
+		getDraft: mock(async () => mockDraft),
+		applyDraft: mock(async () => ({ ...mockDraft, status: "applied" as const })),
+		discardDraft: mock(async () => {}),
 		...overrides,
 	};
 }
@@ -88,9 +112,23 @@ function createTestApp(esc: EscService) {
 	app.patch("/esc/environments/:org/:project/:envName", h.updateEnvironment);
 	app.delete("/esc/environments/:org/:project/:envName", h.deleteEnvironment);
 	app.get("/esc/environments/:org/:project/:envName/versions", h.listRevisions);
+	app.get("/esc/environments/:org/:project/:envName/versions/tags", h.listRevisionTags);
+	app.delete("/esc/environments/:org/:project/:envName/versions/tags/:tagName", h.untagRevision);
+	app.put(
+		"/esc/environments/:org/:project/:envName/versions/:version/tags/:tagName",
+		h.tagRevision,
+	);
 	app.get("/esc/environments/:org/:project/:envName/versions/:version", h.getRevision);
 	app.post("/esc/environments/:org/:project/:envName/open", h.openSession);
 	app.get("/esc/environments/:org/:project/:envName/open/:sessionId", h.getSession);
+	app.get("/esc/environments/:org/:project/:envName/tags", h.getEnvironmentTags);
+	app.put("/esc/environments/:org/:project/:envName/tags", h.setEnvironmentTags);
+	app.patch("/esc/environments/:org/:project/:envName/tags", h.updateEnvironmentTags);
+	app.post("/esc/environments/:org/:project/:envName/drafts", h.createDraft);
+	app.get("/esc/environments/:org/:project/:envName/drafts", h.listDrafts);
+	app.get("/esc/environments/:org/:project/:envName/drafts/:draftId", h.getDraft);
+	app.post("/esc/environments/:org/:project/:envName/drafts/:draftId/apply", h.applyDraft);
+	app.post("/esc/environments/:org/:project/:envName/drafts/:draftId/discard", h.discardDraft);
 	return app;
 }
 
@@ -222,6 +260,152 @@ describe("escHandlers", () => {
 
 			const res = await app.request("/esc/environments/wrong-org/myproj");
 			expect(res.status).toBe(400);
+		});
+	});
+
+	describe("listRevisionTags", () => {
+		test("returns 200 with tags array", async () => {
+			const esc = mockEscService();
+			const app = createTestApp(esc);
+			const res = await app.request("/esc/environments/my-org/myproj/staging/versions/tags");
+			expect(res.status).toBe(200);
+			const body = await res.json();
+			expect(body.tags).toBeArray();
+		});
+	});
+
+	describe("tagRevision", () => {
+		test("returns 204 on success", async () => {
+			const esc = mockEscService();
+			const app = createTestApp(esc);
+			const res = await app.request(
+				"/esc/environments/my-org/myproj/staging/versions/1/tags/stable",
+				{ method: "PUT" },
+			);
+			expect(res.status).toBe(204);
+			expect(esc.tagRevision).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	describe("untagRevision", () => {
+		test("returns 204 on success", async () => {
+			const esc = mockEscService();
+			const app = createTestApp(esc);
+			const res = await app.request(
+				"/esc/environments/my-org/myproj/staging/versions/tags/stable",
+				{ method: "DELETE" },
+			);
+			expect(res.status).toBe(204);
+			expect(esc.untagRevision).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	describe("getEnvironmentTags", () => {
+		test("returns 200 with tags object", async () => {
+			const esc = mockEscService();
+			const app = createTestApp(esc);
+			const res = await app.request("/esc/environments/my-org/myproj/staging/tags");
+			expect(res.status).toBe(200);
+			const body = await res.json();
+			expect(body.tags).toBeDefined();
+		});
+	});
+
+	describe("setEnvironmentTags", () => {
+		test("returns 204 on PUT", async () => {
+			const esc = mockEscService();
+			const app = createTestApp(esc);
+			const res = await app.request("/esc/environments/my-org/myproj/staging/tags", {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ env: "production", tier: "gold" }),
+			});
+			expect(res.status).toBe(204);
+			expect(esc.setEnvironmentTags).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	describe("updateEnvironmentTags", () => {
+		test("returns 204 on PATCH", async () => {
+			const esc = mockEscService();
+			const app = createTestApp(esc);
+			const res = await app.request("/esc/environments/my-org/myproj/staging/tags", {
+				method: "PATCH",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ tier: null, region: "us-west-2" }),
+			});
+			expect(res.status).toBe(204);
+			expect(esc.updateEnvironmentTags).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	describe("createDraft", () => {
+		test("returns 201 with draft", async () => {
+			const esc = mockEscService();
+			const app = createTestApp(esc);
+			const res = await app.request("/esc/environments/my-org/myproj/staging/drafts", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ yamlBody: "values:\n  key: new", description: "test" }),
+			});
+			expect(res.status).toBe(201);
+			const body = await res.json();
+			expect(body.id).toBe("draft-1");
+		});
+	});
+
+	describe("listDrafts", () => {
+		test("returns 200 with drafts array", async () => {
+			const esc = mockEscService();
+			const app = createTestApp(esc);
+			const res = await app.request("/esc/environments/my-org/myproj/staging/drafts");
+			expect(res.status).toBe(200);
+			const body = await res.json();
+			expect(body.drafts).toBeArray();
+		});
+	});
+
+	describe("getDraft", () => {
+		test("returns 200 for existing draft", async () => {
+			const esc = mockEscService();
+			const app = createTestApp(esc);
+			const res = await app.request("/esc/environments/my-org/myproj/staging/drafts/draft-1");
+			expect(res.status).toBe(200);
+			const body = await res.json();
+			expect(body.id).toBe("draft-1");
+		});
+
+		test("returns 404 for missing draft", async () => {
+			const esc = mockEscService({ getDraft: mock(async () => null) });
+			const app = createTestApp(esc);
+			const res = await app.request("/esc/environments/my-org/myproj/staging/drafts/missing");
+			expect(res.status).toBe(404);
+		});
+	});
+
+	describe("applyDraft", () => {
+		test("returns 200 with applied draft", async () => {
+			const esc = mockEscService();
+			const app = createTestApp(esc);
+			const res = await app.request(
+				"/esc/environments/my-org/myproj/staging/drafts/draft-1/apply",
+				{ method: "POST" },
+			);
+			expect(res.status).toBe(200);
+			expect(esc.applyDraft).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	describe("discardDraft", () => {
+		test("returns 204 on discard", async () => {
+			const esc = mockEscService();
+			const app = createTestApp(esc);
+			const res = await app.request(
+				"/esc/environments/my-org/myproj/staging/drafts/draft-1/discard",
+				{ method: "POST" },
+			);
+			expect(res.status).toBe(204);
+			expect(esc.discardDraft).toHaveBeenCalledTimes(1);
 		});
 	});
 });

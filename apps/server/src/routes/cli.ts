@@ -186,9 +186,27 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	api.patch("/esc/environments/:org/:project/:envName", escH.updateEnvironment);
 	api.delete("/esc/environments/:org/:project/:envName", escH.deleteEnvironment);
 	api.get("/esc/environments/:org/:project/:envName/versions", escH.listRevisions);
+	api.get("/esc/environments/:org/:project/:envName/versions/tags", escH.listRevisionTags);
+	api.delete("/esc/environments/:org/:project/:envName/versions/tags/:tagName", escH.untagRevision);
+	api.put(
+		"/esc/environments/:org/:project/:envName/versions/:version/tags/:tagName",
+		escH.tagRevision,
+	);
 	api.get("/esc/environments/:org/:project/:envName/versions/:version", escH.getRevision);
 	api.post("/esc/environments/:org/:project/:envName/open", escH.openSession);
 	api.get("/esc/environments/:org/:project/:envName/open/:sessionId", escH.getSession);
+
+	// ESC environment tags
+	api.get("/esc/environments/:org/:project/:envName/tags", escH.getEnvironmentTags);
+	api.put("/esc/environments/:org/:project/:envName/tags", escH.setEnvironmentTags);
+	api.patch("/esc/environments/:org/:project/:envName/tags", escH.updateEnvironmentTags);
+
+	// ESC drafts
+	api.post("/esc/environments/:org/:project/:envName/drafts", escH.createDraft);
+	api.get("/esc/environments/:org/:project/:envName/drafts", escH.listDrafts);
+	api.get("/esc/environments/:org/:project/:envName/drafts/:draftId", escH.getDraft);
+	api.post("/esc/environments/:org/:project/:envName/drafts/:draftId/apply", escH.applyDraft);
+	api.post("/esc/environments/:org/:project/:envName/drafts/:draftId/discard", escH.discardDraft);
 
 	app.route("/api", api);
 	return app;

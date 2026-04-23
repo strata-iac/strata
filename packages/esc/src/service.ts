@@ -1,9 +1,11 @@
 import { AesCryptoService } from "@procella/crypto";
 import {
 	type Database,
+	escDrafts,
 	escEnvironmentRevisions,
 	escEnvironments,
 	escProjects,
+	escRevisionTags,
 	escSessions,
 } from "@procella/db";
 import { withSpan } from "@procella/telemetry";
@@ -12,9 +14,12 @@ import { and, desc, eq, gt, inArray, isNull, lt, sql } from "drizzle-orm";
 import type { EvaluateDiagnostic, EvaluatorClient } from "./evaluator-client.js";
 import type {
 	CreateEnvironmentInput,
+	DraftStatus,
+	EscDraft,
 	EscEnvironment,
 	EscEnvironmentRevision,
 	EscProject,
+	EscRevisionTag,
 	OpenSessionResult,
 	UpdateEnvironmentInput,
 } from "./types.js";
@@ -61,6 +66,81 @@ export interface EscService {
 		envName: string,
 		sessionId: string,
 	): Promise<OpenSessionResult | null>;
+
+	// Revision tags
+	listRevisionTags(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+	): Promise<EscRevisionTag[]>;
+	tagRevision(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		revisionNumber: number,
+		tagName: string,
+		createdBy: string,
+	): Promise<void>;
+	untagRevision(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		tagName: string,
+	): Promise<void>;
+
+	// Environment tags
+	getEnvironmentTags(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+	): Promise<Record<string, string>>;
+	setEnvironmentTags(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		tags: Record<string, string>,
+	): Promise<void>;
+	updateEnvironmentTags(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		patch: Record<string, string | null>,
+	): Promise<void>;
+
+	// Drafts
+	createDraft(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		yamlBody: string,
+		description: string,
+		createdBy: string,
+	): Promise<EscDraft>;
+	listDrafts(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		status?: DraftStatus,
+	): Promise<EscDraft[]>;
+	getDraft(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		draftId: string,
+	): Promise<EscDraft | null>;
+	applyDraft(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		draftId: string,
+		appliedBy: string,
+	): Promise<EscDraft>;
+	discardDraft(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		draftId: string,
+	): Promise<void>;
 
 	gcSweep(): Promise<{ closedCount: number }>;
 }
@@ -199,9 +279,47 @@ function validateName(kind: "project" | "environment", value: string): void {
 	}
 }
 
+function validateTagName(value: string): void {
+	if (!value || value.length > 128) {
+		throw new BadRequestError("tag name must be 1-128 characters");
+	}
+	if (!/^[a-zA-Z0-9._-]+$/.test(value)) {
+		throw new BadRequestError("tag name may only contain letters, digits, '.', '_', '-'");
+	}
+}
+
+const MAX_ENV_TAGS = 64;
+const MAX_TAG_KEY_LENGTH = 128;
+const MAX_TAG_VALUE_LENGTH = 256;
+const TAG_KEY_PATTERN = /^[a-zA-Z0-9._:/-]+$/;
+
+function validateEnvTags(tags: Record<string, string>): void {
+	const keys = Object.keys(tags);
+	if (keys.length > MAX_ENV_TAGS) {
+		throw new BadRequestError(`maximum ${MAX_ENV_TAGS} tags per environment`);
+	}
+	for (const key of keys) {
+		if (!key || key.length > MAX_TAG_KEY_LENGTH) {
+			throw new BadRequestError(`tag key must be 1-${MAX_TAG_KEY_LENGTH} characters`);
+		}
+		if (!TAG_KEY_PATTERN.test(key)) {
+			throw new BadRequestError(
+				"tag key may only contain letters, digits, '.', '_', ':', '/', '-'",
+			);
+		}
+		const val = tags[key];
+		if (typeof val !== "string" || val.length > MAX_TAG_VALUE_LENGTH) {
+			throw new BadRequestError(
+				`tag value must be a string up to ${MAX_TAG_VALUE_LENGTH} characters`,
+			);
+		}
+	}
+}
+
 type EscEnvRow = typeof escEnvironments.$inferSelect;
 type EscProjectRow = typeof escProjects.$inferSelect;
 type EscRevisionRow = typeof escEnvironmentRevisions.$inferSelect;
+type EscDraftRow = typeof escDrafts.$inferSelect;
 type TxOrDb = Database | Parameters<Parameters<Database["transaction"]>[0]>[0];
 
 function toEnvInfo(row: EscEnvRow): EscEnvironment {
@@ -235,6 +353,21 @@ function toRevisionInfo(row: EscRevisionRow): EscEnvironmentRevision {
 		yamlBody: row.yamlBody,
 		createdBy: row.createdBy,
 		createdAt: row.createdAt,
+	};
+}
+
+function toDraftInfo(row: EscDraftRow): EscDraft {
+	return {
+		id: row.id,
+		environmentId: row.environmentId,
+		yamlBody: row.yamlBody,
+		description: row.description,
+		createdBy: row.createdBy,
+		status: row.status as DraftStatus,
+		appliedRevisionId: row.appliedRevisionId,
+		appliedAt: row.appliedAt,
+		createdAt: row.createdAt,
+		updatedAt: row.updatedAt,
 	};
 }
 
@@ -646,6 +779,377 @@ export class PostgresEscService implements EscService {
 				expiresAt: row.expiresAt,
 			};
 		});
+	}
+
+	// ========================================================================
+	// Revision tags
+	// ========================================================================
+
+	async listRevisionTags(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+	): Promise<EscRevisionTag[]> {
+		const env = await findEnvRow(this.db, tenantId, projectName, envName);
+		if (!env) {
+			throw new NotFoundError("Environment", `${projectName}/${envName}`);
+		}
+		const rows = await this.db
+			.select({
+				tag: escRevisionTags,
+				revisionNumber: escEnvironmentRevisions.revisionNumber,
+			})
+			.from(escRevisionTags)
+			.innerJoin(
+				escEnvironmentRevisions,
+				eq(escRevisionTags.revisionId, escEnvironmentRevisions.id),
+			)
+			.where(eq(escRevisionTags.environmentId, env.id))
+			.orderBy(escRevisionTags.name);
+		return rows.map((r) => ({
+			name: r.tag.name,
+			revisionNumber: r.revisionNumber,
+			createdBy: r.tag.createdBy,
+			createdAt: r.tag.createdAt,
+		}));
+	}
+
+	async tagRevision(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		revisionNumber: number,
+		tagName: string,
+		createdBy: string,
+	): Promise<void> {
+		validateTagName(tagName);
+		return withSpan(
+			"procella.esc",
+			"esc.tagRevision",
+			{ "tenant.id": tenantId, "env.name": envName, "tag.name": tagName },
+			async () => {
+				const env = await findEnvRow(this.db, tenantId, projectName, envName);
+				if (!env) {
+					throw new NotFoundError("Environment", `${projectName}/${envName}`);
+				}
+				const [rev] = await this.db
+					.select({ id: escEnvironmentRevisions.id })
+					.from(escEnvironmentRevisions)
+					.where(
+						and(
+							eq(escEnvironmentRevisions.environmentId, env.id),
+							eq(escEnvironmentRevisions.revisionNumber, revisionNumber),
+						),
+					)
+					.limit(1);
+				if (!rev) {
+					throw new NotFoundError(
+						"EnvironmentRevision",
+						`${projectName}/${envName}#${revisionNumber}`,
+					);
+				}
+				await this.db
+					.insert(escRevisionTags)
+					.values({
+						environmentId: env.id,
+						revisionId: rev.id,
+						name: tagName,
+						createdBy,
+					})
+					.onConflictDoUpdate({
+						target: [escRevisionTags.environmentId, escRevisionTags.name],
+						set: { revisionId: rev.id, createdBy, createdAt: new Date() },
+					});
+			},
+		);
+	}
+
+	async untagRevision(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		tagName: string,
+	): Promise<void> {
+		const env = await findEnvRow(this.db, tenantId, projectName, envName);
+		if (!env) {
+			throw new NotFoundError("Environment", `${projectName}/${envName}`);
+		}
+		const deleted = await this.db
+			.delete(escRevisionTags)
+			.where(and(eq(escRevisionTags.environmentId, env.id), eq(escRevisionTags.name, tagName)))
+			.returning({ id: escRevisionTags.id });
+		if (deleted.length === 0) {
+			throw new NotFoundError("RevisionTag", tagName);
+		}
+	}
+
+	// ========================================================================
+	// Environment tags
+	// ========================================================================
+
+	async getEnvironmentTags(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+	): Promise<Record<string, string>> {
+		const env = await findEnvRow(this.db, tenantId, projectName, envName);
+		if (!env) {
+			throw new NotFoundError("Environment", `${projectName}/${envName}`);
+		}
+		return (env.tags ?? {}) as Record<string, string>;
+	}
+
+	async setEnvironmentTags(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		tags: Record<string, string>,
+	): Promise<void> {
+		validateEnvTags(tags);
+		return withSpan(
+			"procella.esc",
+			"esc.setEnvironmentTags",
+			{ "tenant.id": tenantId, "env.name": envName, "tags.count": Object.keys(tags).length },
+			async () => {
+				const env = await findEnvRow(this.db, tenantId, projectName, envName);
+				if (!env) {
+					throw new NotFoundError("Environment", `${projectName}/${envName}`);
+				}
+				await this.db
+					.update(escEnvironments)
+					.set({ tags, updatedAt: new Date() })
+					.where(eq(escEnvironments.id, env.id));
+			},
+		);
+	}
+
+	async updateEnvironmentTags(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		patch: Record<string, string | null>,
+	): Promise<void> {
+		return withSpan(
+			"procella.esc",
+			"esc.updateEnvironmentTags",
+			{ "tenant.id": tenantId, "env.name": envName },
+			async () => {
+				const env = await findEnvRow(this.db, tenantId, projectName, envName);
+				if (!env) {
+					throw new NotFoundError("Environment", `${projectName}/${envName}`);
+				}
+				const existing = (env.tags ?? {}) as Record<string, string>;
+				const merged = { ...existing };
+				for (const [k, v] of Object.entries(patch)) {
+					if (v === null) {
+						delete merged[k];
+					} else {
+						merged[k] = v;
+					}
+				}
+				validateEnvTags(merged);
+				await this.db
+					.update(escEnvironments)
+					.set({ tags: merged, updatedAt: new Date() })
+					.where(eq(escEnvironments.id, env.id));
+			},
+		);
+	}
+
+	// ========================================================================
+	// Drafts
+	// ========================================================================
+
+	async createDraft(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		yamlBody: string,
+		description: string,
+		createdBy: string,
+	): Promise<EscDraft> {
+		if (typeof yamlBody !== "string") {
+			throw new BadRequestError("yamlBody must be a string");
+		}
+		return withSpan(
+			"procella.esc",
+			"esc.createDraft",
+			{ "tenant.id": tenantId, "env.name": envName },
+			async () => {
+				const env = await findEnvRow(this.db, tenantId, projectName, envName);
+				if (!env) {
+					throw new NotFoundError("Environment", `${projectName}/${envName}`);
+				}
+				const [row] = await this.db
+					.insert(escDrafts)
+					.values({
+						environmentId: env.id,
+						yamlBody,
+						description: description || "",
+						createdBy,
+					})
+					.returning();
+				return toDraftInfo(row);
+			},
+		);
+	}
+
+	async listDrafts(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		status?: DraftStatus,
+	): Promise<EscDraft[]> {
+		const env = await findEnvRow(this.db, tenantId, projectName, envName);
+		if (!env) {
+			throw new NotFoundError("Environment", `${projectName}/${envName}`);
+		}
+		const conditions = [eq(escDrafts.environmentId, env.id)];
+		if (status) {
+			conditions.push(eq(escDrafts.status, status));
+		}
+		const rows = await this.db
+			.select()
+			.from(escDrafts)
+			.where(and(...conditions))
+			.orderBy(desc(escDrafts.createdAt));
+		return rows.map(toDraftInfo);
+	}
+
+	async getDraft(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		draftId: string,
+	): Promise<EscDraft | null> {
+		const env = await findEnvRow(this.db, tenantId, projectName, envName);
+		if (!env) {
+			return null;
+		}
+		const [row] = await this.db
+			.select()
+			.from(escDrafts)
+			.where(and(eq(escDrafts.id, draftId), eq(escDrafts.environmentId, env.id)))
+			.limit(1);
+		return row ? toDraftInfo(row) : null;
+	}
+
+	async applyDraft(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		draftId: string,
+		appliedBy: string,
+	): Promise<EscDraft> {
+		return withSpan(
+			"procella.esc",
+			"esc.applyDraft",
+			{ "tenant.id": tenantId, "env.name": envName, "draft.id": draftId },
+			() =>
+				this.db.transaction(async (tx) => {
+					const [locked] = await tx
+						.select({ env: escEnvironments })
+						.from(escEnvironments)
+						.innerJoin(escProjects, eq(escEnvironments.projectId, escProjects.id))
+						.where(
+							and(
+								eq(escProjects.tenantId, tenantId),
+								eq(escProjects.name, projectName),
+								eq(escEnvironments.name, envName),
+								isNull(escEnvironments.deletedAt),
+							),
+						)
+						.limit(1)
+						.for("update", { of: escEnvironments });
+
+					if (!locked) {
+						throw new NotFoundError("Environment", `${projectName}/${envName}`);
+					}
+					const envRow = locked.env;
+
+					const [draft] = await tx
+						.select()
+						.from(escDrafts)
+						.where(and(eq(escDrafts.id, draftId), eq(escDrafts.environmentId, envRow.id)))
+						.limit(1);
+
+					if (!draft) {
+						throw new NotFoundError("Draft", draftId);
+					}
+					if (draft.status !== "open") {
+						throw new BadRequestError(`Draft is already ${draft.status}`);
+					}
+
+					const nextRevision = envRow.currentRevisionNumber + 1;
+					const now = new Date();
+
+					await tx
+						.update(escEnvironments)
+						.set({
+							yamlBody: draft.yamlBody,
+							currentRevisionNumber: nextRevision,
+							updatedAt: now,
+						})
+						.where(eq(escEnvironments.id, envRow.id));
+
+					const [rev] = await tx
+						.insert(escEnvironmentRevisions)
+						.values({
+							environmentId: envRow.id,
+							revisionNumber: nextRevision,
+							yamlBody: draft.yamlBody,
+							createdBy: appliedBy,
+						})
+						.returning();
+
+					const [updated] = await tx
+						.update(escDrafts)
+						.set({
+							status: "applied",
+							appliedRevisionId: rev.id,
+							appliedAt: now,
+							updatedAt: now,
+						})
+						.where(eq(escDrafts.id, draftId))
+						.returning();
+
+					return toDraftInfo(updated);
+				}),
+		);
+	}
+
+	async discardDraft(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		draftId: string,
+	): Promise<void> {
+		return withSpan(
+			"procella.esc",
+			"esc.discardDraft",
+			{ "tenant.id": tenantId, "env.name": envName, "draft.id": draftId },
+			async () => {
+				const env = await findEnvRow(this.db, tenantId, projectName, envName);
+				if (!env) {
+					throw new NotFoundError("Environment", `${projectName}/${envName}`);
+				}
+				const [draft] = await this.db
+					.select()
+					.from(escDrafts)
+					.where(and(eq(escDrafts.id, draftId), eq(escDrafts.environmentId, env.id)))
+					.limit(1);
+				if (!draft) {
+					throw new NotFoundError("Draft", draftId);
+				}
+				if (draft.status !== "open") {
+					throw new BadRequestError(`Draft is already ${draft.status}`);
+				}
+				await this.db
+					.update(escDrafts)
+					.set({ status: "discarded", updatedAt: new Date() })
+					.where(eq(escDrafts.id, draftId));
+			},
+		);
 	}
 
 	async gcSweep(): Promise<{ closedCount: number }> {

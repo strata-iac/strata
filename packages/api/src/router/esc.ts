@@ -17,6 +17,14 @@ const revisionInput = environmentInput.extend({
 	revision: z.number().int().min(1),
 });
 
+const draftInput = environmentInput.extend({
+	draftId: z.string().uuid(),
+});
+
+const draftStatusFilter = environmentInput.extend({
+	status: z.enum(["open", "applied", "discarded"]).optional(),
+});
+
 export const escRouter = router({
 	listProjects: publicProcedure.query(async ({ ctx }) => {
 		return ctx.esc.listProjects(ctx.caller.tenantId);
@@ -55,5 +63,33 @@ export const escRouter = router({
 			});
 		}
 		return rev;
+	}),
+
+	listRevisionTags: publicProcedure.input(environmentInput).query(async ({ ctx, input }) => {
+		return ctx.esc.listRevisionTags(ctx.caller.tenantId, input.project, input.environment);
+	}),
+
+	getEnvironmentTags: publicProcedure.input(environmentInput).query(async ({ ctx, input }) => {
+		return ctx.esc.getEnvironmentTags(ctx.caller.tenantId, input.project, input.environment);
+	}),
+
+	listDrafts: publicProcedure.input(draftStatusFilter).query(async ({ ctx, input }) => {
+		return ctx.esc.listDrafts(ctx.caller.tenantId, input.project, input.environment, input.status);
+	}),
+
+	getDraft: publicProcedure.input(draftInput).query(async ({ ctx, input }) => {
+		const draft = await ctx.esc.getDraft(
+			ctx.caller.tenantId,
+			input.project,
+			input.environment,
+			input.draftId,
+		);
+		if (!draft) {
+			throw new TRPCError({
+				code: "NOT_FOUND",
+				message: `Draft ${input.draftId} not found`,
+			});
+		}
+		return draft;
 	}),
 });

@@ -207,6 +207,341 @@ describe.skipIf(!(await hasDb()))("PostgresEscService", () => {
 	});
 });
 
+// ============================================================================
+// Revision tags / Environment tags / Drafts tests
+// ============================================================================
+
+describe.skipIf(!(await hasDb()))("PostgresEscService — revision tags", () => {
+	const tenant = `t-rtag-${crypto.randomUUID().slice(0, 8)}`;
+	const user = "test-user";
+	const evaluator = new UnimplementedEvaluatorClient();
+	const encryptionKeyHex = "00".repeat(32);
+
+	let service: PostgresEscService;
+	let dbClient: { close(): Promise<void> };
+
+	beforeAll(async () => {
+		const { db, client } = await createDb({ url: DB_URL });
+		dbClient = client;
+		service = new PostgresEscService({ db, evaluator, encryptionKeyHex });
+	});
+
+	afterAll(async () => {
+		await dbClient.close();
+	});
+
+	beforeEach(async () => {
+		const { db, client } = await createDb({ url: DB_URL });
+		try {
+			await db.delete(escProjects).where(eq(escProjects.tenantId, tenant));
+		} finally {
+			await client.close();
+		}
+	});
+
+	test("tagRevision + listRevisionTags round-trip", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "dev", yamlBody: "values: {a: 1}" },
+			user,
+		);
+		await service.tagRevision(tenant, "demo", "dev", 1, "stable", user);
+		const tags = await service.listRevisionTags(tenant, "demo", "dev");
+		expect(tags).toHaveLength(1);
+		expect(tags[0].name).toBe("stable");
+		expect(tags[0].revisionNumber).toBe(1);
+	});
+
+	test("tagRevision upserts — moves tag to new revision", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "env1", yamlBody: "values: {a: 1}" },
+			user,
+		);
+		await service.updateEnvironment(tenant, "demo", "env1", { yamlBody: "values: {a: 2}" }, user);
+		await service.tagRevision(tenant, "demo", "env1", 1, "stable", user);
+		await service.tagRevision(tenant, "demo", "env1", 2, "stable", user);
+		const tags = await service.listRevisionTags(tenant, "demo", "env1");
+		expect(tags).toHaveLength(1);
+		expect(tags[0].revisionNumber).toBe(2);
+	});
+
+	test("untagRevision removes a tag", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "env2", yamlBody: "values: {}" },
+			user,
+		);
+		await service.tagRevision(tenant, "demo", "env2", 1, "canary", user);
+		await service.untagRevision(tenant, "demo", "env2", "canary");
+		const tags = await service.listRevisionTags(tenant, "demo", "env2");
+		expect(tags).toHaveLength(0);
+	});
+
+	test("untagRevision throws NotFoundError for missing tag", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "env3", yamlBody: "values: {}" },
+			user,
+		);
+		await expect(service.untagRevision(tenant, "demo", "env3", "nope")).rejects.toBeInstanceOf(
+			NotFoundError,
+		);
+	});
+
+	test("tagRevision validates tag name", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "env4", yamlBody: "values: {}" },
+			user,
+		);
+		await expect(
+			service.tagRevision(tenant, "demo", "env4", 1, "bad name!", user),
+		).rejects.toMatchObject({ code: "BAD_REQUEST" });
+	});
+});
+
+describe.skipIf(!(await hasDb()))("PostgresEscService — environment tags", () => {
+	const tenant = `t-etag-${crypto.randomUUID().slice(0, 8)}`;
+	const user = "test-user";
+	const evaluator = new UnimplementedEvaluatorClient();
+	const encryptionKeyHex = "00".repeat(32);
+
+	let service: PostgresEscService;
+	let dbClient: { close(): Promise<void> };
+
+	beforeAll(async () => {
+		const { db, client } = await createDb({ url: DB_URL });
+		dbClient = client;
+		service = new PostgresEscService({ db, evaluator, encryptionKeyHex });
+	});
+
+	afterAll(async () => {
+		await dbClient.close();
+	});
+
+	beforeEach(async () => {
+		const { db, client } = await createDb({ url: DB_URL });
+		try {
+			await db.delete(escProjects).where(eq(escProjects.tenantId, tenant));
+		} finally {
+			await client.close();
+		}
+	});
+
+	test("getEnvironmentTags returns empty object for new env", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "dev", yamlBody: "values: {}" },
+			user,
+		);
+		const tags = await service.getEnvironmentTags(tenant, "demo", "dev");
+		expect(tags).toEqual({});
+	});
+
+	test("setEnvironmentTags replaces all tags", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "env1", yamlBody: "values: {}" },
+			user,
+		);
+		await service.setEnvironmentTags(tenant, "demo", "env1", { env: "prod", tier: "gold" });
+		const tags = await service.getEnvironmentTags(tenant, "demo", "env1");
+		expect(tags).toEqual({ env: "prod", tier: "gold" });
+
+		await service.setEnvironmentTags(tenant, "demo", "env1", { env: "staging" });
+		const tags2 = await service.getEnvironmentTags(tenant, "demo", "env1");
+		expect(tags2).toEqual({ env: "staging" });
+	});
+
+	test("updateEnvironmentTags patches — null removes key", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "env2", yamlBody: "values: {}" },
+			user,
+		);
+		await service.setEnvironmentTags(tenant, "demo", "env2", { a: "1", b: "2" });
+		await service.updateEnvironmentTags(tenant, "demo", "env2", { b: null, c: "3" });
+		const tags = await service.getEnvironmentTags(tenant, "demo", "env2");
+		expect(tags).toEqual({ a: "1", c: "3" });
+	});
+
+	test("setEnvironmentTags validates max 64 tags", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "env3", yamlBody: "values: {}" },
+			user,
+		);
+		const tooMany: Record<string, string> = {};
+		for (let i = 0; i < 65; i++) {
+			tooMany[`key${i}`] = `val${i}`;
+		}
+		await expect(service.setEnvironmentTags(tenant, "demo", "env3", tooMany)).rejects.toMatchObject(
+			{ code: "BAD_REQUEST" },
+		);
+	});
+
+	test("setEnvironmentTags validates value length", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "env4", yamlBody: "values: {}" },
+			user,
+		);
+		await expect(
+			service.setEnvironmentTags(tenant, "demo", "env4", { key: "x".repeat(257) }),
+		).rejects.toMatchObject({ code: "BAD_REQUEST" });
+	});
+});
+
+describe.skipIf(!(await hasDb()))("PostgresEscService — drafts", () => {
+	const tenant = `t-draft-${crypto.randomUUID().slice(0, 8)}`;
+	const user = "test-user";
+	const evaluator = new UnimplementedEvaluatorClient();
+	const encryptionKeyHex = "00".repeat(32);
+
+	let service: PostgresEscService;
+	let dbClient: { close(): Promise<void> };
+
+	beforeAll(async () => {
+		const { db, client } = await createDb({ url: DB_URL });
+		dbClient = client;
+		service = new PostgresEscService({ db, evaluator, encryptionKeyHex });
+	});
+
+	afterAll(async () => {
+		await dbClient.close();
+	});
+
+	beforeEach(async () => {
+		const { db, client } = await createDb({ url: DB_URL });
+		try {
+			await db.delete(escProjects).where(eq(escProjects.tenantId, tenant));
+		} finally {
+			await client.close();
+		}
+	});
+
+	test("createDraft + getDraft round-trip", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "dev", yamlBody: "values: {a: 1}" },
+			user,
+		);
+		const draft = await service.createDraft(
+			tenant,
+			"demo",
+			"dev",
+			"values: {a: 2}",
+			"bump a",
+			user,
+		);
+		expect(draft.status).toBe("open");
+		expect(draft.yamlBody).toBe("values: {a: 2}");
+		expect(draft.description).toBe("bump a");
+
+		const fetched = await service.getDraft(tenant, "demo", "dev", draft.id);
+		expect(fetched).not.toBeNull();
+		expect(fetched?.id).toBe(draft.id);
+	});
+
+	test("listDrafts returns all drafts, filterable by status", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "env1", yamlBody: "values: {}" },
+			user,
+		);
+		await service.createDraft(tenant, "demo", "env1", "values: {x: 1}", "d1", user);
+		const d2 = await service.createDraft(tenant, "demo", "env1", "values: {x: 2}", "d2", user);
+		await service.discardDraft(tenant, "demo", "env1", d2.id);
+
+		const all = await service.listDrafts(tenant, "demo", "env1");
+		expect(all).toHaveLength(2);
+
+		const open = await service.listDrafts(tenant, "demo", "env1", "open");
+		expect(open).toHaveLength(1);
+		expect(open[0].status).toBe("open");
+
+		const discarded = await service.listDrafts(tenant, "demo", "env1", "discarded");
+		expect(discarded).toHaveLength(1);
+		expect(discarded[0].status).toBe("discarded");
+	});
+
+	test("applyDraft creates new revision and updates env", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "env2", yamlBody: "values: {a: 1}" },
+			user,
+		);
+		const draft = await service.createDraft(
+			tenant,
+			"demo",
+			"env2",
+			"values: {a: 99}",
+			"apply test",
+			user,
+		);
+		const applied = await service.applyDraft(tenant, "demo", "env2", draft.id, user);
+		expect(applied.status).toBe("applied");
+		expect(applied.appliedRevisionId).toBeTruthy();
+		expect(applied.appliedAt).not.toBeNull();
+
+		const env = await service.getEnvironment(tenant, "demo", "env2");
+		expect(env?.currentRevisionNumber).toBe(2);
+		expect(env?.yamlBody).toBe("values: {a: 99}");
+
+		const revs = await service.listRevisions(tenant, "demo", "env2");
+		expect(revs.map((r) => r.revisionNumber)).toContain(2);
+	});
+
+	test("applyDraft rejects already-applied draft", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "env3", yamlBody: "values: {}" },
+			user,
+		);
+		const draft = await service.createDraft(tenant, "demo", "env3", "values: {b: 1}", "", user);
+		await service.applyDraft(tenant, "demo", "env3", draft.id, user);
+		await expect(service.applyDraft(tenant, "demo", "env3", draft.id, user)).rejects.toMatchObject({
+			code: "BAD_REQUEST",
+		});
+	});
+
+	test("discardDraft sets status to discarded", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "env4", yamlBody: "values: {}" },
+			user,
+		);
+		const draft = await service.createDraft(tenant, "demo", "env4", "values: {c: 1}", "", user);
+		await service.discardDraft(tenant, "demo", "env4", draft.id);
+		const fetched = await service.getDraft(tenant, "demo", "env4", draft.id);
+		expect(fetched?.status).toBe("discarded");
+	});
+
+	test("discardDraft rejects already-discarded draft", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "env5", yamlBody: "values: {}" },
+			user,
+		);
+		const draft = await service.createDraft(tenant, "demo", "env5", "values: {}", "", user);
+		await service.discardDraft(tenant, "demo", "env5", draft.id);
+		await expect(service.discardDraft(tenant, "demo", "env5", draft.id)).rejects.toMatchObject({
+			code: "BAD_REQUEST",
+		});
+	});
+
+	test("getDraft returns null for missing draft", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "env6", yamlBody: "values: {}" },
+			user,
+		);
+		const fetched = await service.getDraft(tenant, "demo", "env6", crypto.randomUUID());
+		expect(fetched).toBeNull();
+	});
+});
+
 describe("extractImports", () => {
 	test("parses zero-indent block sequences", () => {
 		expect(extractImports("imports:\n- shared\n- prod\n")).toEqual(["shared", "prod"]);

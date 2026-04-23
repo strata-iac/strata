@@ -53,6 +53,28 @@ export interface UpdateEnvironmentInput {
 	yamlBody: string;
 }
 
+export interface EscRevisionTag {
+	name: string;
+	revisionNumber: number;
+	createdBy: string;
+	createdAt: Date;
+}
+
+export type DraftStatus = "open" | "applied" | "discarded";
+
+export interface EscDraft {
+	id: string;
+	environmentId: string;
+	yamlBody: string;
+	description: string;
+	createdBy: string;
+	status: DraftStatus;
+	appliedRevisionId: string | null;
+	appliedAt: Date | null;
+	createdAt: Date;
+	updatedAt: Date;
+}
+
 /** Output the CLI and dashboard receive from /open. Secrets are masked. */
 export interface OpenSessionResult {
 	sessionId: string;
