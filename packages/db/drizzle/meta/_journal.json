@@ -57,6 +57,13 @@
       "when": 1775049472593,
       "tag": "0009_oidc_ci_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1776950222823,
+      "tag": "0008_nostalgic_avengers",
+      "breakpoints": true
     }
   ]
 }

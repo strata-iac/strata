@@ -13,6 +13,10 @@ import { schema } from "./schema.js";
 // Re-export schema for consumers
 export {
 	checkpoints,
+	escEnvironmentRevisions,
+	escEnvironments,
+	escProjects,
+	escSessions,
 	githubInstallations,
 	journalEntries,
 	projects,

@@ -244,6 +244,101 @@ export const oidcTrustPolicies = pgTable(
 );
 
 // ============================================================================
+// esc_projects — ESC project registry (tenant-scoped). Independent of
+// Pulumi `projects` above because ESC has its own project namespace.
+// ============================================================================
+
+export const escProjects = pgTable(
+	"esc_projects",
+	{
+		id: uuid().primaryKey().defaultRandom(),
+		tenantId: text("tenant_id").notNull(),
+		name: text().notNull(),
+		createdAt: timestamp("created_at").notNull().defaultNow(),
+		updatedAt: timestamp("updated_at").notNull().defaultNow(),
+	},
+	(table) => [uniqueIndex("idx_esc_projects_tenant_name").on(table.tenantId, table.name)],
+);
+
+// ============================================================================
+// esc_environments — Current environment YAML body. Soft-delete via
+// `deleted_at`. The body here always equals the latest revision's body;
+// revisions are immutable history.
+// ============================================================================
+
+export const escEnvironments = pgTable(
+	"esc_environments",
+	{
+		id: uuid().primaryKey().defaultRandom(),
+		projectId: uuid("project_id")
+			.notNull()
+			.references(() => escProjects.id, { onDelete: "cascade" }),
+		name: text().notNull(),
+		yamlBody: text("yaml_body").notNull(),
+		currentRevisionNumber: integer("current_revision_number").notNull().default(1),
+		createdBy: text("created_by").notNull(),
+		deletedAt: timestamp("deleted_at"),
+		createdAt: timestamp("created_at").notNull().defaultNow(),
+		updatedAt: timestamp("updated_at").notNull().defaultNow(),
+	},
+	(table) => [
+		uniqueIndex("idx_esc_envs_project_name")
+			.on(table.projectId, table.name)
+			.where(sql`deleted_at IS NULL`),
+	],
+);
+
+// ============================================================================
+// esc_environment_revisions — Immutable revision history per environment.
+// Incrementing `revision_number` per env.
+// ============================================================================
+
+export const escEnvironmentRevisions = pgTable(
+	"esc_environment_revisions",
+	{
+		id: uuid().primaryKey().defaultRandom(),
+		environmentId: uuid("environment_id")
+			.notNull()
+			.references(() => escEnvironments.id, { onDelete: "cascade" }),
+		revisionNumber: integer("revision_number").notNull(),
+		yamlBody: text("yaml_body").notNull(),
+		createdBy: text("created_by").notNull(),
+		createdAt: timestamp("created_at").notNull().defaultNow(),
+	},
+	(table) => [
+		uniqueIndex("idx_esc_revisions_env_number").on(table.environmentId, table.revisionNumber),
+	],
+);
+
+// ============================================================================
+// esc_sessions — Resolved environment values. `resolved_values_ciphertext`
+// is AES-256-GCM encrypted JSON; nonce prepended per crypto pkg convention.
+// GC cron cleans up rows where `expires_at < now()` AND `closed_at IS NULL`.
+// ============================================================================
+
+export const escSessions = pgTable(
+	"esc_sessions",
+	{
+		id: uuid().primaryKey().defaultRandom(),
+		environmentId: uuid("environment_id")
+			.notNull()
+			.references(() => escEnvironments.id, { onDelete: "cascade" }),
+		revisionId: uuid("revision_id")
+			.notNull()
+			.references(() => escEnvironmentRevisions.id, { onDelete: "cascade" }),
+		resolvedValuesCiphertext: jsonb("resolved_values_ciphertext").notNull(),
+		secretPaths: text("secret_paths").array().notNull().default(sql`'{}'::text[]`),
+		openedAt: timestamp("opened_at").notNull().defaultNow(),
+		expiresAt: timestamp("expires_at").notNull(),
+		closedAt: timestamp("closed_at"),
+	},
+	(table) => [
+		index("idx_esc_sessions_env").on(table.environmentId),
+		index("idx_esc_sessions_expires_active").on(table.expiresAt).where(sql`closed_at IS NULL`),
+	],
+);
+
+// ============================================================================
 // Schema export — pass to drizzle() for relational queries
 // ============================================================================
 
@@ -258,4 +353,8 @@ export const schema = {
 	webhookDeliveries,
 	githubInstallations,
 	oidcTrustPolicies,
+	escProjects,
+	escEnvironments,
+	escEnvironmentRevisions,
+	escSessions,
 };

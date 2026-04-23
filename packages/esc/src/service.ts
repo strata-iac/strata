@@ -1,11 +1,12 @@
-// @procella/esc — EscService: CRUD + session lifecycle for environments.
-//
-// P0.2 scaffold: interface + empty PostgresEscService. Implementation lands
-// in procella-yj7.6 (P1). Follow the existing service pattern used by
-// packages/webhooks (constructor DI with { db }, ProcellaError subclasses,
-// tenant-scoped queries).
-
-import type { Database } from "@procella/db";
+import {
+	type Database,
+	escEnvironmentRevisions,
+	escEnvironments,
+	escProjects,
+	escSessions,
+} from "@procella/db";
+import { BadRequestError, ConflictError, NotFoundError } from "@procella/types";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import type { EvaluatorClient } from "./evaluator-client.js";
 import type {
 	CreateEnvironmentInput,
@@ -17,10 +18,8 @@ import type {
 } from "./types.js";
 
 export interface EscService {
-	// Project management (projects are created implicitly on first env create)
 	listProjects(tenantId: string): Promise<EscProject[]>;
 
-	// Environment CRUD
 	createEnvironment(
 		tenantId: string,
 		input: CreateEnvironmentInput,
@@ -41,7 +40,6 @@ export interface EscService {
 	): Promise<EscEnvironment>;
 	deleteEnvironment(tenantId: string, projectName: string, envName: string): Promise<void>;
 
-	// Revisions
 	listRevisions(
 		tenantId: string,
 		projectName: string,
@@ -54,7 +52,6 @@ export interface EscService {
 		revisionNumber: number,
 	): Promise<EscEnvironmentRevision | null>;
 
-	// Sessions ("open" flow)
 	openSession(tenantId: string, projectName: string, envName: string): Promise<OpenSessionResult>;
 	getSession(
 		tenantId: string,
@@ -67,18 +64,106 @@ export interface EscService {
 export interface PostgresEscServiceDeps {
 	db: Database;
 	evaluator: EvaluatorClient;
-	/** 32-byte key as hex string. Sourced from PROCELLA_ENCRYPTION_KEY. */
 	encryptionKeyHex: string;
-	/** Session TTL in seconds. Default: 3600 (1h). */
 	sessionTtlSeconds?: number;
 }
 
-/**
- * PostgreSQL + Go Lambda backed implementation.
- *
- * Scaffold only — methods are stubs. Real implementation lands in
- * procella-yj7.6 (CRUD), .14 (open flow), and .32 (session GC).
- */
+function pgErrorCode(err: unknown): string | undefined {
+	let current: unknown = err;
+	for (let i = 0; i < 10 && current != null; i++) {
+		if (typeof current === "object") {
+			const rec = current as Record<string, unknown>;
+			for (const key of ["code", "errno"] as const) {
+				const val = rec[key];
+				const str = typeof val === "number" ? String(val) : val;
+				if (typeof str === "string" && /^[0-9A-Z]{5}$/i.test(str)) return str;
+			}
+			if (Array.isArray(rec.errors)) {
+				for (const inner of rec.errors) {
+					const found = pgErrorCode(inner);
+					if (found) return found;
+				}
+			}
+			if ("cause" in rec) {
+				current = rec.cause;
+				continue;
+			}
+		}
+		current = undefined;
+	}
+	return undefined;
+}
+
+function validateName(kind: "project" | "environment", value: string): void {
+	if (!value || value.length > 128) {
+		throw new BadRequestError(`${kind} name must be 1-128 characters`);
+	}
+	if (!/^[a-zA-Z0-9._-]+$/.test(value)) {
+		throw new BadRequestError(`${kind} name may only contain letters, digits, '.', '_', '-'`);
+	}
+}
+
+type EscEnvRow = typeof escEnvironments.$inferSelect;
+type EscProjectRow = typeof escProjects.$inferSelect;
+type EscRevisionRow = typeof escEnvironmentRevisions.$inferSelect;
+type TxOrDb = Database | Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+function toEnvInfo(row: EscEnvRow): EscEnvironment {
+	return {
+		id: row.id,
+		projectId: row.projectId,
+		name: row.name,
+		yamlBody: row.yamlBody,
+		currentRevisionNumber: row.currentRevisionNumber,
+		createdBy: row.createdBy,
+		createdAt: row.createdAt,
+		updatedAt: row.updatedAt,
+	};
+}
+
+function toProjectInfo(row: EscProjectRow): EscProject {
+	return {
+		id: row.id,
+		tenantId: row.tenantId,
+		name: row.name,
+		createdAt: row.createdAt,
+		updatedAt: row.updatedAt,
+	};
+}
+
+function toRevisionInfo(row: EscRevisionRow): EscEnvironmentRevision {
+	return {
+		id: row.id,
+		environmentId: row.environmentId,
+		revisionNumber: row.revisionNumber,
+		yamlBody: row.yamlBody,
+		createdBy: row.createdBy,
+		createdAt: row.createdAt,
+	};
+}
+
+async function findEnvRow(
+	db: TxOrDb,
+	tenantId: string,
+	projectName: string,
+	envName: string,
+): Promise<EscEnvRow | null> {
+	const [row] = await db
+		.select({ env: escEnvironments })
+		.from(escEnvironments)
+		.innerJoin(escProjects, eq(escEnvironments.projectId, escProjects.id))
+		.where(
+			and(
+				eq(escProjects.tenantId, tenantId),
+				eq(escProjects.name, projectName),
+				eq(escEnvironments.name, envName),
+				isNull(escEnvironments.deletedAt),
+			),
+		)
+		.limit(1);
+	return row?.env ?? null;
+}
+
 export class PostgresEscService implements EscService {
 	private readonly db: Database;
 	private readonly evaluator: EvaluatorClient;
@@ -92,71 +177,188 @@ export class PostgresEscService implements EscService {
 		this.sessionTtlSeconds = deps.sessionTtlSeconds ?? 3600;
 	}
 
-	private unimplemented(method: string, issue: string): never {
-		throw new Error(
-			`EscService.${method} not implemented — see ${issue}. ` +
-				`deps: db=${!!this.db} evaluator=${!!this.evaluator} ` +
-				`keyHexLen=${this.encryptionKeyHex.length} ttl=${this.sessionTtlSeconds}s`,
-		);
-	}
-
-	async listProjects(_tenantId: string): Promise<EscProject[]> {
-		this.unimplemented("listProjects", "procella-yj7.6");
+	async listProjects(tenantId: string): Promise<EscProject[]> {
+		const rows = await this.db
+			.select()
+			.from(escProjects)
+			.where(eq(escProjects.tenantId, tenantId))
+			.orderBy(escProjects.name);
+		return rows.map(toProjectInfo);
 	}
 
 	async createEnvironment(
-		_tenantId: string,
-		_input: CreateEnvironmentInput,
-		_createdBy: string,
+		tenantId: string,
+		input: CreateEnvironmentInput,
+		createdBy: string,
 	): Promise<EscEnvironment> {
-		this.unimplemented("createEnvironment", "procella-yj7.6");
+		validateName("project", input.projectName);
+		validateName("environment", input.name);
+		if (typeof input.yamlBody !== "string") {
+			throw new BadRequestError("yamlBody must be a string");
+		}
+
+		try {
+			return await this.db.transaction(async (tx) => {
+				await tx
+					.insert(escProjects)
+					.values({ tenantId, name: input.projectName })
+					.onConflictDoNothing({
+						target: [escProjects.tenantId, escProjects.name],
+					});
+
+				const [proj] = await tx
+					.select({ id: escProjects.id })
+					.from(escProjects)
+					.where(and(eq(escProjects.tenantId, tenantId), eq(escProjects.name, input.projectName)));
+
+				if (!proj) {
+					throw new Error("esc_projects row disappeared after upsert");
+				}
+
+				const [env] = await tx
+					.insert(escEnvironments)
+					.values({
+						projectId: proj.id,
+						name: input.name,
+						yamlBody: input.yamlBody,
+						currentRevisionNumber: 1,
+						createdBy,
+					})
+					.returning();
+
+				await tx.insert(escEnvironmentRevisions).values({
+					environmentId: env.id,
+					revisionNumber: 1,
+					yamlBody: input.yamlBody,
+					createdBy,
+				});
+
+				return toEnvInfo(env);
+			});
+		} catch (err: unknown) {
+			if (pgErrorCode(err) === "23505") {
+				throw new ConflictError(`Environment ${input.projectName}/${input.name} already exists`);
+			}
+			throw err;
+		}
 	}
 
-	async listEnvironments(_tenantId: string, _projectName: string): Promise<EscEnvironment[]> {
-		this.unimplemented("listEnvironments", "procella-yj7.6");
+	async listEnvironments(tenantId: string, projectName: string): Promise<EscEnvironment[]> {
+		validateName("project", projectName);
+		const rows = await this.db
+			.select({ env: escEnvironments })
+			.from(escEnvironments)
+			.innerJoin(escProjects, eq(escEnvironments.projectId, escProjects.id))
+			.where(
+				and(
+					eq(escProjects.tenantId, tenantId),
+					eq(escProjects.name, projectName),
+					isNull(escEnvironments.deletedAt),
+				),
+			)
+			.orderBy(escEnvironments.name);
+		return rows.map((r) => toEnvInfo(r.env));
 	}
 
 	async getEnvironment(
-		_tenantId: string,
-		_projectName: string,
-		_envName: string,
+		tenantId: string,
+		projectName: string,
+		envName: string,
 	): Promise<EscEnvironment | null> {
-		this.unimplemented("getEnvironment", "procella-yj7.6");
+		const row = await findEnvRow(this.db, tenantId, projectName, envName);
+		return row ? toEnvInfo(row) : null;
 	}
 
 	async updateEnvironment(
-		_tenantId: string,
-		_projectName: string,
-		_envName: string,
-		_input: UpdateEnvironmentInput,
-		_updatedBy: string,
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		input: UpdateEnvironmentInput,
+		updatedBy: string,
 	): Promise<EscEnvironment> {
-		this.unimplemented("updateEnvironment", "procella-yj7.6");
+		if (typeof input.yamlBody !== "string") {
+			throw new BadRequestError("yamlBody must be a string");
+		}
+
+		return await this.db.transaction(async (tx) => {
+			const row = await findEnvRow(tx, tenantId, projectName, envName);
+			if (!row) {
+				throw new NotFoundError("Environment", `${projectName}/${envName}`);
+			}
+
+			const nextRevision = row.currentRevisionNumber + 1;
+			const now = new Date();
+
+			const [updated] = await tx
+				.update(escEnvironments)
+				.set({
+					yamlBody: input.yamlBody,
+					currentRevisionNumber: nextRevision,
+					updatedAt: now,
+				})
+				.where(eq(escEnvironments.id, row.id))
+				.returning();
+
+			await tx.insert(escEnvironmentRevisions).values({
+				environmentId: row.id,
+				revisionNumber: nextRevision,
+				yamlBody: input.yamlBody,
+				createdBy: updatedBy,
+			});
+
+			return toEnvInfo(updated);
+		});
 	}
 
-	async deleteEnvironment(
-		_tenantId: string,
-		_projectName: string,
-		_envName: string,
-	): Promise<void> {
-		this.unimplemented("deleteEnvironment", "procella-yj7.6");
+	async deleteEnvironment(tenantId: string, projectName: string, envName: string): Promise<void> {
+		const row = await findEnvRow(this.db, tenantId, projectName, envName);
+		if (!row) {
+			throw new NotFoundError("Environment", `${projectName}/${envName}`);
+		}
+		await this.db
+			.update(escEnvironments)
+			.set({ deletedAt: new Date() })
+			.where(eq(escEnvironments.id, row.id));
 	}
 
 	async listRevisions(
-		_tenantId: string,
-		_projectName: string,
-		_envName: string,
+		tenantId: string,
+		projectName: string,
+		envName: string,
 	): Promise<EscEnvironmentRevision[]> {
-		this.unimplemented("listRevisions", "procella-yj7.6");
+		const env = await findEnvRow(this.db, tenantId, projectName, envName);
+		if (!env) {
+			throw new NotFoundError("Environment", `${projectName}/${envName}`);
+		}
+		const rows = await this.db
+			.select()
+			.from(escEnvironmentRevisions)
+			.where(eq(escEnvironmentRevisions.environmentId, env.id))
+			.orderBy(desc(escEnvironmentRevisions.revisionNumber));
+		return rows.map(toRevisionInfo);
 	}
 
 	async getRevision(
-		_tenantId: string,
-		_projectName: string,
-		_envName: string,
-		_revisionNumber: number,
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		revisionNumber: number,
 	): Promise<EscEnvironmentRevision | null> {
-		this.unimplemented("getRevision", "procella-yj7.6");
+		const env = await findEnvRow(this.db, tenantId, projectName, envName);
+		if (!env) {
+			return null;
+		}
+		const [row] = await this.db
+			.select()
+			.from(escEnvironmentRevisions)
+			.where(
+				and(
+					eq(escEnvironmentRevisions.environmentId, env.id),
+					eq(escEnvironmentRevisions.revisionNumber, revisionNumber),
+				),
+			)
+			.limit(1);
+		return row ? toRevisionInfo(row) : null;
 	}
 
 	async openSession(
@@ -164,7 +366,11 @@ export class PostgresEscService implements EscService {
 		_projectName: string,
 		_envName: string,
 	): Promise<OpenSessionResult> {
-		this.unimplemented("openSession", "procella-yj7.14");
+		void this.evaluator;
+		void this.encryptionKeyHex;
+		void this.sessionTtlSeconds;
+		void escSessions;
+		throw new Error("openSession not implemented — see procella-yj7.14");
 	}
 
 	async getSession(
@@ -173,12 +379,10 @@ export class PostgresEscService implements EscService {
 		_envName: string,
 		_sessionId: string,
 	): Promise<OpenSessionResult | null> {
-		this.unimplemented("getSession", "procella-yj7.14");
+		throw new Error("getSession not implemented — see procella-yj7.14");
 	}
 }
 
-// Re-exports so callers can do `import { EscService } from "@procella/esc"`
-// without dipping into sub-paths (matches webhooks convention).
 export type {
 	EvaluateDiagnostic,
 	EvaluatePayload,
