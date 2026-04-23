@@ -294,7 +294,7 @@ export class PostgresEscService implements EscService {
 					),
 				)
 				.limit(1)
-				.for("update");
+				.for("update", { of: escEnvironments });
 
 			if (!locked) {
 				throw new NotFoundError("Environment", `${projectName}/${envName}`);
