@@ -1,0 +1,12 @@
+{
+	"name": "@procella/esc",
+	"private": true,
+	"type": "module",
+	"main": "src/index.ts",
+	"types": "src/index.ts",
+	"dependencies": {
+		"@procella/db": "workspace:*",
+		"@procella/types": "workspace:*",
+		"drizzle-orm": "catalog:"
+	}
+}

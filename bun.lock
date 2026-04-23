@@ -158,6 +158,14 @@
         "@types/ws": "^8.18.1",
       },
     },
+    "packages/esc": {
+      "name": "@procella/esc",
+      "dependencies": {
+        "@procella/db": "workspace:*",
+        "@procella/types": "workspace:*",
+        "drizzle-orm": "catalog:",
+      },
+    },
     "packages/github": {
       "name": "@procella/github",
       "dependencies": {
@@ -729,6 +737,8 @@
     "@procella/db": ["@procella/db@workspace:packages/db"],
 
     "@procella/docs": ["@procella/docs@workspace:apps/docs"],
+
+    "@procella/esc": ["@procella/esc@workspace:packages/esc"],
 
     "@procella/github": ["@procella/github@workspace:packages/github"],
 
