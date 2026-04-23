@@ -34,6 +34,12 @@ const UpdateDetail = lazy(() =>
 const Settings = lazy(() => import("./pages/Settings").then((m) => ({ default: m.Settings })));
 const Tokens = lazy(() => import("./pages/Tokens").then((m) => ({ default: m.Tokens })));
 const Webhooks = lazy(() => import("./pages/Webhooks").then((m) => ({ default: m.Webhooks })));
+const EscEnvironments = lazy(() =>
+	import("./pages/EscEnvironments").then((m) => ({ default: m.EscEnvironments })),
+);
+const EscEnvironmentDetail = lazy(() =>
+	import("./pages/EscEnvironmentDetail").then((m) => ({ default: m.EscEnvironmentDetail })),
+);
 
 const SpinnerFallback = <FullPageSpinner />;
 
@@ -96,6 +102,8 @@ function App() {
 									<Route path="tokens" element={<Tokens />} />
 									<Route path="settings" element={<Settings />} />
 									<Route path="webhooks" element={<Webhooks />} />
+									<Route path="esc" element={<EscEnvironments />} />
+									<Route path="esc/:project/:envName" element={<EscEnvironmentDetail />} />
 									<Route path="stacks/:org/:project/:stack" element={<StackDetail />} />
 									<Route
 										path="stacks/:org/:project/:stack/resources"
@@ -112,7 +120,10 @@ function App() {
 									{/* CLI-generated "View in Browser" URLs omit /stacks/ prefix */}
 									<Route path=":org/:project/:stack" element={<StackDetail />} />
 									<Route path=":org/:project/:stack/resources" element={<ResourceDetail />} />
-									<Route path=":org/:project/:stack/updates/:updateID" element={<UpdateDetail />} />
+									<Route
+										path=":org/:project/:stack/updates/:updateID"
+										element={<UpdateDetail />}
+									/>
 									<Route
 										path=":org/:project/:stack/previews/:updateID"
 										element={<UpdateDetail />}

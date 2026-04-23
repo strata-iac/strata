@@ -13,7 +13,7 @@ import { getAuthConfig } from "./hooks/useAuthConfig";
 
 export const trpc: CreateTRPCReact<AppRouter, unknown> = createTRPCReact<AppRouter>();
 
-function getAuthHeaders(): Record<string, string> {
+export function getAuthHeaders(): Record<string, string> {
 	const config = getAuthConfig();
 
 	if (config?.mode === "descope") {
