@@ -1,3 +1,4 @@
+import { AesCryptoService } from "@procella/crypto";
 import {
 	type Database,
 	escEnvironmentRevisions,
@@ -5,9 +6,9 @@ import {
 	escProjects,
 	escSessions,
 } from "@procella/db";
-import { BadRequestError, ConflictError, NotFoundError } from "@procella/types";
-import { and, desc, eq, isNull } from "drizzle-orm";
-import type { EvaluatorClient } from "./evaluator-client.js";
+import { BadRequestError, ConflictError, NotFoundError, ProcellaError } from "@procella/types";
+import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import type { EvaluateDiagnostic, EvaluatorClient } from "./evaluator-client.js";
 import type {
 	CreateEnvironmentInput,
 	EscEnvironment,
@@ -66,6 +67,63 @@ export interface PostgresEscServiceDeps {
 	evaluator: EvaluatorClient;
 	encryptionKeyHex: string;
 	sessionTtlSeconds?: number;
+}
+
+// ============================================================================
+// EscEvaluationError — 422 with evaluator diagnostics
+// ============================================================================
+
+export class EscEvaluationError extends ProcellaError {
+	public readonly diagnostics: EvaluateDiagnostic[];
+
+	constructor(diagnostics: EvaluateDiagnostic[]) {
+		const summaries = diagnostics.map((d) => d.summary).join("; ");
+		super(`Evaluation failed: ${summaries}`, "ESC_EVALUATION_ERROR", 422);
+		this.name = "EscEvaluationError";
+		this.diagnostics = diagnostics;
+	}
+}
+
+// ============================================================================
+// YAML import-list extraction (no npm yaml dep — evaluator does real parsing)
+// ============================================================================
+
+const MAX_IMPORT_DEPTH = 50;
+
+/**
+ * Extract `imports:` list from YAML body. Handles:
+ * - `imports: [a, b, c]` (flow sequence)
+ * - `imports:\n  - a\n  - b` (block sequence)
+ * - Missing/empty imports → []
+ * - Quoted/unquoted strings
+ */
+function extractImports(yamlBody: string): string[] {
+	// Try flow sequence: imports: [a, b, c] or imports: ["a", 'b']
+	const flowMatch = yamlBody.match(/^imports:\s*\[([^\]]*)\]/m);
+	if (flowMatch) {
+		const inner = flowMatch[1].trim();
+		if (!inner) return [];
+		return inner
+			.split(",")
+			.map((s) => s.trim().replace(/^["']|["']$/g, ""))
+			.filter(Boolean);
+	}
+
+	// Try block sequence: imports:\n  - a\n  - b
+	const blockMatch = yamlBody.match(/^imports:\s*\n((?:[ \t]+-[^\n]*\n?)+)/m);
+	if (blockMatch) {
+		return blockMatch[1]
+			.split("\n")
+			.map((line) =>
+				line
+					.replace(/^[ \t]+-\s*/, "")
+					.trim()
+					.replace(/^["']|["']$/g, ""),
+			)
+			.filter(Boolean);
+	}
+
+	return [];
 }
 
 function pgErrorCode(err: unknown): string | undefined {
@@ -382,24 +440,187 @@ export class PostgresEscService implements EscService {
 	}
 
 	async openSession(
-		_tenantId: string,
-		_projectName: string,
-		_envName: string,
+		tenantId: string,
+		projectName: string,
+		envName: string,
 	): Promise<OpenSessionResult> {
-		void this.evaluator;
-		void this.encryptionKeyHex;
-		void this.sessionTtlSeconds;
-		void escSessions;
-		throw new Error("openSession not implemented — see procella-yj7.14");
+		const envRow = await findEnvRow(this.db, tenantId, projectName, envName);
+		if (!envRow) {
+			throw new NotFoundError("Environment", `${projectName}/${envName}`);
+		}
+
+		const [revisionRow] = await this.db
+			.select()
+			.from(escEnvironmentRevisions)
+			.where(
+				and(
+					eq(escEnvironmentRevisions.environmentId, envRow.id),
+					eq(escEnvironmentRevisions.revisionNumber, envRow.currentRevisionNumber),
+				),
+			)
+			.limit(1);
+		if (!revisionRow) {
+			throw new NotFoundError(
+				"EnvironmentRevision",
+				`${projectName}/${envName}#${envRow.currentRevisionNumber}`,
+			);
+		}
+
+		const resolvedImports = await this.resolveImports(
+			this.db,
+			tenantId,
+			projectName,
+			envRow.yamlBody,
+			new Set<string>(),
+			0,
+		);
+
+		const result = await this.evaluator.evaluate({
+			definition: envRow.yamlBody,
+			imports: resolvedImports,
+			encryptionKeyHex: this.encryptionKeyHex,
+		});
+
+		const errorDiags = result.diagnostics.filter((d) => d.severity === "error");
+		if (errorDiags.length > 0 && !result.values) {
+			throw new EscEvaluationError(errorDiags);
+		}
+
+		const crypto = new AesCryptoService(this.encryptionKeyHex);
+		const envFQN = `${tenantId}/${projectName}/${envName}`;
+		const plaintext = new TextEncoder().encode(JSON.stringify(result.values));
+		const cipherBytes = await crypto.encrypt(plaintext, envFQN);
+		const ciphertextBase64 = Buffer.from(cipherBytes).toString("base64");
+
+		const expiresAt = new Date(Date.now() + this.sessionTtlSeconds * 1000);
+
+		const [session] = await this.db
+			.insert(escSessions)
+			.values({
+				environmentId: envRow.id,
+				revisionId: revisionRow.id,
+				resolvedValuesCiphertext: ciphertextBase64,
+				secretPaths: result.secrets,
+				expiresAt,
+			})
+			.returning();
+
+		if (errorDiags.length > 0) {
+			throw new EscEvaluationError(errorDiags);
+		}
+
+		return {
+			sessionId: session.id,
+			values: result.values,
+			secrets: result.secrets,
+			expiresAt: session.expiresAt,
+		};
 	}
 
 	async getSession(
-		_tenantId: string,
-		_projectName: string,
-		_envName: string,
-		_sessionId: string,
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		sessionId: string,
 	): Promise<OpenSessionResult | null> {
-		throw new Error("getSession not implemented — see procella-yj7.14");
+		const envRow = await findEnvRow(this.db, tenantId, projectName, envName);
+		if (!envRow) {
+			return null;
+		}
+
+		const [row] = await this.db
+			.select()
+			.from(escSessions)
+			.where(
+				and(
+					eq(escSessions.id, sessionId),
+					eq(escSessions.environmentId, envRow.id),
+					isNull(escSessions.closedAt),
+					gt(escSessions.expiresAt, new Date()),
+				),
+			)
+			.limit(1);
+
+		if (!row) {
+			return null;
+		}
+
+		const crypto = new AesCryptoService(this.encryptionKeyHex);
+		const envFQN = `${tenantId}/${projectName}/${envName}`;
+		const cipherBytes = Buffer.from(row.resolvedValuesCiphertext, "base64");
+		const plainBytes = await crypto.decrypt(new Uint8Array(cipherBytes), envFQN);
+		const values = JSON.parse(new TextDecoder().decode(plainBytes)) as Record<string, unknown>;
+
+		return {
+			sessionId: row.id,
+			values,
+			secrets: row.secretPaths,
+			expiresAt: row.expiresAt,
+		};
+	}
+
+	private async resolveImports(
+		db: TxOrDb,
+		tenantId: string,
+		contextProjectName: string,
+		yamlBody: string,
+		visited: Set<string>,
+		depth: number,
+	): Promise<Record<string, string>> {
+		if (depth > MAX_IMPORT_DEPTH) {
+			throw new BadRequestError(
+				`import_too_deep: exceeded maximum import depth of ${MAX_IMPORT_DEPTH}`,
+			);
+		}
+
+		const importRefs = extractImports(yamlBody);
+		if (importRefs.length === 0) return {};
+
+		const result: Record<string, string> = {};
+
+		await Promise.all(
+			importRefs.map(async (ref) => {
+				let importProject: string;
+				let importEnv: string;
+				if (ref.includes("/")) {
+					const slashIdx = ref.indexOf("/");
+					importProject = ref.slice(0, slashIdx);
+					importEnv = ref.slice(slashIdx + 1);
+				} else {
+					importProject = contextProjectName;
+					importEnv = ref;
+				}
+
+				const fqn = `${importProject}/${importEnv}`;
+				if (visited.has(fqn)) {
+					throw new BadRequestError(
+						`import_cycle: circular import detected: ${[...visited, fqn].join(" → ")}`,
+					);
+				}
+
+				const importedRow = await findEnvRow(db, tenantId, importProject, importEnv);
+				if (!importedRow) {
+					throw new NotFoundError("ImportedEnvironment", fqn);
+				}
+
+				const childVisited = new Set(visited);
+				childVisited.add(fqn);
+
+				const childImports = await this.resolveImports(
+					db,
+					tenantId,
+					importProject,
+					importedRow.yamlBody,
+					childVisited,
+					depth + 1,
+				);
+
+				Object.assign(result, childImports);
+				result[fqn] = importedRow.yamlBody;
+			}),
+		);
+
+		return result;
 	}
 }
 

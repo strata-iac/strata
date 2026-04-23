@@ -1,38 +1,26 @@
-name: Deploy
+name: ESC Eval
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:
-    inputs:
-      stage:
-        description: "SST stage to deploy"
-        required: true
-        type: choice
-        options:
-          - production
-          - dev
-      ref:
-        description: "Git ref to deploy (tag, branch, or SHA). Defaults to current default branch HEAD."
-        required: false
+  pull_request:
+    branches: [main]
+    paths:
+      - esc-eval/**
 
 permissions:
-  id-token: write
   contents: read
 
 concurrency:
-  group: deploy-${{ inputs.stage || 'dev' }}
-  cancel-in-progress: ${{ (inputs.stage || 'dev') != 'production' }}
+  group: esc-eval-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   esc-eval-go:
-    name: Build ESC eval bootstrap
+    name: Go vet, test & build ESC eval
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.ref || github.sha }}
-
       - uses: actions/setup-go@v6
         with:
           go-version-file: esc-eval/go.mod
@@ -57,14 +45,3 @@ jobs:
           name: esc-eval-bootstrap
           path: .build/esc-eval/bootstrap
           if-no-files-found: error
-
-  deploy:
-    uses: ./.github/workflows/deploy-sst.yml
-    needs: [esc-eval-go]
-    permissions:
-      id-token: write
-      contents: read
-    with:
-      stage: ${{ inputs.stage || 'dev' }}
-      ref: ${{ inputs.ref || '' }}
-    secrets: inherit

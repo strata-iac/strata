@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { createDb, escProjects } from "@procella/db";
+import { AesCryptoService } from "@procella/crypto";
+import { createDb, escProjects, escSessions } from "@procella/db";
 import { ConflictError, NotFoundError } from "@procella/types";
 import { eq } from "drizzle-orm";
+import type { EvaluatePayload, EvaluateResult, EvaluatorClient } from "./evaluator-client.js";
 import { UnimplementedEvaluatorClient } from "./evaluator-client.js";
-import { PostgresEscService } from "./service.js";
+import { EscEvaluationError, PostgresEscService } from "./service.js";
 
 const DB_URL =
 	process.env.PROCELLA_TEST_DATABASE_URL ??
@@ -198,5 +200,230 @@ describe.skipIf(!(await hasDb()))("PostgresEscService", () => {
 		expect(list).toEqual([]);
 		const fetch = await service.getEnvironment(otherTenant, "iso", "dev");
 		expect(fetch).toBeNull();
+	});
+});
+
+// ============================================================================
+// Session tests — openSession / getSession with mocked evaluator
+// ============================================================================
+
+class MockEvaluatorClient implements EvaluatorClient {
+	lastPayload: EvaluatePayload | null = null;
+	result: EvaluateResult = { values: { foo: "bar" }, secrets: [], diagnostics: [] };
+
+	async evaluate(payload: EvaluatePayload): Promise<EvaluateResult> {
+		this.lastPayload = payload;
+		return this.result;
+	}
+}
+
+describe.skipIf(!(await hasDb()))("PostgresEscService — sessions", () => {
+	const tenant = `t-sess-${crypto.randomUUID().slice(0, 8)}`;
+	const user = "test-user";
+	const encryptionKeyHex = "00".repeat(32);
+
+	let mockEval: MockEvaluatorClient;
+	let service: PostgresEscService;
+	let dbClient: { close(): Promise<void> };
+
+	beforeAll(async () => {
+		const { db, client } = await createDb({ url: DB_URL });
+		dbClient = client;
+		mockEval = new MockEvaluatorClient();
+		service = new PostgresEscService({
+			db,
+			evaluator: mockEval,
+			encryptionKeyHex,
+		});
+	});
+
+	afterAll(async () => {
+		await dbClient.close();
+	});
+
+	beforeEach(async () => {
+		const { db, client } = await createDb({ url: DB_URL });
+		try {
+			mockEval.result = { values: { foo: "bar" }, secrets: [], diagnostics: [] };
+			mockEval.lastPayload = null;
+			await db.delete(escProjects).where(eq(escProjects.tenantId, tenant));
+		} finally {
+			await client.close();
+		}
+	});
+
+	test("openSession stores encrypted ciphertext + returns values inline", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "proj", name: "dev", yamlBody: "values:\n  foo: bar\n" },
+			user,
+		);
+
+		const result = await service.openSession(tenant, "proj", "dev");
+
+		expect(result.sessionId).toBeTruthy();
+		expect(result.values).toEqual({ foo: "bar" });
+		expect(result.secrets).toEqual([]);
+		expect(result.expiresAt).toBeInstanceOf(Date);
+		expect(result.expiresAt.getTime()).toBeGreaterThan(Date.now());
+
+		const { db: verifyDb, client: verifyClient } = await createDb({ url: DB_URL });
+		try {
+			const [row] = await verifyDb
+				.select()
+				.from(escSessions)
+				.where(eq(escSessions.id, result.sessionId))
+				.limit(1);
+			expect(row).toBeTruthy();
+			expect(row.resolvedValuesCiphertext).toBeTruthy();
+			expect(row.resolvedValuesCiphertext).not.toContain("foo");
+
+			const cryptoSvc = new AesCryptoService(encryptionKeyHex);
+			const envFQN = `${tenant}/proj/dev`;
+			const cipherBytes = Buffer.from(row.resolvedValuesCiphertext, "base64");
+			const plainBytes = await cryptoSvc.decrypt(new Uint8Array(cipherBytes), envFQN);
+			const decrypted = JSON.parse(new TextDecoder().decode(plainBytes));
+			expect(decrypted).toEqual({ foo: "bar" });
+		} finally {
+			await verifyClient.close();
+		}
+	});
+
+	test("openSession collects imports recursively", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "proj", name: "shared", yamlBody: "values:\n  x: 1\n" },
+			user,
+		);
+		await service.createEnvironment(
+			tenant,
+			{
+				projectName: "proj",
+				name: "app",
+				yamlBody: "imports:\n  - shared\nvalues:\n  y: 2\n",
+			},
+			user,
+		);
+
+		await service.openSession(tenant, "proj", "app");
+
+		expect(mockEval.lastPayload).toBeTruthy();
+		expect(mockEval.lastPayload?.imports).toEqual({
+			"proj/shared": "values:\n  x: 1\n",
+		});
+	});
+
+	test("openSession detects import cycles", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "proj", name: "a", yamlBody: "imports:\n  - b\nvalues: {}" },
+			user,
+		);
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "proj", name: "b", yamlBody: "imports:\n  - a\nvalues: {}" },
+			user,
+		);
+
+		await expect(service.openSession(tenant, "proj", "a")).rejects.toThrow("import_cycle");
+	});
+
+	test("openSession throws EscEvaluationError for evaluator error diagnostics", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "proj", name: "bad", yamlBody: "values: {}" },
+			user,
+		);
+
+		mockEval.result = {
+			values: null as unknown as Record<string, unknown>,
+			secrets: [],
+			diagnostics: [{ severity: "error", summary: "unknown provider aws-login" }],
+		};
+
+		try {
+			await service.openSession(tenant, "proj", "bad");
+			expect.unreachable("should have thrown");
+		} catch (err) {
+			expect(err).toBeInstanceOf(EscEvaluationError);
+			const evalErr = err as EscEvaluationError;
+			expect(evalErr.statusCode).toBe(422);
+			expect(evalErr.diagnostics).toHaveLength(1);
+			expect(evalErr.diagnostics[0].summary).toContain("aws-login");
+		}
+	});
+
+	test("getSession returns decrypted values for fresh session", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "proj", name: "fresh", yamlBody: "values:\n  key: value\n" },
+			user,
+		);
+		mockEval.result = { values: { key: "value" }, secrets: ["key"], diagnostics: [] };
+
+		const opened = await service.openSession(tenant, "proj", "fresh");
+		const fetched = await service.getSession(tenant, "proj", "fresh", opened.sessionId);
+
+		expect(fetched).not.toBeNull();
+		expect(fetched?.sessionId).toBe(opened.sessionId);
+		expect(fetched?.values).toEqual({ key: "value" });
+		expect(fetched?.secrets).toEqual(["key"]);
+		expect(fetched?.expiresAt.getTime()).toBe(opened.expiresAt.getTime());
+	});
+
+	test("getSession returns null for expired session", async () => {
+		const { db: shortDb, client: shortClient } = await createDb({ url: DB_URL });
+		const shortTtlService = new PostgresEscService({
+			db: shortDb,
+			evaluator: mockEval,
+			encryptionKeyHex,
+			sessionTtlSeconds: 0,
+		});
+
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "proj", name: "expiry", yamlBody: "values: {}" },
+			user,
+		);
+
+		const opened = await shortTtlService.openSession(tenant, "proj", "expiry");
+		await new Promise((r) => setTimeout(r, 50));
+		const fetched = await shortTtlService.getSession(tenant, "proj", "expiry", opened.sessionId);
+		expect(fetched).toBeNull();
+		await shortClient.close();
+	});
+
+	test("getSession returns null for closed session", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "proj", name: "closed", yamlBody: "values: {}" },
+			user,
+		);
+
+		const opened = await service.openSession(tenant, "proj", "closed");
+
+		const { db: updateDb, client: updateClient } = await createDb({ url: DB_URL });
+		try {
+			await updateDb
+				.update(escSessions)
+				.set({ closedAt: new Date() })
+				.where(eq(escSessions.id, opened.sessionId));
+		} finally {
+			await updateClient.close();
+		}
+
+		const fetched = await service.getSession(tenant, "proj", "closed", opened.sessionId);
+		expect(fetched).toBeNull();
+	});
+
+	test("getSession returns null for unknown sessionId", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "proj", name: "missing", yamlBody: "values: {}" },
+			user,
+		);
+
+		const fetched = await service.getSession(tenant, "proj", "missing", crypto.randomUUID());
+		expect(fetched).toBeNull();
 	});
 });
