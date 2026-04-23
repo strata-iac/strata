@@ -46,7 +46,7 @@ describe("LambdaEvaluatorClient", () => {
 			Payload: new TextEncoder().encode(JSON.stringify(expectedResult)),
 		});
 
-		const client = new LambdaEvaluatorClient({ functionName: "test-fn", region: "us-east-1" });
+		const client = new LambdaEvaluatorClient({ functionName: "test-fn" });
 		await client.evaluate(samplePayload);
 
 		expect(sendMock).toHaveBeenCalledTimes(1);

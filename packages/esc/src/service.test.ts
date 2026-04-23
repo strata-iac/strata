@@ -3,9 +3,13 @@ import { AesCryptoService } from "@procella/crypto";
 import { createDb, type Database, escProjects, escSessions } from "@procella/db";
 import { ConflictError, NotFoundError } from "@procella/types";
 import { eq } from "drizzle-orm";
-import type { EvaluatePayload, EvaluateResult, EvaluatorClient } from "./evaluator-client.js";
-import { UnimplementedEvaluatorClient } from "./evaluator-client.js";
-import { EscEvaluationError, PostgresEscService } from "./service.js";
+import {
+	type EvaluatePayload,
+	type EvaluateResult,
+	type EvaluatorClient,
+	UnimplementedEvaluatorClient,
+} from "./evaluator-client.js";
+import { EscEvaluationError, extractImports, PostgresEscService } from "./service.js";
 
 const DB_URL =
 	process.env.PROCELLA_TEST_DATABASE_URL ??
@@ -203,6 +207,31 @@ describe.skipIf(!(await hasDb()))("PostgresEscService", () => {
 	});
 });
 
+describe("extractImports", () => {
+	test("parses zero-indent block sequences", () => {
+		expect(extractImports("imports:\n- shared\n- prod\n")).toEqual(["shared", "prod"]);
+	});
+
+	test("parses mixed-indent block sequences", () => {
+		expect(extractImports("imports:\n  - shared\n    - prod\n")).toEqual(["shared", "prod"]);
+	});
+
+	test("skips comments and blank lines in block sequences", () => {
+		expect(extractImports("imports:\n  - a\n  # comment\n\n  - b\n")).toEqual(["a", "b"]);
+	});
+
+	test("strips quotes from block sequence items", () => {
+		expect(extractImports("imports:\n  - \"shared/env\"\n  - 'prod/env'\n")).toEqual([
+			"shared/env",
+			"prod/env",
+		]);
+	});
+
+	test("parses flow sequences with quoted values", () => {
+		expect(extractImports("imports: [\"a\", 'b']\n")).toEqual(["a", "b"]);
+	});
+});
+
 // ============================================================================
 // Session tests — openSession / getSession with mocked evaluator
 // ============================================================================
@@ -334,6 +363,10 @@ describe.skipIf(!(await hasDb()))("PostgresEscService — sessions", () => {
 			{ projectName: "proj", name: "bad", yamlBody: "values: {}" },
 			user,
 		);
+		const env = await service.getEnvironment(tenant, "proj", "bad");
+		if (!env) {
+			throw new Error("expected environment to exist");
+		}
 
 		mockEval.result = {
 			values: null as unknown as Record<string, unknown>,
@@ -350,6 +383,48 @@ describe.skipIf(!(await hasDb()))("PostgresEscService — sessions", () => {
 			expect(evalErr.statusCode).toBe(422);
 			expect(evalErr.diagnostics).toHaveLength(1);
 			expect(evalErr.diagnostics[0].summary).toContain("aws-login");
+		}
+
+		const { db: verifyDb, client: verifyClient } = await createDb({ url: DB_URL });
+		try {
+			const rows = await verifyDb
+				.select()
+				.from(escSessions)
+				.where(eq(escSessions.environmentId, env.id));
+			expect(rows).toHaveLength(0);
+		} finally {
+			await verifyClient.close();
+		}
+	});
+
+	test("openSession still creates sessions for warning-only diagnostics", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "proj", name: "warn", yamlBody: "values: {}" },
+			user,
+		);
+		mockEval.result = {
+			values: { ok: true },
+			secrets: [],
+			diagnostics: [{ severity: "warning", summary: "deprecated field" }],
+		};
+
+		const result = await service.openSession(tenant, "proj", "warn");
+		expect(result.values).toEqual({ ok: true });
+
+		const env = await service.getEnvironment(tenant, "proj", "warn");
+		if (!env) {
+			throw new Error("expected environment to exist");
+		}
+		const { db: verifyDb, client: verifyClient } = await createDb({ url: DB_URL });
+		try {
+			const rows = await verifyDb
+				.select()
+				.from(escSessions)
+				.where(eq(escSessions.environmentId, env.id));
+			expect(rows).toHaveLength(1);
+		} finally {
+			await verifyClient.close();
 		}
 	});
 

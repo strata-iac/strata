@@ -100,30 +100,58 @@ const MAX_IMPORT_DEPTH = 50;
  * - Missing/empty imports → []
  * - Quoted/unquoted strings
  */
-function extractImports(yamlBody: string): string[] {
-	// Try flow sequence: imports: [a, b, c] or imports: ["a", 'b']
-	const flowMatch = yamlBody.match(/^imports:\s*\[([^\]]*)\]/m);
-	if (flowMatch) {
-		const inner = flowMatch[1].trim();
-		if (!inner) return [];
-		return inner
-			.split(",")
-			.map((s) => s.trim().replace(/^["']|["']$/g, ""))
-			.filter(Boolean);
-	}
+export function extractImports(yamlBody: string): string[] {
+	const lines = yamlBody.split("\n");
+	for (let i = 0; i < lines.length; i++) {
+		const match = lines[i]?.match(/^\s*imports:\s*(.*)$/);
+		if (!match) continue;
 
-	// Try block sequence: imports:\n  - a\n  - b
-	const blockMatch = yamlBody.match(/^imports:\s*\n((?:[ \t]+-[^\n]*\n?)+)/m);
-	if (blockMatch) {
-		return blockMatch[1]
-			.split("\n")
-			.map((line) =>
-				line
-					.replace(/^[ \t]+-\s*/, "")
-					.trim()
-					.replace(/^["']|["']$/g, ""),
-			)
-			.filter(Boolean);
+		const rest = match[1].trim();
+		if (rest.startsWith("[")) {
+			const closeIdx = rest.indexOf("]");
+			if (closeIdx === -1) return [];
+			const inner = rest.slice(1, closeIdx).trim();
+			if (!inner) return [];
+
+			const items: string[] = [];
+			let current = "";
+			let quote: '"' | "'" | null = null;
+			for (const ch of inner) {
+				if (quote) {
+					if (ch === quote) quote = null;
+					else current += ch;
+					continue;
+				}
+				if (ch === '"' || ch === "'") {
+					quote = ch;
+					continue;
+				}
+				if (ch === ",") {
+					const item = current.trim();
+					if (item) items.push(item);
+					current = "";
+					continue;
+				}
+				current += ch;
+			}
+			const tail = current.trim();
+			if (tail) items.push(tail);
+			return items.map((s) => s.replace(/^["']|["']$/g, "")).filter(Boolean);
+		}
+
+		const items: string[] = [];
+		for (let j = i + 1; j < lines.length; j++) {
+			const line = lines[j] ?? "";
+			const trimmed = line.trim();
+			if (trimmed === "" || trimmed.startsWith("#")) continue;
+
+			const listMatch = line.match(/^\s*-\s+(.+?)\s*(?:#.*)?$/);
+			if (!listMatch) break;
+
+			const value = listMatch[1].trim().replace(/^["']|["']$/g, "");
+			if (value) items.push(value);
+		}
+		return items;
 	}
 
 	return [];
@@ -529,7 +557,7 @@ export class PostgresEscService implements EscService {
 				);
 
 				const errorDiags = result.diagnostics.filter((d) => d.severity === "error");
-				if (errorDiags.length > 0 && !result.values) {
+				if (errorDiags.length > 0) {
 					throw new EscEvaluationError(errorDiags);
 				}
 
@@ -558,10 +586,6 @@ export class PostgresEscService implements EscService {
 							.returning();
 					},
 				);
-
-				if (errorDiags.length > 0) {
-					throw new EscEvaluationError(errorDiags);
-				}
 
 				return {
 					sessionId: session.id,

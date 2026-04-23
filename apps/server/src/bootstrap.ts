@@ -95,7 +95,6 @@ async function bootstrapServices() {
 	const evaluatorClient = config.escEvaluatorFnName
 		? new LambdaEvaluatorClient({
 				functionName: config.escEvaluatorFnName,
-				region: process.env.AWS_REGION ?? "us-east-1",
 			})
 		: new UnimplementedEvaluatorClient();
 	const escService = new PostgresEscService({

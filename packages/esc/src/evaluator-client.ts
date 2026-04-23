@@ -71,7 +71,8 @@ export class LambdaEvaluatorClient implements EvaluatorClient {
 	constructor(opts: { functionName: string; region?: string; timeoutMs?: number }) {
 		this.functionName = opts.functionName;
 		this.timeoutMs = opts.timeoutMs ?? 55_000;
-		this.client = new LambdaClient({ region: opts.region ?? "us-east-1" });
+		this.client =
+			opts.region !== undefined ? new LambdaClient({ region: opts.region }) : new LambdaClient();
 	}
 
 	async evaluate(payload: EvaluatePayload): Promise<EvaluateResult> {

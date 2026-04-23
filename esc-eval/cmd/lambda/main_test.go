@@ -147,22 +147,38 @@ func TestHandleDiagnosticsForUnknownProvider(t *testing.T) {
 	}
 }
 
-func TestHandleRejectsMalformedYAML(t *testing.T) {
-	resp, err := handle(context.Background(), EvaluateRequest{
+func TestRunStdioMalformedYAML(t *testing.T) {
+	req := EvaluateRequest{
 		Definition:       "values: [unclosed",
 		EncryptionKeyHex: validKey,
-	})
-	if err != nil {
+	}
+	input, _ := json.Marshal(req)
+
+	var out bytes.Buffer
+	if err := runStdio(bytes.NewReader(input), &out); err != nil {
+		t.Fatalf("runStdio returned error: %v", err)
+	}
+
+	var resp EvaluateResponse
+	if err := json.Unmarshal(out.Bytes(), &resp); err == nil {
+		var hasError bool
+		for _, d := range resp.Diagnostics {
+			if d.Severity == "error" {
+				hasError = true
+			}
+		}
+		if !hasError {
+			t.Fatalf("expected error diagnostic in response: %+v", resp.Diagnostics)
+		}
 		return
 	}
-	var hasError bool
-	for _, d := range resp.Diagnostics {
-		if d.Severity == "error" {
-			hasError = true
-		}
+
+	var errResp struct{ Error string }
+	if err := json.Unmarshal(out.Bytes(), &errResp); err != nil {
+		t.Fatalf("stdout was not valid JSON response or error shape: %v (raw: %s)", err, out.String())
 	}
-	if !hasError {
-		t.Fatal("expected error or error-severity diagnostic for malformed YAML")
+	if errResp.Error == "" {
+		t.Fatal("expected non-empty error field for malformed YAML")
 	}
 }
 
