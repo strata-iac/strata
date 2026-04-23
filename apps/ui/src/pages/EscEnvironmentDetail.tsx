@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useBlocker, useParams } from "react-router";
 import YAML from "yaml";
+import { EscResolvedValues } from "../components/EscResolvedValues";
+import { EscRevisionDiff } from "../components/EscRevisionDiff";
+import { EscSessions, useSessionTracker } from "../components/EscSessions";
 import { apiBase } from "../config";
 import { useOrg } from "../hooks/useOrg";
 import { getAuthHeaders, trpc } from "../trpc";
+
+type Tab = "editor" | "values" | "sessions";
 
 function formatDate(date: Date): string {
 	return new Date(date).toLocaleDateString(undefined, {
@@ -17,6 +22,7 @@ function formatDate(date: Date): string {
 export function EscEnvironmentDetail() {
 	const { project, envName } = useParams<{ project: string; envName: string }>();
 	const { org } = useOrg();
+	const [activeTab, setActiveTab] = useState<Tab>("editor");
 
 	const {
 		data: env,
@@ -39,11 +45,20 @@ export function EscEnvironmentDetail() {
 	const [saveError, setSaveError] = useState<string | null>(null);
 	const [dirty, setDirty] = useState(false);
 	const [selectedRevision, setSelectedRevision] = useState<number | null>(null);
+	const [compareRevision, setCompareRevision] = useState<number | null>(null);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+	const envId = env?.id ?? "";
+	const { addSession } = useSessionTracker(envId);
 
 	const { data: revisionData } = trpc.esc.getRevision.useQuery(
 		{ project: project ?? "", environment: envName ?? "", revision: selectedRevision ?? 0 },
 		{ enabled: !!project && !!envName && selectedRevision != null },
+	);
+
+	const { data: compareRevisionData } = trpc.esc.getRevision.useQuery(
+		{ project: project ?? "", environment: envName ?? "", revision: compareRevision ?? 0 },
+		{ enabled: !!project && !!envName && compareRevision != null },
 	);
 
 	useEffect(() => {
@@ -159,6 +174,13 @@ export function EscEnvironmentDetail() {
 
 	const isViewingRevision = selectedRevision != null;
 	const canSave = dirty && !yamlError && !saving && !isViewingRevision;
+	const showDiff = compareRevision != null && compareRevisionData;
+
+	const tabs: { key: Tab; label: string }[] = [
+		{ key: "editor", label: "Editor" },
+		{ key: "values", label: "Resolved Values" },
+		{ key: "sessions", label: "Sessions" },
+	];
 
 	return (
 		<div className="space-y-6">
@@ -169,19 +191,38 @@ export function EscEnvironmentDetail() {
 					{env && (
 						<span className="text-xs text-cloud font-mono">rev #{env.currentRevisionNumber}</span>
 					)}
+					{activeTab === "editor" && (
+						<button
+							type="button"
+							onClick={handleSave}
+							disabled={!canSave}
+							className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+								canSave
+									? "bg-lightning text-deep-sky hover:bg-lightning/90"
+									: "bg-slate-brand text-cloud/50 cursor-not-allowed"
+							}`}
+						>
+							{saving ? "Saving\u2026" : "Save"}
+						</button>
+					)}
+				</div>
+			</div>
+
+			<div className="flex gap-1 border-b border-slate-brand">
+				{tabs.map((tab) => (
 					<button
+						key={tab.key}
 						type="button"
-						onClick={handleSave}
-						disabled={!canSave}
-						className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-							canSave
-								? "bg-lightning text-deep-sky hover:bg-lightning/90"
-								: "bg-slate-brand text-cloud/50 cursor-not-allowed"
+						onClick={() => setActiveTab(tab.key)}
+						className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+							activeTab === tab.key
+								? "text-lightning border-lightning"
+								: "text-cloud hover:text-mist border-transparent"
 						}`}
 					>
-						{saving ? "Saving\u2026" : "Save"}
+						{tab.label}
 					</button>
-				</div>
+				))}
 			</div>
 
 			{saveError && (
@@ -190,104 +231,155 @@ export function EscEnvironmentDetail() {
 				</div>
 			)}
 
-			<div className="flex gap-6">
-				<div className="flex-1 min-w-0">
-					{yamlError && (
-						<div className="mb-2 text-xs text-danger bg-danger/10 border border-danger/20 rounded-lg px-3 py-2 font-mono">
-							{yamlError}
-						</div>
-					)}
-					<div className="relative">
-						{isViewingRevision && (
-							<div className="absolute top-0 left-0 right-0 bg-flash/10 border-b border-flash/20 px-3 py-1.5 text-xs text-flash z-10 rounded-t-xl flex items-center justify-between">
-								<span>Viewing revision #{selectedRevision}</span>
-								<button
-									type="button"
-									onClick={() => {
-										setSelectedRevision(null);
-										if (env) {
-											setYamlContent(env.yamlBody);
-											setDirty(false);
-										}
-									}}
-									className="text-flash hover:text-white transition-colors"
-								>
-									Back to latest
-								</button>
-							</div>
-						)}
-						<textarea
-							ref={textareaRef}
-							value={yamlContent}
-							onChange={handleChange}
-							readOnly={isViewingRevision}
-							spellCheck={false}
-							className={`w-full h-[500px] bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 font-mono text-sm text-mist leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-lightning focus:border-transparent placeholder:text-zinc-500 ${
-								isViewingRevision ? "pt-10 opacity-75" : ""
-							}`}
-							placeholder="# Enter your YAML configuration..."
+			{activeTab === "editor" && (
+				<>
+					{showDiff && env && (
+						<EscRevisionDiff
+							leftYaml={compareRevisionData.yamlBody}
+							rightYaml={env.yamlBody}
+							leftLabel={`Revision #${compareRevision}`}
+							rightLabel="Current"
+							onClose={() => setCompareRevision(null)}
 						/>
-					</div>
-					<p className="mt-1.5 text-xs text-cloud/60">
-						<kbd className="font-mono bg-slate-brand px-1 py-0.5 rounded text-cloud/80">
-							\u2318S
-						</kbd>{" "}
-						or{" "}
-						<kbd className="font-mono bg-slate-brand px-1 py-0.5 rounded text-cloud/80">Ctrl+S</kbd>{" "}
-						to save
-					</p>
-				</div>
+					)}
 
-				<div className="w-64 shrink-0">
-					<h3 className="text-sm font-medium text-mist mb-3">Revisions</h3>
-					<div className="bg-slate-brand/50 border border-slate-brand rounded-xl overflow-hidden max-h-[520px] overflow-y-auto">
-						{revisions && revisions.length > 0 ? (
-							revisions.map((rev) => {
-								const isSelected = selectedRevision === rev.revisionNumber;
-								const isCurrent =
-									env?.currentRevisionNumber === rev.revisionNumber && !isViewingRevision;
-								return (
-									<button
-										key={rev.id}
-										type="button"
-										onClick={() => {
-											if (isSelected) {
+					<div className="flex gap-6">
+						<div className="flex-1 min-w-0">
+							{yamlError && (
+								<div className="mb-2 text-xs text-danger bg-danger/10 border border-danger/20 rounded-lg px-3 py-2 font-mono">
+									{yamlError}
+								</div>
+							)}
+							<div className="relative">
+								{isViewingRevision && (
+									<div className="absolute top-0 left-0 right-0 bg-flash/10 border-b border-flash/20 px-3 py-1.5 text-xs text-flash z-10 rounded-t-xl flex items-center justify-between">
+										<span>Viewing revision #{selectedRevision}</span>
+										<button
+											type="button"
+											onClick={() => {
 												setSelectedRevision(null);
 												if (env) {
 													setYamlContent(env.yamlBody);
 													setDirty(false);
 												}
-											} else {
-												if (dirty && !window.confirm("Discard unsaved changes?")) return;
-												setSelectedRevision(rev.revisionNumber);
-												setDirty(false);
-											}
-										}}
-										className={`w-full text-left px-3 py-2.5 border-b border-slate-brand/40 transition-colors ${
-											isSelected
-												? "bg-lightning/10 border-l-2 border-l-lightning"
-												: "hover:bg-slate-brand/80"
-										}`}
-									>
-										<div className="flex items-center justify-between">
-											<span className="text-sm font-mono text-mist">#{rev.revisionNumber}</span>
-											{isCurrent && (
-												<span className="text-[10px] font-medium text-lightning bg-lightning/10 px-1.5 py-0.5 rounded">
-													latest
-												</span>
-											)}
-										</div>
-										<div className="text-xs text-cloud mt-0.5">{rev.createdBy}</div>
-										<div className="text-xs text-cloud/60 mt-0.5">{formatDate(rev.createdAt)}</div>
-									</button>
-								);
-							})
-						) : (
-							<div className="px-3 py-4 text-xs text-cloud/60 text-center">No revisions yet</div>
-						)}
+											}}
+											className="text-flash hover:text-white transition-colors"
+										>
+											Back to latest
+										</button>
+									</div>
+								)}
+								<textarea
+									ref={textareaRef}
+									value={yamlContent}
+									onChange={handleChange}
+									readOnly={isViewingRevision}
+									spellCheck={false}
+									className={`w-full h-[500px] bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 font-mono text-sm text-mist leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-lightning focus:border-transparent placeholder:text-zinc-500 ${
+										isViewingRevision ? "pt-10 opacity-75" : ""
+									}`}
+									placeholder="# Enter your YAML configuration..."
+								/>
+							</div>
+							<p className="mt-1.5 text-xs text-cloud/60">
+								<kbd className="font-mono bg-slate-brand px-1 py-0.5 rounded text-cloud/80">
+									{"\u2318S"}
+								</kbd>{" "}
+								or{" "}
+								<kbd className="font-mono bg-slate-brand px-1 py-0.5 rounded text-cloud/80">
+									Ctrl+S
+								</kbd>{" "}
+								to save
+							</p>
+						</div>
+
+						<div className="w-64 shrink-0">
+							<h3 className="text-sm font-medium text-mist mb-3">Revisions</h3>
+							<div className="bg-slate-brand/50 border border-slate-brand rounded-xl overflow-hidden max-h-[520px] overflow-y-auto">
+								{revisions && revisions.length > 0 ? (
+									revisions.map((rev) => {
+										const isSelected = selectedRevision === rev.revisionNumber;
+										const isCurrent =
+											env?.currentRevisionNumber === rev.revisionNumber && !isViewingRevision;
+										return (
+											<div
+												key={rev.id}
+												className={`w-full text-left px-3 py-2.5 border-b border-slate-brand/40 transition-colors ${
+													isSelected
+														? "bg-lightning/10 border-l-2 border-l-lightning"
+														: "hover:bg-slate-brand/80"
+												}`}
+											>
+												<button
+													type="button"
+													onClick={() => {
+														if (isSelected) {
+															setSelectedRevision(null);
+															if (env) {
+																setYamlContent(env.yamlBody);
+																setDirty(false);
+															}
+														} else {
+															if (dirty && !window.confirm("Discard unsaved changes?")) return;
+															setSelectedRevision(rev.revisionNumber);
+															setDirty(false);
+														}
+													}}
+													className="w-full text-left"
+												>
+													<div className="flex items-center justify-between">
+														<span className="text-sm font-mono text-mist">
+															#{rev.revisionNumber}
+														</span>
+														{isCurrent && (
+															<span className="text-[10px] font-medium text-lightning bg-lightning/10 px-1.5 py-0.5 rounded">
+																latest
+															</span>
+														)}
+													</div>
+													<div className="text-xs text-cloud mt-0.5">{rev.createdBy}</div>
+													<div className="text-xs text-cloud/60 mt-0.5">
+														{formatDate(rev.createdAt)}
+													</div>
+												</button>
+												{!isCurrent && (
+													<button
+														type="button"
+														onClick={() =>
+															setCompareRevision(
+																compareRevision === rev.revisionNumber ? null : rev.revisionNumber,
+															)
+														}
+														className={`mt-1 text-[10px] px-2 py-0.5 rounded transition-colors ${
+															compareRevision === rev.revisionNumber
+																? "bg-lightning/20 text-lightning"
+																: "text-cloud/50 hover:text-cloud bg-slate-brand/60"
+														}`}
+													>
+														{compareRevision === rev.revisionNumber ? "Hide diff" : "Compare"}
+													</button>
+												)}
+											</div>
+										);
+									})
+								) : (
+									<div className="px-3 py-4 text-xs text-cloud/60 text-center">
+										No revisions yet
+									</div>
+								)}
+							</div>
+						</div>
 					</div>
-				</div>
-			</div>
+				</>
+			)}
+
+			{activeTab === "values" && project && envName && (
+				<EscResolvedValues project={project} environment={envName} onSessionOpened={addSession} />
+			)}
+
+			{activeTab === "sessions" && project && envName && envId && (
+				<EscSessions project={project} environment={envName} envId={envId} />
+			)}
 		</div>
 	);
 }
