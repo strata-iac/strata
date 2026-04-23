@@ -1,10 +1,11 @@
 // @procella/esc — EvaluatorClient: invokes the Go Lambda (esc-eval/) that
 // embeds github.com/pulumi/esc to evaluate a composed environment.
 //
-// P0.2 scaffold: interface + placeholder implementation. Real Lambda invoke
-// lands in procella-yj7.13 (P2). Recursive import resolution happens in
-// packages/esc/src/service.ts BEFORE calling evaluate() — the Lambda itself
-// never reads the DB or the network for imports.
+// Scaffold: interface + placeholder implementation. Real Lambda invoke lands
+// in procella-yj7.13. Recursive import resolution WILL happen in
+// packages/esc/src/service.ts#openSession BEFORE calling evaluate()
+// (procella-yj7.14) — the Lambda itself never reads the DB or the network
+// for imports; all inputs come pre-resolved in the payload.
 
 /** Input for one evaluator invocation. */
 export interface EvaluatePayload {

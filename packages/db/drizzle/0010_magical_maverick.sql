@@ -38,8 +38,8 @@ CREATE TABLE "esc_sessions" (
 	"closed_at" timestamp
 );
 --> statement-breakpoint
-DROP INDEX IF EXISTS "idx_oidc_trust_org_slug";--> statement-breakpoint
-DROP INDEX IF EXISTS "idx_oidc_trust_org_name";--> statement-breakpoint
+DROP INDEX "idx_oidc_trust_org_slug";--> statement-breakpoint
+DROP INDEX "idx_oidc_trust_org_name";--> statement-breakpoint
 ALTER TABLE "esc_environment_revisions" ADD CONSTRAINT "esc_environment_revisions_environment_id_esc_environments_id_fk" FOREIGN KEY ("environment_id") REFERENCES "public"."esc_environments"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "esc_environments" ADD CONSTRAINT "esc_environments_project_id_esc_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."esc_projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "esc_sessions" ADD CONSTRAINT "esc_sessions_environment_id_esc_environments_id_fk" FOREIGN KEY ("environment_id") REFERENCES "public"."esc_environments"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
