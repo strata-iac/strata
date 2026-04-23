@@ -103,7 +103,7 @@ const MAX_IMPORT_DEPTH = 50;
 export function extractImports(yamlBody: string): string[] {
 	const lines = yamlBody.split("\n");
 	for (let i = 0; i < lines.length; i++) {
-		const match = lines[i]?.match(/^\s*imports:\s*(.*)$/);
+		const match = lines[i]?.match(/^[ \t]{0,256}imports:[ \t]{0,256}(.*)$/);
 		if (!match) continue;
 
 		const rest = match[1].trim();
@@ -145,10 +145,17 @@ export function extractImports(yamlBody: string): string[] {
 			const trimmed = line.trim();
 			if (trimmed === "" || trimmed.startsWith("#")) continue;
 
-			const listMatch = line.match(/^\s*-\s+(.+?)\s*(?:#.*)?$/);
-			if (!listMatch) break;
+			const dashIdx = trimmed.indexOf("-");
+			if (dashIdx !== 0) break;
+			const afterDash = trimmed.slice(1);
+			if (afterDash.length === 0 || (afterDash[0] !== " " && afterDash[0] !== "\t")) break;
 
-			const value = listMatch[1].trim().replace(/^["']|["']$/g, "");
+			let val = afterDash.trimStart();
+			const hashIdx = val.indexOf("#");
+			if (hashIdx > 0 && (val[hashIdx - 1] === " " || val[hashIdx - 1] === "\t")) {
+				val = val.slice(0, hashIdx).trimEnd();
+			}
+			const value = val.replace(/^["']|["']$/g, "");
 			if (value) items.push(value);
 		}
 		return items;
@@ -723,18 +730,19 @@ const ESC_GC_ADVISORY_LOCK_ID = 0x455343475f455343n;
  * Returns { closedCount: 0 } if lock not acquired (another replica handles it).
  */
 export async function escGcSweep(db: Database): Promise<{ closedCount: number }> {
+	const lockId = ESC_GC_ADVISORY_LOCK_ID.toString();
 	return withSpan("procella.esc", "esc.gc.sweep", {}, async () => {
-		const lockResult = await db.execute(
-			sql`SELECT pg_try_advisory_lock(${ESC_GC_ADVISORY_LOCK_ID}) as acquired`,
-		);
-		const rows = "rows" in lockResult ? lockResult.rows : lockResult;
-		const acquired = (rows[0] as { acquired?: boolean })?.acquired;
-		if (!acquired) {
-			return { closedCount: 0 };
-		}
+		return await db.transaction(async (tx) => {
+			const lockResult = await tx.execute(
+				sql`SELECT pg_try_advisory_xact_lock(${lockId}::bigint) as acquired`,
+			);
+			const rows = "rows" in lockResult ? lockResult.rows : lockResult;
+			const acquired = (rows[0] as { acquired?: boolean })?.acquired;
+			if (!acquired) {
+				return { closedCount: 0 };
+			}
 
-		try {
-			const expired = await db
+			const expired = await tx
 				.select({ id: escSessions.id })
 				.from(escSessions)
 				.where(and(lt(escSessions.expiresAt, sql`now()`), isNull(escSessions.closedAt)))
@@ -745,15 +753,13 @@ export async function escGcSweep(db: Database): Promise<{ closedCount: number }>
 			}
 
 			const ids = expired.map((s) => s.id);
-			await db
+			await tx
 				.update(escSessions)
 				.set({ closedAt: sql`now()` })
 				.where(inArray(escSessions.id, ids));
 
 			return { closedCount: ids.length };
-		} finally {
-			await db.execute(sql`SELECT pg_advisory_unlock(${ESC_GC_ADVISORY_LOCK_ID})`);
-		}
+		});
 	});
 }
 

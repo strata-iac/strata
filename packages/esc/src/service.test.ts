@@ -230,6 +230,25 @@ describe("extractImports", () => {
 	test("parses flow sequences with quoted values", () => {
 		expect(extractImports("imports: [\"a\", 'b']\n")).toEqual(["a", "b"]);
 	});
+
+	test("header regex does not backtrack on pathological whitespace input", () => {
+		const input = `imports:${" ".repeat(50000)}[a]`;
+		const start = performance.now();
+		const result = extractImports(input);
+		const elapsed = performance.now() - start;
+		expect(elapsed).toBeLessThan(500);
+		expect(result).toEqual(["a"]);
+	});
+
+	test("block-item regex does not backtrack on pathological trailing spaces", () => {
+		const line = `  - val${" ".repeat(50000)}`;
+		const input = `imports:\n${line}\n`;
+		const start = performance.now();
+		const result = extractImports(input);
+		const elapsed = performance.now() - start;
+		expect(elapsed).toBeLessThan(500);
+		expect(result).toEqual(["val"]);
+	});
 });
 
 // ============================================================================
