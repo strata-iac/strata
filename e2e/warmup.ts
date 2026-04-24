@@ -24,6 +24,6 @@ export async function warmupServer(fetcher: Fetcher = apiRequest): Promise<void>
 				r.status === "fulfilled" ? String(r.value.status) : `rejected(${String(r.reason)})`,
 			)
 			.join(", ");
-		throw new Error(`warmup: no successful /api/user response (results: ${details})`);
+		throw new Error(`warmup: no successful /user response (results: ${details})`);
 	}
 }
