@@ -35,7 +35,7 @@ jobs:
       - name: Run unit tests with coverage
         run: |
           mkdir -p test-results
-          bun test --coverage --coverage-reporter=lcov --reporter=junit --reporter-outfile=test-results/unit.junit.xml packages/ apps/ scripts/
+          bun test --parallel --coverage --coverage-reporter=lcov --reporter=junit --reporter-outfile=test-results/unit.junit.xml packages/ apps/ scripts/
       - name: Upload coverage to Codecov
         if: always()
         uses: codecov/codecov-action@v6
@@ -154,7 +154,7 @@ jobs:
       - name: Typecheck with regenerated types
         run: bun run typecheck
       - name: Run unit tests
-        run: bun test packages/
+        run: bun test --parallel packages/
 
   e2e:
     name: E2E Acceptance Tests
