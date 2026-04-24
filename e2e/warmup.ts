@@ -9,12 +9,21 @@ export type Fetcher = (path: string) => Promise<Response>;
 // Throws if every warmup request failed — otherwise a backend that is fully
 // broken at cold-start would silently pass this step, defeating the purpose.
 export async function warmupServer(fetcher: Fetcher = apiRequest): Promise<void> {
-	const responses = await Promise.all(Array.from({ length: 5 }, () => fetcher("/user")));
-	// Drain response bodies so Bun returns sockets to the pool and does not
-	// hold strong references to unconsumed ArrayBuffers.
-	await Promise.all(responses.map((r) => r.body?.cancel()));
-	if (!responses.some((r) => r.ok)) {
-		const statuses = responses.map((r) => r.status).join(", ");
-		throw new Error(`warmup: no successful /api/user response (statuses: ${statuses})`);
+	// allSettled (not all): cold-start can produce partial network failures
+	// (ECONNRESET / aborted sockets). Collect every outcome so a single
+	// rejected fetch does not short-circuit the check or leak sibling bodies.
+	const results = await Promise.allSettled(Array.from({ length: 5 }, () => fetcher("/user")));
+	// Drain fulfilled response bodies so Bun returns sockets to the pool and
+	// does not hold strong references to unconsumed ArrayBuffers.
+	await Promise.all(
+		results.flatMap((r) => (r.status === "fulfilled" ? [r.value.body?.cancel()] : [])),
+	);
+	if (!results.some((r) => r.status === "fulfilled" && r.value.ok)) {
+		const details = results
+			.map((r) =>
+				r.status === "fulfilled" ? String(r.value.status) : `rejected(${String(r.reason)})`,
+			)
+			.join(", ");
+		throw new Error(`warmup: no successful /api/user response (results: ${details})`);
 	}
 }

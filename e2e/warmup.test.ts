@@ -60,4 +60,43 @@ describe("warmupServer", () => {
 		await warmupServer(fetcher);
 		expect(count).toBe(5);
 	});
+
+	test("succeeds when some requests reject but at least one is ok — cold-start partial failures", async () => {
+		let i = 0;
+		const fetcher: Fetcher = async () => {
+			const idx = i++;
+			if (idx === 0 || idx === 3) throw new Error(`ECONNRESET attempt ${idx}`);
+			return makeResponse(200);
+		};
+		await expect(warmupServer(fetcher)).resolves.toBeUndefined();
+	});
+
+	test("throws when every request rejects — includes reasons in error message", async () => {
+		const fetcher: Fetcher = async () => {
+			throw new Error("ECONNREFUSED");
+		};
+		await expect(warmupServer(fetcher)).rejects.toThrow(/rejected\(Error: ECONNREFUSED\)/);
+	});
+
+	test("throws when mix of rejections and 5xx responses", async () => {
+		let i = 0;
+		const fetcher: Fetcher = async () => {
+			const idx = i++;
+			if (idx % 2 === 0) throw new Error("timeout");
+			return makeResponse(503);
+		};
+		await expect(warmupServer(fetcher)).rejects.toThrow(/503.*rejected|rejected.*503/);
+	});
+
+	test("drains bodies of fulfilled responses even when siblings reject", async () => {
+		let cancelled = 0;
+		let i = 0;
+		const fetcher: Fetcher = async () => {
+			const idx = i++;
+			if (idx === 0 || idx === 2) throw new Error("network");
+			return makeResponse(200, () => cancelled++);
+		};
+		await warmupServer(fetcher);
+		expect(cancelled).toBe(3);
+	});
 });
