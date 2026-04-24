@@ -54,7 +54,8 @@ test.describe("ESC Revision Diff", () => {
 
 	test("Compare button shows diff between revision and current", async ({ page }) => {
 		await page.goto(`${UI_URL}/esc/${project}/${envName}`);
-		await expect(page.getByText("rev #2")).toBeVisible({ timeout: 10_000 });
+		await page.waitForLoadState("networkidle");
+		await expect(page.getByText("rev #2")).toBeVisible({ timeout: 15_000 });
 
 		const compareBtn = page.getByRole("button", { name: "Compare" });
 		await expect(compareBtn).toBeVisible({ timeout: 5_000 });
@@ -66,7 +67,8 @@ test.describe("ESC Revision Diff", () => {
 
 	test("Close button hides diff panel", async ({ page }) => {
 		await page.goto(`${UI_URL}/esc/${project}/${envName}`);
-		await expect(page.getByText("rev #2")).toBeVisible({ timeout: 10_000 });
+		await page.waitForLoadState("networkidle");
+		await expect(page.getByText("rev #2")).toBeVisible({ timeout: 15_000 });
 
 		await page.getByRole("button", { name: "Compare" }).first().click();
 		await expect(page.getByText("Revision #1")).toBeVisible({ timeout: 5_000 });

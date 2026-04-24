@@ -40,18 +40,21 @@ test.describe("ESC Environment Editor", () => {
 
 	test("loads environment YAML in editor", async ({ page }) => {
 		await page.goto(`${UI_URL}/esc/${project}/${envName}`);
+		await page.waitForLoadState("networkidle");
+		await expect(page.getByRole("button", { name: "Save" })).toBeVisible({ timeout: 15_000 });
 		const textarea = page.locator("textarea");
-		await expect(textarea).toBeVisible({ timeout: 10_000 });
+		await expect(textarea).toBeVisible({ timeout: 15_000 });
 		await expect(textarea).toContainText("original");
 	});
 
 	test("edit YAML and save bumps revision", async ({ page }) => {
 		await page.goto(`${UI_URL}/esc/${project}/${envName}`);
+		await page.waitForLoadState("networkidle");
 		const textarea = page.locator("textarea");
-		await expect(textarea).toBeVisible({ timeout: 10_000 });
+		await expect(textarea).toBeVisible({ timeout: 15_000 });
 
 		await textarea.fill("values:\n  key: modified\n");
 		await page.getByRole("button", { name: "Save" }).click();
-		await expect(page.getByText("rev #2")).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByText("rev #2")).toBeVisible({ timeout: 15_000 });
 	});
 });

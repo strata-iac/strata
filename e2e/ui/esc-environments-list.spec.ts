@@ -32,8 +32,8 @@ test.describe("ESC Environments List", () => {
 
 	test("page loads and shows empty state", async ({ page }) => {
 		await page.goto(`${UI_URL}/esc`);
-		await page.waitForLoadState("domcontentloaded");
-		await expect(page.getByText("Environments")).toBeVisible();
+		await page.waitForLoadState("networkidle");
+		await expect(page.getByRole("heading", { name: "Environments" })).toBeVisible();
 	});
 
 	test("shows environment after API creation", async ({ page }) => {
