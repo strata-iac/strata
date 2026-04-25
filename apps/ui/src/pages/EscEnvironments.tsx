@@ -89,7 +89,7 @@ const EnvTable = memo(function EnvTable({ items }: { items: EnvRow[] }) {
 			{items.map((env, index) => (
 				<Link
 					key={`${env.projectName}/${env.envName}`}
-					to={`/esc/${env.projectName}/${env.envName}`}
+					to={`/esc/${encodeURIComponent(env.projectName)}/${encodeURIComponent(env.envName)}`}
 					className={`grid grid-cols-[1fr_1.5fr_0.5fr_1fr_1fr] gap-4 px-4 py-3 hover:bg-slate-brand/80 transition-colors text-sm ${
 						index < items.length - 1 ? "border-b border-slate-brand/40" : ""
 					}`}

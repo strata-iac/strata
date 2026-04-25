@@ -5,9 +5,9 @@
 // providers. Value resolution is delegated to a Go Lambda (esc-eval/) that
 // embeds github.com/pulumi/esc as a library.
 //
-// Current status: CRUD + session scaffolding implemented (procella-yj7.5, .6).
-// openSession/getSession + recursive import resolution land in procella-yj7.14
-// once the evaluator Lambda is wired up (procella-yj7.11/.12/.13).
+// Current status: full CRUD, revisions/tags, drafts, openSession/getSession,
+// and recursive import resolution are wired up end-to-end through the Go
+// evaluator (Lambda + stdio modes). See the procella-yj7 epic for history.
 
 export {
 	EvaluatorInvokeError,

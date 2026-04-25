@@ -16,13 +16,33 @@ async function setDevToken(page: Page) {
 }
 
 async function createEscEnvironment(project: string, name: string, yamlBody: string) {
-	const res = await fetch(`${API_URL}/api/esc/environments/dev-org/${project}`, {
+	// Step 1: Create empty environment (matches upstream esc CLI wire contract).
+	const createRes = await fetch(`${API_URL}/api/esc/environments/dev-org`, {
 		method: "POST",
 		headers: ESC_HEADERS,
-		body: JSON.stringify({ name, yamlBody }),
+		body: JSON.stringify({ project, name }),
 	});
-	if (!res.ok) throw new Error(`Create env failed: ${res.status} ${await res.text()}`);
-	return res.json();
+	if (!createRes.ok) {
+		throw new Error(`Create env failed: ${createRes.status} ${await createRes.text()}`);
+	}
+	// Step 2: PATCH the YAML body (sent as raw text, not JSON).
+	if (yamlBody) {
+		const patchRes = await fetch(
+			`${API_URL}/api/esc/environments/dev-org/${encodeURIComponent(project)}/${encodeURIComponent(name)}`,
+			{
+				method: "PATCH",
+				headers: {
+					Authorization: `token ${TOKEN}`,
+					Accept: "application/vnd.pulumi+8",
+					"Content-Type": "application/x-yaml",
+				},
+				body: yamlBody,
+			},
+		);
+		if (!patchRes.ok) {
+			throw new Error(`Patch env failed: ${patchRes.status} ${await patchRes.text()}`);
+		}
+	}
 }
 
 test.describe("ESC Environment Editor", () => {

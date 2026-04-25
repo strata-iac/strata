@@ -134,6 +134,8 @@ export function EscEnvironmentDetail() {
 		if (!dirty) return;
 		function handleBeforeUnload(e: BeforeUnloadEvent) {
 			e.preventDefault();
+			// Required by Chrome/Edge/Firefox to actually show the unload prompt.
+			e.returnValue = "";
 		}
 		window.addEventListener("beforeunload", handleBeforeUnload);
 		return () => window.removeEventListener("beforeunload", handleBeforeUnload);
