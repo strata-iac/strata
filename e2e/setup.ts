@@ -3,6 +3,7 @@
 import { afterAll, beforeAll, setDefaultTimeout } from "bun:test";
 import type { Subprocess } from "bun";
 import { ensureDeps, resetDatabase, startServer, stopServer } from "./helpers.js";
+import { warmupServer } from "./warmup.js";
 
 setDefaultTimeout(120_000);
 
@@ -12,6 +13,7 @@ beforeAll(async () => {
 	await ensureDeps();
 	await resetDatabase();
 	server = await startServer();
+	await warmupServer();
 });
 
 afterAll(async () => {
