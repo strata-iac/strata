@@ -1,4 +1,3 @@
-import { getSessionToken } from "@descope/react-sdk";
 import type { AppRouter } from "@procella/api/src/router/index.js";
 import {
 	createTRPCUntypedClient,
@@ -8,6 +7,7 @@ import {
 } from "@trpc/client";
 import { type CreateTRPCReact, createTRPCReact } from "@trpc/react-query";
 import superjson from "superjson";
+import { getStoredDescopeSessionToken } from "./auth/sessionToken";
 import { apiBase } from "./config";
 import { getAuthConfig } from "./hooks/useAuthConfig";
 
@@ -17,7 +17,7 @@ export function getAuthHeaders(): Record<string, string> {
 	const config = getAuthConfig();
 
 	if (config?.mode === "descope") {
-		const token = getSessionToken();
+		const token = getStoredDescopeSessionToken();
 		if (!token) return {};
 		return { Authorization: `Bearer ${token}` };
 	}
