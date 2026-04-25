@@ -98,12 +98,15 @@ function createTestApp(esc: EscService) {
 	const app = new Hono<Env>();
 	app.use("*", injectCaller(validCaller));
 	app.onError((err, c) => {
-		const status = err.message.includes("does not match")
-			? 400
-			: err.message.includes("not found")
-				? 404
-				: 500;
-		return c.json({ error: err.message }, status);
+		const status =
+			"statusCode" in err && typeof err.statusCode === "number"
+				? err.statusCode
+				: err.message.includes("does not match")
+					? 400
+					: err.message.includes("not found")
+						? 404
+						: 500;
+		return c.json({ error: err.message }, status as 400 | 404 | 500);
 	});
 	const h = escHandlers({ esc });
 	app.post("/esc/environments/:org/:project", h.createEnvironment);
@@ -362,6 +365,25 @@ describe("escHandlers", () => {
 			expect(res.status).toBe(200);
 			const body = await res.json();
 			expect(body.drafts).toBeArray();
+		});
+
+		test("returns 400 for invalid status query param", async () => {
+			const esc = mockEscService();
+			const app = createTestApp(esc);
+			const res = await app.request(
+				"/esc/environments/my-org/myproj/staging/drafts?status=invalid",
+			);
+			expect(res.status).toBe(400);
+			const body = await res.json();
+			expect(body.error).toContain("must be one of");
+		});
+
+		test("accepts valid status query param", async () => {
+			const esc = mockEscService();
+			const app = createTestApp(esc);
+			const res = await app.request("/esc/environments/my-org/myproj/staging/drafts?status=open");
+			expect(res.status).toBe(200);
+			expect(esc.listDrafts).toHaveBeenCalledTimes(1);
 		});
 	});
 

@@ -147,6 +147,25 @@ func TestHandleDiagnosticsForUnknownProvider(t *testing.T) {
 	}
 }
 
+func TestHandleSurfacesEvalFailureAsResponseNotError(t *testing.T) {
+	resp, err := handle(context.Background(), EvaluateRequest{
+		Definition:       "values:\n  creds:\n    fn::open::nonexistent:\n      foo: bar\n",
+		EncryptionKeyHex: validKey,
+	})
+	if err != nil {
+		t.Fatalf("expected nil error (diagnostics carry failure info), got: %v", err)
+	}
+	var hasError bool
+	for _, d := range resp.Diagnostics {
+		if d.Severity == "error" {
+			hasError = true
+		}
+	}
+	if !hasError {
+		t.Fatal("expected error-severity diagnostic in response")
+	}
+}
+
 func TestRunStdioMalformedYAML(t *testing.T) {
 	req := EvaluateRequest{
 		Definition:       "values: [unclosed",

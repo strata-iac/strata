@@ -3,10 +3,13 @@ import { vpc } from "./database";
 // ---------------------------------------------------------------------------
 // ESC Evaluator Lambda — Go binary that embeds github.com/pulumi/esc
 //
-// Self-contained: receives everything in the invoke payload (YAML definition,
-// pre-resolved imports, encryption key). No DB, blob, or secret access needed.
-// The CLI API function invokes this via @aws-sdk/client-lambda (sync invoke).
-// SST `link` on the CLI API auto-grants lambda:InvokeFunction permission.
+// Receives the YAML definition, pre-resolved imports, and encryption key in
+// the invoke payload. Does NOT need: DB, S3 blob, or Procella runtime config.
+// DOES need: STS for OIDC role-assumption (fn::open::aws-login), Secrets
+// Manager + SSM for fn::open::aws-secrets / aws-parameter-store providers
+// (procella/* prefix only). The CLI API function invokes this via
+// @aws-sdk/client-lambda (sync invoke). SST `link` on the CLI API
+// auto-grants lambda:InvokeFunction permission.
 // ---------------------------------------------------------------------------
 export const escEvaluator = new sst.aws.Function("ProcellaEscEvaluator", {
 	runtime: "provided.al2023",

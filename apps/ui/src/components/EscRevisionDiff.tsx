@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 interface EscRevisionDiffProps {
 	leftYaml: string;
@@ -94,7 +94,6 @@ export function EscRevisionDiff({
 	rightLabel,
 	onClose,
 }: EscRevisionDiffProps) {
-	const [mode, setMode] = useState<"unified" | "side">("unified");
 	const diff = useMemo(() => computeDiff(leftYaml, rightYaml), [leftYaml, rightYaml]);
 
 	const stats = useMemo(() => {
@@ -125,13 +124,6 @@ export function EscRevisionDiff({
 					)}
 				</div>
 				<div className="flex items-center gap-2">
-					<button
-						type="button"
-						onClick={() => setMode(mode === "unified" ? "side" : "unified")}
-						className="text-xs text-cloud hover:text-mist transition-colors px-2 py-1 rounded bg-slate-brand/80"
-					>
-						{mode === "unified" ? "Side-by-side" : "Unified"}
-					</button>
 					<button
 						type="button"
 						onClick={onClose}

@@ -47,6 +47,12 @@ const DebouncedInput = memo(function DebouncedInput({
 	const commitRef = useRef(onCommit);
 	commitRef.current = onCommit;
 
+	useEffect(() => {
+		return () => {
+			if (timerRef.current) clearTimeout(timerRef.current);
+		};
+	}, []);
+
 	return (
 		<input
 			type="text"
@@ -107,6 +113,7 @@ export function EscEnvironments() {
 	const [search, setSearch] = useState("");
 	const [allEnvs, setAllEnvs] = useState<EnvRow[]>([]);
 	const [envsLoading, setEnvsLoading] = useState(true);
+	const [fetchErrors, setFetchErrors] = useState<string[]>([]);
 	const utils = trpc.useUtils();
 
 	const {
@@ -120,24 +127,32 @@ export function EscEnvironments() {
 		if (!projects) return;
 		if (projects.length === 0) {
 			setAllEnvs([]);
+			setFetchErrors([]);
 			setEnvsLoading(false);
 			return;
 		}
 		setEnvsLoading(true);
+		const errors: string[] = [];
 		try {
 			const results = await Promise.all(
 				projects.map(async (p) => {
-					const envs = await utils.esc.listEnvironments.fetch({ project: p.name });
-					return envs.map((e) => ({
-						projectName: p.name,
-						envName: e.name,
-						revision: e.currentRevisionNumber,
-						updatedAt: e.updatedAt,
-						createdBy: e.createdBy,
-					}));
+					try {
+						const envs = await utils.esc.listEnvironments.fetch({ project: p.name });
+						return envs.map((e) => ({
+							projectName: p.name,
+							envName: e.name,
+							revision: e.currentRevisionNumber,
+							updatedAt: e.updatedAt,
+							createdBy: e.createdBy,
+						}));
+					} catch {
+						errors.push(p.name);
+						return [];
+					}
 				}),
 			);
 			setAllEnvs(results.flat());
+			setFetchErrors(errors);
 		} finally {
 			setEnvsLoading(false);
 		}
@@ -193,6 +208,12 @@ export function EscEnvironments() {
 					{allEnvs.length > 0 && `${allEnvs.length} environment${allEnvs.length !== 1 ? "s" : ""}`}
 				</span>
 			</div>
+
+			{fetchErrors.length > 0 && (
+				<div className="bg-flash/10 border border-flash/20 text-flash p-3 rounded-xl text-sm">
+					Could not load environments for: {fetchErrors.join(", ")}
+				</div>
+			)}
 
 			{!hasNoEnvs && (
 				<div className="relative">

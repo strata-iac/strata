@@ -64,7 +64,7 @@ export function EscSessions({ project, environment, envId }: EscSessionsProps) {
 		if (active.length !== stored.length) {
 			saveSessions(envId, active);
 		}
-		setSessions(stored);
+		setSessions(active);
 	}, [envId]);
 
 	const clearSession = useCallback(

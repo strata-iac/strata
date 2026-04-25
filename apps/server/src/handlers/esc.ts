@@ -18,6 +18,7 @@ const draftCreateSchema = z.object({
 	yamlBody: z.string(),
 	description: z.string().optional().default(""),
 });
+const draftStatusSchema = z.enum(["open", "applied", "discarded"]);
 
 export function escHandlers(deps: { esc: EscService }) {
 	const requireOrgMatch = (c: Context<Env>): string => {
@@ -223,7 +224,15 @@ export function escHandlers(deps: { esc: EscService }) {
 			const tenantId = requireOrgMatch(c);
 			const projectName = param(c, "project");
 			const envName = param(c, "envName");
-			const status = c.req.query("status") as DraftStatus | undefined;
+			const rawStatus = c.req.query("status");
+			let status: DraftStatus | undefined;
+			if (rawStatus !== undefined) {
+				const parsed = draftStatusSchema.safeParse(rawStatus);
+				if (!parsed.success) {
+					throw new BadRequestError("status must be one of: open, applied, discarded");
+				}
+				status = parsed.data;
+			}
 			const drafts = await deps.esc.listDrafts(tenantId, projectName, envName, status);
 			return c.json({ drafts });
 		},

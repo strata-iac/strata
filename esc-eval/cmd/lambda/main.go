@@ -89,7 +89,7 @@ func handle(ctx context.Context, req EvaluateRequest) (EvaluateResponse, error) 
 			Values:      map[string]any{},
 			Secrets:     []string{},
 			Diagnostics: convertDiagnostics(allDiags),
-		}, fmt.Errorf("evaluation failed: %s", allDiags.Error())
+		}, nil
 	}
 
 	values := make(map[string]any)

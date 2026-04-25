@@ -59,7 +59,6 @@ function ValueNode({
 				>
 					Reveal
 				</button>
-				<CopyButton value={String(value)} />
 			</span>
 		);
 	}

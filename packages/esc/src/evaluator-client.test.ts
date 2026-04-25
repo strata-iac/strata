@@ -89,6 +89,24 @@ describe("LambdaEvaluatorClient", () => {
 		});
 	});
 
+	test("resolves with structured diagnostics when payload contains error diagnostics", async () => {
+		const diagnosticResult = {
+			values: {},
+			secrets: [],
+			diagnostics: [{ severity: "error", summary: "unknown provider nonexistent" }],
+		};
+		sendMock.mockResolvedValueOnce({
+			Payload: new TextEncoder().encode(JSON.stringify(diagnosticResult)),
+		});
+
+		const client = new LambdaEvaluatorClient({ functionName: "test-fn" });
+		const result = await client.evaluate(samplePayload);
+
+		expect(result.diagnostics).toHaveLength(1);
+		expect(result.diagnostics[0].severity).toBe("error");
+		expect(result.diagnostics[0].summary).toContain("nonexistent");
+	});
+
 	test("throws EvaluatorInvokeError on empty response payload", async () => {
 		sendMock.mockResolvedValueOnce({});
 
