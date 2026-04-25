@@ -65,7 +65,7 @@ test.describe("ESC Resolved Values", () => {
 	test("Open Session shows resolved values with masked secrets", async ({ page }) => {
 		await page.goto(`${UI_URL}/esc/${project}/${envName}`);
 		await page.waitForLoadState("networkidle");
-		await expect(page.getByText("rev #1")).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByText("rev #2")).toBeVisible({ timeout: 15_000 });
 
 		await page.getByRole("button", { name: "Resolved Values" }).click();
 		await page.getByRole("button", { name: "Open Session" }).click();
@@ -80,7 +80,7 @@ test.describe("ESC Resolved Values", () => {
 	test("Reveal secret shows confirmation then value", async ({ page }) => {
 		await page.goto(`${UI_URL}/esc/${project}/${envName}`);
 		await page.waitForLoadState("networkidle");
-		await expect(page.getByText("rev #1")).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByText("rev #2")).toBeVisible({ timeout: 15_000 });
 
 		await page.getByRole("button", { name: "Resolved Values" }).click();
 		await page.getByRole("button", { name: "Open Session" }).click();
