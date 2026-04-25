@@ -326,6 +326,29 @@ describe("escHandlers", () => {
 			expect(res.status).toBe(204);
 			expect(esc.setEnvironmentTags).toHaveBeenCalledTimes(1);
 		});
+
+		test("PUT with no body returns 400 instead of silently wiping tags", async () => {
+			const esc = mockEscService();
+			const app = createTestApp(esc);
+			const res = await app.request("/esc/environments/my-org/myproj/staging/tags", {
+				method: "PUT",
+			});
+			expect(res.status).toBe(400);
+			expect(esc.setEnvironmentTags).not.toHaveBeenCalled();
+		});
+
+		test("PUT with empty {} body wipes tags explicitly", async () => {
+			const esc = mockEscService();
+			const app = createTestApp(esc);
+			const res = await app.request("/esc/environments/my-org/myproj/staging/tags", {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: "{}",
+			});
+			expect(res.status).toBe(204);
+			expect(esc.setEnvironmentTags).toHaveBeenCalledTimes(1);
+			expect(esc.setEnvironmentTags).toHaveBeenCalledWith("t-1", "myproj", "staging", {});
+		});
 	});
 
 	describe("updateEnvironmentTags", () => {

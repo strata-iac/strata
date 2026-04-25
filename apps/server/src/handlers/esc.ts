@@ -186,7 +186,14 @@ export function escHandlers(deps: { esc: EscService }) {
 			const tenantId = requireOrgMatch(c);
 			const projectName = param(c, "project");
 			const envName = param(c, "envName");
-			const body = await c.req.json().catch(() => ({}));
+			let body: unknown;
+			try {
+				body = await c.req.json();
+			} catch {
+				throw new BadRequestError(
+					"PUT /tags requires a JSON object body. Send {} to clear all tags explicitly.",
+				);
+			}
 			const tags = envTagsSchema.parse(body);
 			await deps.esc.setEnvironmentTags(tenantId, projectName, envName, tags);
 			return c.body(null, 204);

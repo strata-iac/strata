@@ -109,10 +109,14 @@ func (p *provider) Open(ctx context.Context, inputs map[string]esc.Value, _ esc.
 	}
 
 	if result.SecretString != nil {
-		return esc.NewSecret(map[string]esc.Value{"plaintext": esc.NewValue(*result.SecretString)}), nil
+		return esc.NewSecret(
+			map[string]esc.Value{"plaintext": esc.NewSecret(*result.SecretString)},
+		), nil
 	}
 	if len(result.SecretBinary) > 0 {
-		return esc.NewSecret(map[string]esc.Value{"binary": bytesToValue(result.SecretBinary)}), nil
+		return esc.NewSecret(
+			map[string]esc.Value{"binary": bytesToSecretValue(result.SecretBinary)},
+		), nil
 	}
 	return esc.Value{}, fmt.Errorf("get secret value: secret %q had neither string nor binary payload", secretID)
 }
@@ -124,10 +128,14 @@ func optionalStringPtr(v string) *string {
 	return aws.String(v)
 }
 
-func bytesToValue(b []byte) esc.Value {
+// bytesToSecretValue marks each byte element as Secret so the evaluator's
+// secret-path collector reports each leaf (binary[i]) as sensitive. Without
+// this, only the outer wrapper is flagged and TS-side masking misses the
+// individual bytes.
+func bytesToSecretValue(b []byte) esc.Value {
 	values := make([]esc.Value, len(b))
 	for i, bb := range b {
-		values[i] = esc.NewValue(json.Number(fmt.Sprintf("%d", bb)))
+		values[i] = esc.NewSecret(json.Number(fmt.Sprintf("%d", bb)))
 	}
-	return esc.NewValue(values)
+	return esc.NewSecret(values)
 }

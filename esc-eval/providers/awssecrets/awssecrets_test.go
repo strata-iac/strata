@@ -73,6 +73,33 @@ func TestOpenReturnsBinarySecret(t *testing.T) {
 	if !binary.Secret || len(items) != 3 || items[0].ToJSON(false) != json.Number("1") {
 		t.Fatalf("binary = %#v", binary)
 	}
+	for i, item := range items {
+		if !item.Secret {
+			t.Fatalf("binary[%d] is not marked Secret — leaks individual byte values to TS-side secret-path collector", i)
+		}
+	}
+}
+
+func TestOpenMarksPlaintextLeafAsSecret(t *testing.T) {
+	client := &fakeSecretsClient{output: &secretsmanager.GetSecretValueOutput{SecretString: aws.String("hunter2")}}
+	p := New(
+		WithConfigLoader(func(_ context.Context, region string, _ *awsutil.Credentials) (aws.Config, error) {
+			return aws.Config{Region: region}, nil
+		}),
+		WithClientFactory(func(aws.Config) secretsAPI { return client }),
+	).(*provider)
+
+	v, err := p.Open(context.Background(), map[string]esc.Value{
+		"region":   esc.NewValue("us-east-1"),
+		"secretId": esc.NewValue("procella/demo"),
+	}, nil)
+	if err != nil {
+		t.Fatalf("Open returned error: %v", err)
+	}
+	plaintext := v.Value.(map[string]esc.Value)["plaintext"]
+	if !plaintext.Secret {
+		t.Fatal("plaintext leaf is not marked Secret — collectSecretPaths would miss the path")
+	}
 }
 
 func TestOpenRejectsMissingSecretID(t *testing.T) {
