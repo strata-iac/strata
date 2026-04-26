@@ -8,7 +8,14 @@ import type { Caller } from "@procella/types";
 import { UnauthorizedError } from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
 import type { CreateWebhookInput, WebhookEventValue, WebhooksService } from "@procella/webhooks";
+import { SignJWT } from "jose";
+import { INTERNAL_CLIENT_IP_HEADER } from "../middleware/security.js";
+import { createSubscriptionTicketService } from "../subscription-tickets.js";
 import { createApp } from "./index.js";
+
+const subscriptionTickets = createSubscriptionTicketService(
+	"ticket-signing-key-ticket-signing-key",
+);
 
 // ============================================================================
 // Mock Data
@@ -55,6 +62,7 @@ function mockAuthService(): AuthService {
 			}
 			return validCaller;
 		},
+		createCliAccessKey: async (_caller: Caller, name: string) => `cli-token:${name}`,
 		authenticateUpdateToken: async (token: string) => {
 			const parts = token.split(":");
 			if (parts.length !== 4 || parts[0] !== "update") {
@@ -186,7 +194,12 @@ describe("@procella/server routes", () => {
 			userLogin: "test-user",
 			orgLogin: "test-org",
 		},
-		opts?: { corsOrigins?: string[]; cronSecret?: string },
+		opts?: {
+			corsOrigins?: string[];
+			cronSecret?: string;
+			issueSubscriptionTicket?: (caller: Caller) => Promise<string>;
+			verifySubscriptionTicket?: (ticket: string) => Promise<Caller>;
+		},
 	) {
 		return createApp({
 			auth: mockAuthService(),
@@ -198,9 +211,15 @@ describe("@procella/server routes", () => {
 			corsOrigins: opts?.corsOrigins,
 			github: null,
 			githubWebhookSecret: undefined,
+			issueSubscriptionTicket:
+				opts?.issueSubscriptionTicket ??
+				((caller: Caller) => subscriptionTickets.issueTicket(caller)),
 			stacks: mockStacksService(),
 			updates: mockUpdatesService(),
 			webhooks: mockWebhooksService(),
+			verifySubscriptionTicket:
+				opts?.verifySubscriptionTicket ??
+				((ticket: string) => subscriptionTickets.verifyTicket(ticket)),
 			esc: {
 				listProjects: async () => [],
 				listAllEnvironments: async () => ({ environments: [], nextToken: "" }),
@@ -242,6 +261,19 @@ describe("@procella/server routes", () => {
 	// ========================================================================
 
 	describe("public routes", () => {
+		test("responses include security headers", async () => {
+			const app = makeApp();
+			const res = await app.request("/healthz");
+
+			expect(res.status).toBe(200);
+			expect(res.headers.get("content-security-policy")).toContain("default-src 'self'");
+			expect(res.headers.get("x-frame-options")).toBe("DENY");
+			expect(res.headers.get("referrer-policy")).toBe("no-referrer");
+			expect(res.headers.get("strict-transport-security")).toBe(
+				"max-age=31536000; includeSubDomains",
+			);
+		});
+
 		test("GET /healthz returns 200 without auth", async () => {
 			const app = makeApp();
 			const res = await app.request("/healthz");
@@ -342,6 +374,58 @@ describe("@procella/server routes", () => {
 			});
 			expect(res.status).toBe(401);
 		});
+
+		test("GET /trpc SSE endpoint returns 401 without a ticket", async () => {
+			const app = makeApp(undefined, {
+				verifySubscriptionTicket: async () => validCaller,
+			});
+			const res = await app.request(
+				"/trpc/updates.onEvents?input=%7B%22org%22%3A%22my-org%22%2C%22project%22%3A%22myproj%22%2C%22stack%22%3A%22dev%22%2C%22updateId%22%3A%22upd-1%22%7D",
+			);
+
+			expect(res.status).toBe(401);
+		});
+
+		test("GET /trpc SSE endpoint returns invalid_ticket for bad signatures", async () => {
+			const app = makeApp(undefined, {
+				verifySubscriptionTicket: (ticket: string) => subscriptionTickets.verifyTicket(ticket),
+			});
+			const badTicket = await createSubscriptionTicketService(
+				"wrong-ticket-signing-key-wrong-key",
+			).issueTicket(validCaller);
+			const res = await app.request(
+				`/trpc/updates.onEvents?ticket=${encodeURIComponent(badTicket)}&input=%7B%22org%22%3A%22my-org%22%2C%22project%22%3A%22myproj%22%2C%22stack%22%3A%22dev%22%2C%22updateId%22%3A%22upd-1%22%7D`,
+			);
+
+			expect(res.status).toBe(401);
+			expect(await res.json()).toEqual({ code: "invalid_ticket" });
+		});
+
+		test("GET /trpc SSE endpoint returns invalid_ticket for expired tickets", async () => {
+			const app = makeApp(undefined, {
+				verifySubscriptionTicket: (ticket: string) => subscriptionTickets.verifyTicket(ticket),
+			});
+			const expiredTicket = await new SignJWT({
+				tenantId: validCaller.tenantId,
+				orgSlug: validCaller.orgSlug,
+				userId: validCaller.userId,
+				login: validCaller.login,
+				roles: [...validCaller.roles],
+				principalType: validCaller.principalType,
+			})
+				.setProtectedHeader({ alg: "HS256", typ: "JWT" })
+				.setIssuer("procella")
+				.setAudience("procella:trpc-subscription")
+				.setIssuedAt(Math.floor(Date.now() / 1000) - 120)
+				.setExpirationTime(Math.floor(Date.now() / 1000) - 60)
+				.sign(new TextEncoder().encode("ticket-signing-key-ticket-signing-key"));
+			const res = await app.request(
+				`/trpc/updates.onEvents?ticket=${encodeURIComponent(expiredTicket)}&input=%7B%22org%22%3A%22my-org%22%2C%22project%22%3A%22myproj%22%2C%22stack%22%3A%22dev%22%2C%22updateId%22%3A%22upd-1%22%7D`,
+			);
+
+			expect(res.status).toBe(401);
+			expect(await res.json()).toEqual({ code: "invalid_ticket" });
+		});
 	});
 
 	// ========================================================================
@@ -363,6 +447,33 @@ describe("@procella/server routes", () => {
 	// ========================================================================
 
 	describe("authenticated API routes", () => {
+		test("POST /api/auth/cli-token rate limits the 11th request", async () => {
+			const app = makeApp();
+			const headers = {
+				Authorization: "token valid-token",
+				"Content-Type": "application/json",
+				[INTERNAL_CLIENT_IP_HEADER]: "127.0.0.1",
+			};
+
+			for (let attempt = 1; attempt <= 10; attempt++) {
+				const res = await app.request("/api/auth/cli-token", {
+					method: "POST",
+					headers,
+					body: JSON.stringify({ name: `cli-${attempt}` }),
+				});
+				expect(res.status).toBe(200);
+			}
+
+			const limited = await app.request("/api/auth/cli-token", {
+				method: "POST",
+				headers,
+				body: JSON.stringify({ name: "cli-11" }),
+			});
+
+			expect(limited.status).toBe(429);
+			expect(await limited.json()).toEqual({ error: "Too many requests" });
+		});
+
 		test("GET /api/esc/environments returns CLI environment list shape", async () => {
 			const app = makeApp();
 			const res = await app.request("/api/esc/environments", { headers: authHeaders });

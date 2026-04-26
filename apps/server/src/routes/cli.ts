@@ -33,6 +33,8 @@ import {
 import {
 	apiAuth,
 	auditMiddleware,
+	createIpRateLimiter,
+	createSecurityHeadersMiddleware,
 	decompress,
 	errorHandler,
 	pulumiAccept,
@@ -66,6 +68,7 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	app.onError(errorHandler());
 
 	// Global middleware — no CORS (CLI traffic only)
+	app.use("*", createSecurityHeadersMiddleware());
 	app.use("*", tracingMiddleware());
 	app.use("*", requestLogger());
 	app.use("/api/*", (c, next) => {
@@ -97,6 +100,8 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	const withApiAuth = apiAuth(deps.auth);
 	const withAudit = auditMiddleware(deps.audit);
 	const withPulumiAccept = pulumiAccept();
+	const withOauthTokenRateLimit = createIpRateLimiter({ limit: 30 });
+	const withCryptoRateLimit = createIpRateLimiter({ limit: 1000 });
 	const withUpdateAuth = updateAuth(
 		deps.auth,
 		(updateId, token) => deps.updates.verifyLeaseToken(updateId, token),
@@ -112,7 +117,7 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	app.post("/api/webhooks/github", githubH.handleGitHubWebhook);
 
 	const oauth = oauthHandlers(deps.oidc ?? null);
-	app.post("/api/oauth/token", oauth.tokenExchange);
+	app.post("/api/oauth/token", withOauthTokenRateLimit, oauth.tokenExchange);
 
 	// Update-token authenticated routes (during active update execution)
 	app.patch(
@@ -190,10 +195,10 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	api.post("/stacks/:org/:project/:stack/import", stateH.importStack);
 
 	// Crypto (API token)
-	api.post("/stacks/:org/:project/:stack/encrypt", cryptoH.encryptValue);
-	api.post("/stacks/:org/:project/:stack/decrypt", cryptoH.decryptValue);
-	api.post("/stacks/:org/:project/:stack/batch-encrypt", cryptoH.batchEncrypt);
-	api.post("/stacks/:org/:project/:stack/batch-decrypt", cryptoH.batchDecrypt);
+	api.post("/stacks/:org/:project/:stack/encrypt", withCryptoRateLimit, cryptoH.encryptValue);
+	api.post("/stacks/:org/:project/:stack/decrypt", withCryptoRateLimit, cryptoH.decryptValue);
+	api.post("/stacks/:org/:project/:stack/batch-encrypt", withCryptoRateLimit, cryptoH.batchEncrypt);
+	api.post("/stacks/:org/:project/:stack/batch-decrypt", withCryptoRateLimit, cryptoH.batchDecrypt);
 	api.post("/stacks/:org/:project/:stack/log-decryption", cryptoH.logDecryption);
 
 	// Stack CRUD + createUpdate (:kind catch-all LAST)
