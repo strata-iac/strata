@@ -55,7 +55,7 @@ const configSchema = z
 			}),
 		descopeProjectId: z.string().optional(),
 		descopeManagementKey: z.string().optional(),
-		ticketSigningKey: z.string().min(32, "Must be at least 32 characters"),
+		ticketSigningKey: z.string().min(32, "Must be at least 32 characters").optional(),
 
 		// Blob storage
 		blobBackend: blobBackendSchema.default("local"),

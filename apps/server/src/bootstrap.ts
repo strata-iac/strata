@@ -70,6 +70,11 @@ async function bootstrapServices() {
 					managementKey: config.descopeManagementKey,
 				};
 	const auth = createAuthService(authConfig);
+	if (!config.ticketSigningKey) {
+		throw new Error(
+			"PROCELLA_TICKET_SIGNING_KEY is required (32+ chars). Generate with: bun -e \"console.log(crypto.randomBytes(32).toString('hex'))\"",
+		);
+	}
 	const subscriptionTickets = createSubscriptionTicketService(config.ticketSigningKey);
 	const oidcPolicies: TrustPolicyRepository | null = config.oidcEnabled
 		? new PostgresTrustPolicyRepository(db)

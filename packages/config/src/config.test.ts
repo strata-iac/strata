@@ -102,12 +102,13 @@ describe("@procella/config", () => {
 			expect(() => loadConfig()).toThrow();
 		});
 
-		test("throws when ticket signing key is missing", () => {
+		test("allows missing ticket signing key (enforced in bootstrap, not schema)", () => {
 			clearProcellaEnv();
 			Bun.env.PROCELLA_DATABASE_URL = "postgres://localhost:5432/procella?sslmode=disable";
 			Bun.env.PROCELLA_AUTH_MODE = "dev";
 			Bun.env.PROCELLA_DEV_AUTH_TOKEN = "token";
-			expect(() => loadConfig()).toThrow();
+			const config = loadConfig();
+			expect(config.ticketSigningKey).toBeUndefined();
 		});
 
 		test("throws when ticket signing key is too short", () => {
