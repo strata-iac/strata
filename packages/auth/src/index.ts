@@ -3,12 +3,13 @@
 // Descope handles authn; tenant_id and roles from JWT drive authz.
 // Dev mode uses a static token for local development.
 
+import { timingSafeEqual } from "node:crypto";
 import DescopeSdk from "@descope/node-sdk";
 import { OidcClaims } from "@procella/oidc";
 import { authAuthenticateDuration, authFailureCount, withSpan } from "@procella/telemetry";
-
 import type { Caller, Role, WorkloadIdentity } from "@procella/types";
 import { ForbiddenError, UnauthorizedError } from "@procella/types";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 
 // ============================================================================
 // Auth Service Interface
@@ -41,7 +42,7 @@ export type AuthConfig =
 			orgLogin: string;
 			users?: readonly DevAuthUser[];
 	  }
-	| { mode: "descope"; projectId: string; managementKey?: string };
+	| { mode: "descope"; projectId: string; managementKey?: string; issuer?: string };
 
 // ============================================================================
 // Dev Auth Service
@@ -62,21 +63,18 @@ export interface DevAuthConfig {
 }
 
 export class DevAuthService implements AuthService {
-	private readonly usersByToken: Map<string, DevAuthUser>;
+	private readonly users: readonly DevAuthUser[];
 
 	constructor(config: DevAuthConfig) {
-		this.usersByToken = new Map([
-			[
-				config.token,
-				{
-					token: config.token,
-					login: config.userLogin,
-					org: config.orgLogin,
-					role: "admin",
-				},
-			],
-			...(config.users ?? []).map((user) => [user.token, user] as const),
-		]);
+		this.users = [
+			{
+				token: config.token,
+				login: config.userLogin,
+				org: config.orgLogin,
+				role: "admin",
+			},
+			...(config.users ?? []),
+		];
 	}
 
 	async authenticate(request: Request): Promise<Caller> {
@@ -84,7 +82,7 @@ export class DevAuthService implements AuthService {
 			const start = performance.now();
 			try {
 				const { token } = extractToken(request);
-				const user = this.usersByToken.get(token);
+				const user = this.users.find((entry) => safeEqualString(token, entry.token));
 				if (!user) {
 					throw new UnauthorizedError("Invalid authentication token");
 				}
@@ -132,6 +130,7 @@ export class DevAuthService implements AuthService {
 export interface DescopeAuthConfig {
 	projectId: string;
 	managementKey?: string;
+	issuer?: string;
 }
 
 type DescopeClient = ReturnType<typeof DescopeSdk>;
@@ -151,10 +150,18 @@ export class DescopeAuthService implements AuthService {
 	private readonly pending = new Map<string, Promise<Caller>>();
 	private readonly EXPIRY_MARGIN_S = 60;
 	private readonly MAX_CACHE_TTL_S = 300;
+	private readonly projectId: string;
+	private readonly issuer: string;
+	private readonly jwks: ReturnType<typeof createRemoteJWKSet>;
 	private sweepTimer: ReturnType<typeof setInterval> | null = null;
 
 	constructor(options: { sdk: DescopeClient; config: DescopeAuthConfig }) {
 		this.sdk = options.sdk;
+		this.projectId = options.config.projectId;
+		this.issuer = options.config.issuer ?? buildDescopeIssuer(options.config.projectId);
+		this.jwks = createRemoteJWKSet(
+			new URL(".well-known/jwks.json", this.issuer.endsWith("/") ? this.issuer : `${this.issuer}/`),
+		);
 		this.sweepTimer = setInterval(() => this.sweep(), 60_000);
 		if (this.sweepTimer.unref) this.sweepTimer.unref();
 	}
@@ -175,8 +182,12 @@ export class DescopeAuthService implements AuthService {
 
 				// JWT tokens (Bearer from UI) — validate directly, no caching needed.
 				if (token.startsWith("eyJ")) {
-					const authInfo = await this.sdk.validateJwt(token);
-					return this.extractCaller(authInfo.token);
+					const { payload } = await jwtVerify(token, this.jwks, {
+						algorithms: ["RS256"],
+						issuer: this.issuer,
+						audience: this.projectId,
+					});
+					return this.extractCaller(payload as Record<string, unknown>);
 				}
 
 				// Access key tokens — cache the exchanged JWT.
@@ -438,6 +449,7 @@ export function createAuthService(config: AuthConfig): AuthService {
 				config: {
 					projectId: config.projectId,
 					managementKey: config.managementKey,
+					issuer: config.issuer,
 				},
 			});
 		}
@@ -510,6 +522,15 @@ function parseUpdateToken(token: string): { updateId: string; stackId: string } 
 		throw new UnauthorizedError("Invalid update token format");
 	}
 	return { updateId: parts[1], stackId: parts[2] };
+}
+
+function buildDescopeIssuer(projectId: string): string {
+	return `https://api.descope.com/${projectId}`;
+}
+
+function safeEqualString(a: string, b: string): boolean {
+	if (a.length !== b.length) return false;
+	return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
 
 /** Extract tenant ID from Descope JWT claims. */

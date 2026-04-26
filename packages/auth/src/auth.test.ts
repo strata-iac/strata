@@ -1,7 +1,8 @@
-import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import DescopeSdk from "@descope/node-sdk";
 import { OidcClaims } from "@procella/oidc";
 import { ForbiddenError, UnauthorizedError } from "@procella/types";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import {
 	type AuthService,
 	createAuthService,
@@ -16,13 +17,11 @@ import {
 
 // Mock @descope/node-sdk — Bun hoists this before all imports.
 const mockExchangeAccessKey = mock();
-const mockValidateJwt = mock();
 const mockLoadByUserId = mock();
 const mockAccessKeyCreate = mock();
 mock.module("@descope/node-sdk", () => ({
 	default: () => ({
 		exchangeAccessKey: mockExchangeAccessKey,
-		validateJwt: mockValidateJwt,
 		management: {
 			user: { loadByUserId: mockLoadByUserId },
 			accessKey: { create: mockAccessKeyCreate },
@@ -53,6 +52,51 @@ function reqWithoutAuth(): Request {
 	return new Request("http://localhost:9090/api/test");
 }
 
+async function createJwtTestHarness() {
+	const { publicKey, privateKey } = await generateKeyPair("RS256");
+	const publicJwk = await exportJWK(publicKey);
+	publicJwk.alg = "RS256";
+	publicJwk.use = "sig";
+	publicJwk.kid = "descope-test-key";
+
+	const jwks = { keys: [publicJwk] };
+	const server = Bun.serve({
+		port: 0,
+		fetch(request) {
+			const { pathname } = new URL(request.url);
+			if (pathname === "/.well-known/jwks.json") {
+				return Response.json(jwks);
+			}
+			return new Response("not found", { status: 404 });
+		},
+	});
+
+	return {
+		issuer: `http://localhost:${server.port}`,
+		audience: "P3Aaha02iJvkGVbPDAF78KWuAxe6",
+		privateKey,
+		server,
+	};
+}
+
+async function signDescopeJwt(
+	privateKey: Parameters<SignJWT["sign"]>[0],
+	claims: Record<string, unknown>,
+	options: { issuer: string; audience: string; alg?: string; secret?: Uint8Array },
+): Promise<string> {
+	const signer = new SignJWT(claims)
+		.setProtectedHeader({ alg: options.alg ?? "RS256", kid: "descope-test-key" })
+		.setIssuer(options.issuer)
+		.setAudience(options.audience)
+		.setExpirationTime("1h");
+
+	if (options.alg === "HS256") {
+		return signer.sign(options.secret ?? new TextEncoder().encode("test-secret"));
+	}
+
+	return signer.sign(privateKey);
+}
+
 // ============================================================================
 // DevAuthService
 // ============================================================================
@@ -75,17 +119,23 @@ describe("DevAuthService", () => {
 	});
 
 	test("missing Authorization header throws UnauthorizedError", async () => {
-		await expect(svc.authenticate(reqWithoutAuth())).rejects.toBeInstanceOf(UnauthorizedError);
+		return expect(svc.authenticate(reqWithoutAuth())).rejects.toBeInstanceOf(UnauthorizedError);
 	});
 
-	test("wrong token throws UnauthorizedError", async () => {
-		await expect(svc.authenticate(reqWithAuth("token wrong-token"))).rejects.toBeInstanceOf(
+	test("wrong token of the same length throws UnauthorizedError", async () => {
+		return expect(svc.authenticate(reqWithAuth("token wrong-token"))).rejects.toBeInstanceOf(
+			UnauthorizedError,
+		);
+	});
+
+	test("wrong token of a different length throws UnauthorizedError", async () => {
+		return expect(svc.authenticate(reqWithAuth("token bad"))).rejects.toBeInstanceOf(
 			UnauthorizedError,
 		);
 	});
 
 	test("invalid Authorization format throws UnauthorizedError", async () => {
-		await expect(svc.authenticate(reqWithAuth("Basic dXNlcjpwYXNz"))).rejects.toBeInstanceOf(
+		return expect(svc.authenticate(reqWithAuth("Basic dXNlcjpwYXNz"))).rejects.toBeInstanceOf(
 			UnauthorizedError,
 		);
 	});
@@ -110,53 +160,63 @@ describe("DevAuthService", () => {
 	});
 
 	test("authenticateUpdateToken rejects old 3-part format", async () => {
-		await expect(svc.authenticateUpdateToken("update:abc-123:stack-456")).rejects.toBeInstanceOf(
+		return expect(svc.authenticateUpdateToken("update:abc-123:stack-456")).rejects.toBeInstanceOf(
 			UnauthorizedError,
 		);
 	});
 
 	test("authenticateUpdateToken rejects invalid format — missing prefix", async () => {
-		await expect(
+		return expect(
 			svc.authenticateUpdateToken("abc-123:stack-456:secret:extra"),
 		).rejects.toBeInstanceOf(UnauthorizedError);
 	});
 
 	test("authenticateUpdateToken rejects invalid format — too few parts", async () => {
-		await expect(svc.authenticateUpdateToken("update:abc-123")).rejects.toBeInstanceOf(
+		return expect(svc.authenticateUpdateToken("update:abc-123")).rejects.toBeInstanceOf(
 			UnauthorizedError,
 		);
 	});
 
 	test("authenticateUpdateToken rejects empty segments", async () => {
-		await expect(svc.authenticateUpdateToken("update::stack-456:secret")).rejects.toBeInstanceOf(
+		return expect(svc.authenticateUpdateToken("update::stack-456:secret")).rejects.toBeInstanceOf(
 			UnauthorizedError,
 		);
 	});
 });
 
 // ============================================================================
-// DescopeAuthService — JWT guard
+// DescopeAuthService — JWT verification
 // ============================================================================
 
 describe("DescopeAuthService", () => {
-	// Uses a placeholder project ID — the JWT guard fires before any SDK call.
-	const svc = new DescopeAuthService({
-		sdk: DescopeSdk({ projectId: "P3Aaha02iJvkGVbPDAF78KWuAxe6" }),
-		config: { projectId: "P3Aaha02iJvkGVbPDAF78KWuAxe6" },
+	let harness: Awaited<ReturnType<typeof createJwtTestHarness>>;
+	let svc: DescopeAuthService;
+
+	beforeAll(async () => {
+		harness = await createJwtTestHarness();
+		svc = new DescopeAuthService({
+			sdk: DescopeSdk({ projectId: harness.audience }),
+			config: { projectId: harness.audience, issuer: harness.issuer },
+		});
 	});
-	afterAll(() => svc.dispose());
+
+	afterAll(() => {
+		svc.dispose();
+		harness.server.stop();
+	});
 
 	test("rejects session JWT on 'token' prefix (CLI path)", async () => {
-		// eyJhbGciOiJIUzI1NiJ9 is a valid JWT header prefix
 		const fakeJwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.fake";
-		await expect(svc.authenticate(reqWithAuth(`token ${fakeJwt}`))).rejects.toBeInstanceOf(
+		return expect(svc.authenticate(reqWithAuth(`token ${fakeJwt}`))).rejects.toBeInstanceOf(
 			UnauthorizedError,
 		);
 	});
 
 	test("rejection message mentions pulumi login", async () => {
 		const fakeJwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.fake";
-		await expect(svc.authenticate(reqWithAuth(`token ${fakeJwt}`))).rejects.toThrow(/pulumi login/);
+		return expect(svc.authenticate(reqWithAuth(`token ${fakeJwt}`))).rejects.toThrow(
+			/pulumi login/,
+		);
 	});
 
 	test("standard human JWT returns principalType user without workload", async () => {
@@ -166,11 +226,15 @@ describe("DescopeAuthService", () => {
 			procellaLogin: "omer",
 			tenant_name: "Omer Corp",
 			tenants: { "tenant-1": { roles: ["admin"] } },
+			[OidcClaims.principalType]: "user",
 			exp: Math.floor(Date.now() / 1000) + 3600,
 		};
-		mockValidateJwt.mockResolvedValueOnce({ token: claims });
+		const token = await signDescopeJwt(harness.privateKey, claims, {
+			issuer: harness.issuer,
+			audience: harness.audience,
+		});
 
-		const caller = await svc.authenticate(reqWithAuth("Bearer eyJ.fake.jwt"));
+		const caller = await svc.authenticate(reqWithAuth(`Bearer ${token}`));
 
 		expect(caller.principalType).toBe("user");
 		expect(caller.workload).toBeUndefined();
@@ -200,9 +264,12 @@ describe("DescopeAuthService", () => {
 			[OidcClaims.triggerActorId]: "987",
 			[OidcClaims.workloadJti]: "jti-123",
 		};
-		mockValidateJwt.mockResolvedValueOnce({ token: claims });
+		const token = await signDescopeJwt(harness.privateKey, claims, {
+			issuer: harness.issuer,
+			audience: harness.audience,
+		});
 
-		const caller = await svc.authenticate(reqWithAuth("Bearer eyJ.fake.jwt"));
+		const caller = await svc.authenticate(reqWithAuth(`Bearer ${token}`));
 
 		expect(caller.principalType).toBe("workload");
 		expect(caller.workload).toEqual({
@@ -234,9 +301,12 @@ describe("DescopeAuthService", () => {
 			[OidcClaims.workloadProvider]: "kubernetes",
 			[OidcClaims.workloadSub]: "issuer:subject",
 		};
-		mockValidateJwt.mockResolvedValueOnce({ token: claims });
+		const token = await signDescopeJwt(harness.privateKey, claims, {
+			issuer: harness.issuer,
+			audience: harness.audience,
+		});
 
-		const caller = await svc.authenticate(reqWithAuth("Bearer eyJ.fake.jwt"));
+		const caller = await svc.authenticate(reqWithAuth(`Bearer ${token}`));
 
 		expect(caller.principalType).toBe("workload");
 		expect(caller.workload).toEqual({
@@ -255,6 +325,56 @@ describe("DescopeAuthService", () => {
 			actorId: undefined,
 			jti: undefined,
 		});
+	});
+
+	test("rejects JWT with wrong algorithm", async () => {
+		const claims = {
+			sub: "user-1",
+			dct: "tenant-1",
+			tenant_name: "Omer Corp",
+			tenants: { "tenant-1": { roles: ["admin"] } },
+			exp: Math.floor(Date.now() / 1000) + 3600,
+		};
+		const token = await signDescopeJwt(harness.privateKey, claims, {
+			issuer: harness.issuer,
+			audience: harness.audience,
+			alg: "HS256",
+			secret: new TextEncoder().encode("wrong-secret"),
+		});
+
+		return expect(svc.authenticate(reqWithAuth(`Bearer ${token}`))).rejects.toThrow();
+	});
+
+	test("rejects JWT with wrong issuer", async () => {
+		const claims = {
+			sub: "user-1",
+			dct: "tenant-1",
+			tenant_name: "Omer Corp",
+			tenants: { "tenant-1": { roles: ["admin"] } },
+			exp: Math.floor(Date.now() / 1000) + 3600,
+		};
+		const token = await signDescopeJwt(harness.privateKey, claims, {
+			issuer: `${harness.issuer}/wrong`,
+			audience: harness.audience,
+		});
+
+		return expect(svc.authenticate(reqWithAuth(`Bearer ${token}`))).rejects.toThrow();
+	});
+
+	test("rejects JWT with wrong audience", async () => {
+		const claims = {
+			sub: "user-1",
+			dct: "tenant-1",
+			tenant_name: "Omer Corp",
+			tenants: { "tenant-1": { roles: ["admin"] } },
+			exp: Math.floor(Date.now() / 1000) + 3600,
+		};
+		const token = await signDescopeJwt(harness.privateKey, claims, {
+			issuer: harness.issuer,
+			audience: `${harness.audience}-wrong`,
+		});
+
+		return expect(svc.authenticate(reqWithAuth(`Bearer ${token}`))).rejects.toThrow();
 	});
 });
 
@@ -341,9 +461,13 @@ describe("DescopeAuthService — JWT cache", () => {
 		mockExchangeAccessKey.mockRejectedValueOnce(rateErr);
 		mockExchangeAccessKey.mockRejectedValueOnce(rateErr);
 
-		await expect(svc.authenticate(reqWithAuth("token ak_fail"))).rejects.toThrow(
-			"Rate limit exceeded",
-		);
+		try {
+			await svc.authenticate(reqWithAuth("token ak_fail"));
+			throw new Error("Expected authenticate() to reject");
+		} catch (error) {
+			expect(error).toBeInstanceOf(Error);
+			expect((error as Error).message).toContain("Rate limit exceeded");
+		}
 
 		// Retry succeeds — error was not cached
 		mockExchangeAccessKey.mockResolvedValueOnce({ token: CLAIMS });
@@ -772,7 +896,7 @@ describe("DescopeAuthService — createCliAccessKey", () => {
 			error: { errorMessage: "Key creation denied" },
 		});
 
-		await expect(createKey(userCaller, "key")).rejects.toThrow("Key creation denied");
+		return expect(createKey(userCaller, "key")).rejects.toThrow("Key creation denied");
 	});
 
 	test("falls through user lookup fields (name, givenName+familyName, loginIds)", async () => {
