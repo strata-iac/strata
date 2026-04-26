@@ -80,5 +80,5 @@ Procella grants the evaluator Lambda `sts:AssumeRoleWithWebIdentity`, `secretsma
 | procella-yj7.11 — real handler with `eval.EvalEnvironment` | ✅ done |
 | procella-yj7.12 — SST infra (`infra/esc.ts`) | ✅ done |
 | procella-yj7.13 — `LambdaEvaluatorClient` TS → Lambda invoke | ✅ done |
-| procella-yj7.15 — CI Go build step | open |
-| procella-yj7.14 — wire `open`/`session` endpoint through evaluator | open |
+| procella-yj7.14 — wire `open`/`session` endpoint through evaluator | ✅ done |
+| procella-yj7.15 — CI Go build step | ✅ done |
