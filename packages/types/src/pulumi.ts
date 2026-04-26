@@ -122,7 +122,7 @@ export {
 // Enum allowlists (as const + type union pattern)
 // ============================================================================
 
-export const UPDATE_KINDS = ["update", "preview", "refresh", "destroy"] as const;
+export const UPDATE_KINDS = ["update", "preview", "refresh", "destroy", "import"] as const;
 export type UpdateKind = (typeof UPDATE_KINDS)[number];
 
 export function isValidUpdateKind(s: string): s is UpdateKind {

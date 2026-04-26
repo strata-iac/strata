@@ -1563,7 +1563,7 @@
       "checkConstraints": {
         "chk_updates_kind": {
           "name": "chk_updates_kind",
-          "value": "\"updates\".\"kind\" IN ('update', 'preview', 'refresh', 'destroy')"
+          "value": "\"updates\".\"kind\" IN ('update', 'preview', 'refresh', 'destroy', 'import')"
         }
       },
       "isRLSEnabled": false
