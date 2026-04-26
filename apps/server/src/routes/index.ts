@@ -1,5 +1,6 @@
 // @procella/server — Hono route registration.
 
+import { timingSafeEqual } from "node:crypto";
 import { appRouter } from "@procella/api/src/router/index.js";
 import type { TRPCContext } from "@procella/api/src/trpc.js";
 import type { AuditService } from "@procella/audit";
@@ -52,6 +53,7 @@ export function createApp(deps: {
 	authConfig: AuthConfig;
 	audit: AuditService;
 	corsOrigins?: string[];
+	cronSecret?: string;
 	db: Database;
 	dbUrl: string;
 	stacks: StacksService;
@@ -64,6 +66,9 @@ export function createApp(deps: {
 	oidcPolicies?: TrustPolicyRepository | null;
 }): Hono<Env> {
 	const app = new Hono<Env>();
+	const R = PulumiRoutes;
+	const withApiDecompress = decompress();
+	const withCheckpointDecompress = decompress({ maxDecompressedBytes: 100 * 1024 * 1024 });
 
 	// Global error handler (Hono onError hook)
 	app.onError(errorHandler());
@@ -71,8 +76,18 @@ export function createApp(deps: {
 	// Global middleware
 	app.use("*", tracingMiddleware());
 	app.use("*", requestLogger());
-	app.use("*", cors(deps.corsOrigins ? { origin: deps.corsOrigins } : undefined));
-	app.use("*", decompress());
+	if ((deps.corsOrigins ?? []).length > 0) {
+		if (deps.corsOrigins?.includes("*")) {
+			console.warn("[cors] PROCELLA_CORS_ORIGINS=* allows any origin; do not use in production");
+		}
+		app.use("*", cors({ origin: deps.corsOrigins ?? [] }));
+	}
+	app.use("/api/*", (c, next) => {
+		if (isCheckpointPath(c.req.path)) {
+			return next();
+		}
+		return withApiDecompress(c, next);
+	});
 
 	// Create handler instances
 	const health = healthHandlers({ db: deps.db });
@@ -163,18 +178,16 @@ export function createApp(deps: {
 
 	// Vercel Cron endpoint — GC worker runs as a scheduled job.
 	// Registered outside /api/* to avoid pulumiAccept + apiAuth middleware.
-	// Secured via Authorization: Bearer <CRON_SECRET> (set by Vercel automatically).
+	// Secured via Authorization: Bearer <PROCELLA_CRON_SECRET>.
 	app.get("/cron/gc", async (c) => {
-		const secret = process.env.CRON_SECRET;
-		const nodeEnv = process.env.NODE_ENV;
+		const secret = deps.cronSecret;
+		const provided = c.req.header("authorization");
 
-		if (!secret) {
-			// Fail closed in non-development environments if the cron secret is missing.
-			if (nodeEnv !== "development" && nodeEnv !== "test") {
-				return c.json({ error: "Server misconfigured: CRON_SECRET is not set" }, 500);
-			}
-			// In development/test, allow running without auth to ease local testing.
-		} else if (c.req.header("authorization") !== `Bearer ${secret}`) {
+		if (!secret || !provided?.startsWith("Bearer ")) {
+			return c.json({ error: "Unauthorized" }, 401);
+		}
+		const providedSecret = provided.slice("Bearer ".length);
+		if (!safeEqualString(providedSecret, secret)) {
 			return c.json({ error: "Unauthorized" }, 401);
 		}
 		const gc = new GCWorker({ db: deps.db });
@@ -215,11 +228,24 @@ export function createApp(deps: {
 	// These use "Authorization: update-token <lease-token>" from the CLI.
 	// ========================================================================
 
-	const R = PulumiRoutes;
-
-	app.patch(R.patchCheckpoint.path, withUpdateAuth, checkpointH.patchCheckpoint);
-	app.patch(R.patchCheckpointVerbatim.path, withUpdateAuth, checkpointH.patchCheckpointVerbatim);
-	app.patch(R.patchCheckpointDelta.path, withUpdateAuth, checkpointH.patchCheckpointDelta);
+	app.patch(
+		R.patchCheckpoint.path,
+		withCheckpointDecompress,
+		withUpdateAuth,
+		checkpointH.patchCheckpoint,
+	);
+	app.patch(
+		R.patchCheckpointVerbatim.path,
+		withCheckpointDecompress,
+		withUpdateAuth,
+		checkpointH.patchCheckpointVerbatim,
+	);
+	app.patch(
+		R.patchCheckpointDelta.path,
+		withCheckpointDecompress,
+		withUpdateAuth,
+		checkpointH.patchCheckpointDelta,
+	);
 	app.patch(R.patchJournalEntries.path, withUpdateAuth, checkpointH.appendJournalEntries);
 	app.post(R.postEngineEventBatch.path, withUpdateAuth, eventH.postEvents);
 	app.post(R.renewLease.path, withUpdateAuth, eventH.renewLease);
@@ -378,4 +404,19 @@ export function createApp(deps: {
 
 	app.route("/api", api);
 	return app;
+}
+
+function isCheckpointPath(path: string): boolean {
+	return /\/api\/stacks\/[^/]+\/[^/]+\/[^/]+\/[^/]+\/[^/]+\/(checkpoint|checkpointverbatim|checkpointdelta)$/.test(
+		path,
+	);
+}
+
+function safeEqualString(a: string, b: string): boolean {
+	const aBuf = Buffer.from(a);
+	const bBuf = Buffer.from(b);
+	if (aBuf.length !== bBuf.length) {
+		return false;
+	}
+	return timingSafeEqual(aBuf, bBuf);
 }

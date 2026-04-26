@@ -98,6 +98,13 @@ describe("@procella/config", () => {
 			expect(() => loadConfig()).toThrow();
 		});
 
+		test("throws when auth mode is missing", () => {
+			clearProcellaEnv();
+			Bun.env.PROCELLA_DATABASE_URL = "postgres://localhost:5432/procella?sslmode=disable";
+			Bun.env.PROCELLA_DEV_AUTH_TOKEN = "token";
+			expect(() => loadConfig()).toThrow();
+		});
+
 		test("throws when s3 backend lacks bucket", () => {
 			clearProcellaEnv();
 			setMinimalEnv();
@@ -112,18 +119,19 @@ describe("@procella/config", () => {
 			expect(() => loadConfig()).toThrow();
 		});
 
-		test("throws when non-dev mode lacks encryption key", () => {
-			clearProcellaEnv();
-			Bun.env.PROCELLA_DATABASE_URL = "postgres://localhost:5432/procella?sslmode=disable";
-			Bun.env.PROCELLA_AUTH_MODE = "descope";
-			Bun.env.PROCELLA_DESCOPE_PROJECT_ID = "P3test";
-			expect(() => loadConfig()).toThrow(/Required in production/);
-		});
-
 		test("allows missing encryption key in dev mode", () => {
 			clearProcellaEnv();
 			setMinimalEnv();
 			// No PROCELLA_ENCRYPTION_KEY set — should be fine in dev
+			const config = loadConfig();
+			expect(config.encryptionKey).toBeUndefined();
+		});
+
+		test("allows missing encryption key in descope mode", () => {
+			clearProcellaEnv();
+			Bun.env.PROCELLA_DATABASE_URL = "postgres://localhost:5432/procella?sslmode=disable";
+			Bun.env.PROCELLA_AUTH_MODE = "descope";
+			Bun.env.PROCELLA_DESCOPE_PROJECT_ID = "P3test";
 			const config = loadConfig();
 			expect(config.encryptionKey).toBeUndefined();
 		});

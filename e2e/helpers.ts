@@ -1,5 +1,6 @@
 // E2E test helpers — server lifecycle, Pulumi CLI wrapper, DB cleanup.
 
+import { randomBytes } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -15,6 +16,8 @@ export const TEST_TOKEN = "devtoken123";
 export const TEST_TOKEN_USER_B = "token-user-b";
 export const TEST_DEV_USERS =
 	'[{"token":"token-user-b","login":"user-b","org":"org-b","role":"admin"},{"token":"token-viewer","login":"viewer-user","org":"dev-org","role":"viewer"}]';
+export const TEST_ENCRYPTION_KEY = randomBytes(32).toString("hex");
+export const TEST_CRON_SECRET = "test-cron-secret";
 export const TEST_DB_URL =
 	process.env.PROCELLA_DATABASE_URL ||
 	"postgres://procella:procella@localhost:5432/procella?sslmode=disable";
@@ -44,7 +47,7 @@ export async function resetDatabase(): Promise<void> {
 	);
 	const exitCode = await proc.exited;
 	if (exitCode !== 0) {
-		const stderr = await new Response(proc.stderr).text();
+		const stderr = await new Response(proc.stderr as ReadableStream<Uint8Array>).text();
 		throw new Error(`drizzle-kit migrate failed (exit ${exitCode}): ${stderr}`);
 	}
 }
@@ -76,7 +79,7 @@ export async function ensureDeps(): Promise<void> {
 	});
 	const exit = await proc.exited;
 	if (exit !== 0) {
-		const stderr = await new Response(proc.stderr).text();
+		const stderr = await new Response(proc.stderr as ReadableStream<Uint8Array>).text();
 		throw new Error(`docker compose up failed: ${stderr}`);
 	}
 
@@ -161,6 +164,8 @@ export async function startServer(): Promise<Subprocess> {
 			PROCELLA_AUTH_MODE: "dev",
 			PROCELLA_DEV_AUTH_TOKEN: TEST_TOKEN,
 			PROCELLA_DEV_USERS: TEST_DEV_USERS,
+			PROCELLA_ENCRYPTION_KEY: TEST_ENCRYPTION_KEY,
+			PROCELLA_CRON_SECRET: TEST_CRON_SECRET,
 			PROCELLA_BLOB_BACKEND: "local",
 			PROCELLA_BLOB_LOCAL_PATH: "./data/e2e-blobs",
 			...(escEvaluatorBinary ? { PROCELLA_ESC_EVALUATOR_BINARY: escEvaluatorBinary } : {}),
@@ -248,14 +253,16 @@ export async function pulumi(args: string[], opts?: PulumiOpts): Promise<PulumiR
 	// Collect output chunks to avoid pipe deadlock with large outputs
 	const stdoutChunks: Uint8Array[] = [];
 	const stderrChunks: Uint8Array[] = [];
+	const stdoutStream = proc.stdout as AsyncIterable<Uint8Array>;
+	const stderrStream = proc.stderr as AsyncIterable<Uint8Array>;
 
 	const stdoutDone = (async () => {
-		for await (const chunk of proc.stdout) {
+		for await (const chunk of stdoutStream) {
 			stdoutChunks.push(chunk);
 		}
 	})();
 	const stderrDone = (async () => {
-		for await (const chunk of proc.stderr) {
+		for await (const chunk of stderrStream) {
 			stderrChunks.push(chunk);
 		}
 	})();

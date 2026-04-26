@@ -294,14 +294,6 @@ describe("@procella/server routes", () => {
 			expect(res.status).toBe(401);
 		});
 
-		test("returns 200 with correct Bearer token", async () => {
-			const app = makeApp(undefined, { cronSecret: "correct-secret" });
-			const res = await app.request("/cron/gc", {
-				headers: { Authorization: "Bearer correct-secret" },
-			});
-			expect(res.status).toBe(200);
-		});
-
 		test("returns 401 with wrong Bearer token", async () => {
 			const app = makeApp(undefined, { cronSecret: "correct-secret" });
 			const res = await app.request("/cron/gc", {

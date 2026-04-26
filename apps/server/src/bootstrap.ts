@@ -3,10 +3,11 @@
 // Creates all services and the Hono app. Called once at module load time
 // in both entry points (index.ts for local dev, vercel.ts for production).
 
+import { createHash } from "node:crypto";
 import { DescopeAuditService, NoopAuditService } from "@procella/audit";
 import { createAuthService, DescopeAuthService } from "@procella/auth";
 import { loadConfig } from "@procella/config";
-import { AesCryptoService, devMasterKey } from "@procella/crypto";
+import { AesCryptoService } from "@procella/crypto";
 import { createDb } from "@procella/db";
 import {
 	LambdaEvaluatorClient,
@@ -30,8 +31,23 @@ import { createCliApp } from "./routes/cli.js";
 import { createApp } from "./routes/index.js";
 import { createWebApp } from "./routes/web.js";
 
+const KNOWN_DEV_ENCRYPTION_KEY = createHash("sha256")
+	.update("procella-dev-encryption-key")
+	.digest("hex");
+
+export function requireExplicitEncryptionKey(encryptionKey: string | undefined): string {
+	if (!encryptionKey) {
+		throw new Error("PROCELLA_ENCRYPTION_KEY is required");
+	}
+	if (encryptionKey === KNOWN_DEV_ENCRYPTION_KEY) {
+		throw new Error("PROCELLA_ENCRYPTION_KEY must not use the well-known dev value");
+	}
+	return encryptionKey;
+}
+
 async function bootstrapServices() {
 	const config = loadConfig();
+	const encryptionKey = requireExplicitEncryptionKey(config.encryptionKey);
 
 	initTelemetry({ enabled: config.otelEnabled, serviceName: "procella" });
 
@@ -73,13 +89,6 @@ async function bootstrapServices() {
 				},
 	);
 
-	const encryptionKey =
-		config.encryptionKey ??
-		(config.authMode === "dev"
-			? devMasterKey()
-			: (() => {
-					throw new Error("PROCELLA_ENCRYPTION_KEY is required in production");
-				})());
 	const crypto = new AesCryptoService(encryptionKey);
 
 	// Domain services
@@ -113,6 +122,7 @@ async function bootstrapServices() {
 		authConfig,
 		audit: auditService,
 		corsOrigins: config.corsOrigins,
+		cronSecret: config.cronSecret,
 		db,
 		dbUrl: config.databaseUrl,
 		client,

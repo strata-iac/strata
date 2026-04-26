@@ -31,7 +31,7 @@ const configSchema = z
 		databasePoolMax: z.coerce.number().int().min(1).max(100).default(10),
 
 		// Auth
-		authMode: authModeSchema.default("dev"),
+		authMode: authModeSchema,
 		devAuthToken: z.string().optional(),
 		devUserLogin: z.string().default("dev-user"),
 		devOrgLogin: z.string().default("dev-org"),
@@ -68,6 +68,7 @@ const configSchema = z
 			.string()
 			.regex(/^[0-9a-fA-F]{64}$/, "Must be 64 hex chars (32 bytes)")
 			.optional(),
+		cronSecret: z.string().min(1).optional(),
 
 		// Telemetry
 		otelEnabled: z
@@ -93,7 +94,12 @@ const configSchema = z
 		// CORS
 		corsOrigins: z
 			.string()
-			.transform((s) => s.split(",").map((o) => o.trim()))
+			.transform((s) =>
+				s
+					.split(",")
+					.map((o) => o.trim())
+					.filter(Boolean),
+			)
 			.optional(),
 	})
 	.superRefine((data, ctx) => {
@@ -116,13 +122,6 @@ const configSchema = z
 				code: z.ZodIssueCode.custom,
 				message: "Required when PROCELLA_BLOB_BACKEND=s3",
 				path: ["blobS3Bucket"],
-			});
-		}
-		if (data.authMode !== "dev" && !data.encryptionKey) {
-			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
-				message: "Required in production (non-dev auth mode). Must be 64 hex chars (32 bytes).",
-				path: ["encryptionKey"],
 			});
 		}
 		// OIDC enabled by default; dev mode silently disables it in bootstrap
@@ -168,6 +167,7 @@ const envMapping = {
 	blobS3Endpoint: "PROCELLA_BLOB_S3_ENDPOINT",
 	blobS3Region: "PROCELLA_BLOB_S3_REGION",
 	encryptionKey: "PROCELLA_ENCRYPTION_KEY",
+	cronSecret: "PROCELLA_CRON_SECRET",
 	otelEnabled: "PROCELLA_OTEL_ENABLED",
 	oidcEnabled: "PROCELLA_OIDC_ENABLED",
 	githubAppId: "PROCELLA_GITHUB_APP_ID",

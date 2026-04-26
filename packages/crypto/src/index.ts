@@ -1,6 +1,6 @@
 // @procella/crypto — AES-256-GCM encryption with HKDF per-stack key derivation
 
-import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:crypto";
 import { cryptoOperationCount } from "@procella/telemetry";
 
 // ============================================================================
@@ -135,13 +135,4 @@ function stackIdToSalt(stackId: string): Buffer {
 		throw new Error(`Invalid stackId: expected ${STACK_ID_LENGTH} bytes, got ${salt.length}`);
 	}
 	return salt;
-}
-
-// ============================================================================
-// Dev helper — deterministic master key for development
-// ============================================================================
-
-/** Generate a deterministic master key from sha256("procella-dev-encryption-key"). */
-export function devMasterKey(): string {
-	return createHash("sha256").update("procella-dev-encryption-key").digest("hex");
 }

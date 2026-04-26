@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createCipheriv, createHash, hkdfSync } from "node:crypto";
-import {
-	AesCryptoService,
-	devMasterKey,
-	NopCryptoService,
-	type StackCryptoInput,
-} from "./index.js";
+import { AesCryptoService, NopCryptoService, type StackCryptoInput } from "./index.js";
 
 const VERSION_V2 = 0x02;
 const NONCE_LENGTH = 12;
@@ -15,7 +10,11 @@ const V2_OVERHEAD = 1 + NONCE_LENGTH + TAG_LENGTH;
 const HKDF_INFO = "procella-encrypt";
 
 function devService(): AesCryptoService {
-	return new AesCryptoService(devMasterKey());
+	return new AesCryptoService(testMasterKey());
+}
+
+function testMasterKey(): string {
+	return createHash("sha256").update("procella-dev-encryption-key").digest("hex");
 }
 
 function stackInput(overrides?: Partial<StackCryptoInput>): StackCryptoInput {
@@ -69,7 +68,7 @@ describe("@procella/crypto", () => {
 			const plaintext = new TextEncoder().encode("legacy secret");
 			const input = stackInput();
 
-			const encrypted = legacyEncrypt(devMasterKey(), input, plaintext);
+			const encrypted = legacyEncrypt(testMasterKey(), input, plaintext);
 			const decrypted = await svc.decrypt(input, encrypted);
 
 			expect(decrypted).toEqual(plaintext);
@@ -79,7 +78,7 @@ describe("@procella/crypto", () => {
 			const svc = devService();
 			const plaintext = new TextEncoder().encode("legacy secret");
 			const input = stackInput();
-			const encrypted = legacyEncrypt(devMasterKey(), input, plaintext);
+			const encrypted = legacyEncrypt(testMasterKey(), input, plaintext);
 
 			await expect(
 				svc.decrypt(stackInput({ stackId: "22222222-2222-2222-2222-222222222222" }), encrypted),
@@ -200,23 +199,6 @@ describe("@procella/crypto", () => {
 
 			const decrypted = await svc.decrypt(input, data);
 			expect(decrypted).toEqual(data);
-		});
-	});
-
-	describe("devMasterKey", () => {
-		test("returns consistent 32-byte key as 64 hex chars", () => {
-			const key1 = devMasterKey();
-			const key2 = devMasterKey();
-
-			expect(key1).toBe(key2);
-			expect(key1.length).toBe(64);
-			expect(/^[0-9a-f]{64}$/.test(key1)).toBe(true);
-			expect(Buffer.from(key1, "hex")).toHaveLength(32);
-		});
-
-		test("matches the documented sha256 seed", () => {
-			const expected = createHash("sha256").update("procella-dev-encryption-key").digest("hex");
-			expect(devMasterKey()).toBe(expected);
 		});
 	});
 });

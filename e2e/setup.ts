@@ -5,6 +5,10 @@ import type { Subprocess } from "bun";
 import { ensureDeps, resetDatabase, startServer, stopServer } from "./helpers.js";
 import { warmupServer } from "./warmup.js";
 
+process.env.PROCELLA_AUTH_MODE ??= "dev";
+process.env.PROCELLA_ENCRYPTION_KEY ??= "c".repeat(64);
+process.env.PROCELLA_CRON_SECRET ??= "e2e-cron-secret";
+
 setDefaultTimeout(120_000);
 
 let server: Subprocess;
