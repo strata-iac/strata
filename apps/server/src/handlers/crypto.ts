@@ -14,6 +14,12 @@ import type { UpdatesService } from "@procella/updates";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
 import { param } from "./params.js";
+import {
+	BatchDecryptRequestSchema,
+	BatchEncryptRequestSchema,
+	DecryptValueRequestSchema,
+	EncryptValueRequestSchema,
+} from "./schemas.js";
 
 // ============================================================================
 // Crypto Handlers
@@ -24,7 +30,12 @@ export function cryptoHandlers(updates: UpdatesService, stacks: StacksService) {
 		encryptValue: async (c: Context<Env>) => {
 			const stackInput = await resolveAuthorizedStack(c, stacks);
 			if (stackInput instanceof Response) return stackInput;
-			const body = await c.req.json<EncryptValueRequest>();
+			const raw = await c.req.json<EncryptValueRequest>();
+			const parseResult = EncryptValueRequestSchema.safeParse(raw);
+			if (!parseResult.success) {
+				return c.json({ code: "invalid_request", message: parseResult.error.message }, 400);
+			}
+			const body = parseResult.data;
 			const plaintext = decodeBase64(body.plaintext);
 			const ciphertext = await updates.encryptValue(stackInput, plaintext);
 			return c.json({ ciphertext: encodeBase64(ciphertext) });
@@ -33,7 +44,12 @@ export function cryptoHandlers(updates: UpdatesService, stacks: StacksService) {
 		decryptValue: async (c: Context<Env>) => {
 			const stackInput = await resolveAuthorizedStack(c, stacks);
 			if (stackInput instanceof Response) return stackInput;
-			const body = await c.req.json<DecryptValueRequest>();
+			const raw = await c.req.json<DecryptValueRequest>();
+			const parseResult = DecryptValueRequestSchema.safeParse(raw);
+			if (!parseResult.success) {
+				return c.json({ code: "invalid_request", message: parseResult.error.message }, 400);
+			}
+			const body = parseResult.data;
 			const ciphertext = decodeBase64(body.ciphertext);
 			const plaintext = await updates.decryptValue(stackInput, ciphertext);
 			return c.json({ plaintext: encodeBase64(plaintext) });
@@ -42,7 +58,12 @@ export function cryptoHandlers(updates: UpdatesService, stacks: StacksService) {
 		batchEncrypt: async (c: Context<Env>) => {
 			const stackInput = await resolveAuthorizedStack(c, stacks);
 			if (stackInput instanceof Response) return stackInput;
-			const body = await c.req.json<BatchEncryptRequest>();
+			const raw = await c.req.json<BatchEncryptRequest>();
+			const parseResult = BatchEncryptRequestSchema.safeParse(raw);
+			if (!parseResult.success) {
+				return c.json({ code: "invalid_request", message: parseResult.error.message }, 400);
+			}
+			const body = parseResult.data;
 			const plaintexts = (body.plaintexts ?? []).map(decodeBase64);
 			const ciphertexts = await updates.batchEncrypt(stackInput, plaintexts);
 			return c.json({
@@ -53,7 +74,12 @@ export function cryptoHandlers(updates: UpdatesService, stacks: StacksService) {
 		batchDecrypt: async (c: Context<Env>) => {
 			const stackInput = await resolveAuthorizedStack(c, stacks);
 			if (stackInput instanceof Response) return stackInput;
-			const body = await c.req.json<BatchDecryptRequest>();
+			const raw = await c.req.json<BatchDecryptRequest>();
+			const parseResult = BatchDecryptRequestSchema.safeParse(raw);
+			if (!parseResult.success) {
+				return c.json({ code: "invalid_request", message: parseResult.error.message }, 400);
+			}
+			const body = parseResult.data;
 			const rawCiphertexts = body.ciphertexts ?? [];
 			const ciphertexts = rawCiphertexts.map(decodeBase64);
 			const decrypted = await updates.batchDecrypt(stackInput, ciphertexts);

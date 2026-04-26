@@ -47,7 +47,7 @@ describe("checkpointHandlers", () => {
 		const h = checkpointHandlers(updates);
 		app.patch("/checkpoint", h.patchCheckpoint);
 
-		const body = { version: 1, deployment: { resources: [] } };
+		const body = { isInvalid: false, version: 1, deployment: { resources: [] } };
 		const res = await app.request("/checkpoint", {
 			method: "PATCH",
 			headers: { "Content-Type": "application/json" },
@@ -66,7 +66,11 @@ describe("checkpointHandlers", () => {
 		const h = checkpointHandlers(updates);
 		app.patch("/checkpointverbatim", h.patchCheckpointVerbatim);
 
-		const body = { version: 2, deployment: '{"resources":[]}' };
+		const body = {
+			version: 2,
+			sequenceNumber: 1,
+			untypedDeployment: { version: 3, deployment: { resources: [] } },
+		};
 		const res = await app.request("/checkpointverbatim", {
 			method: "PATCH",
 			headers: { "Content-Type": "application/json" },
@@ -109,7 +113,7 @@ describe("checkpointHandlers", () => {
 		const h = checkpointHandlers(updates);
 		app.patch("/journal", h.appendJournalEntries);
 
-		const body = { entries: [{ kind: 1 }] };
+		const body = { entries: [{ version: 1, kind: 1, operationID: 1, sequenceID: 1 }] };
 		const res = await app.request("/journal", {
 			method: "PATCH",
 			headers: { "Content-Type": "application/json" },

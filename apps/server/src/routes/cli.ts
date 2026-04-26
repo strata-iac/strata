@@ -59,13 +59,21 @@ export interface CliAppDeps {
 
 export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	const app = new Hono<Env>();
+	const R = PulumiRoutes;
+	const withApiDecompress = decompress();
+	const withCheckpointDecompress = decompress({ maxDecompressedBytes: 100 * 1024 * 1024 });
 
 	app.onError(errorHandler());
 
 	// Global middleware — no CORS (CLI traffic only)
 	app.use("*", tracingMiddleware());
 	app.use("*", requestLogger());
-	app.use("*", decompress());
+	app.use("/api/*", (c, next) => {
+		if (isCheckpointPath(c.req.path)) {
+			return next();
+		}
+		return withApiDecompress(c, next);
+	});
 
 	// Handler instances
 	const health = healthHandlers({ db: deps.db });
@@ -107,10 +115,24 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	app.post("/api/oauth/token", oauth.tokenExchange);
 
 	// Update-token authenticated routes (during active update execution)
-	const R = PulumiRoutes;
-	app.patch(R.patchCheckpoint.path, withUpdateAuth, checkpointH.patchCheckpoint);
-	app.patch(R.patchCheckpointVerbatim.path, withUpdateAuth, checkpointH.patchCheckpointVerbatim);
-	app.patch(R.patchCheckpointDelta.path, withUpdateAuth, checkpointH.patchCheckpointDelta);
+	app.patch(
+		R.patchCheckpoint.path,
+		withCheckpointDecompress,
+		withUpdateAuth,
+		checkpointH.patchCheckpoint,
+	);
+	app.patch(
+		R.patchCheckpointVerbatim.path,
+		withCheckpointDecompress,
+		withUpdateAuth,
+		checkpointH.patchCheckpointVerbatim,
+	);
+	app.patch(
+		R.patchCheckpointDelta.path,
+		withCheckpointDecompress,
+		withUpdateAuth,
+		checkpointH.patchCheckpointDelta,
+	);
 	app.patch(R.patchJournalEntries.path, withUpdateAuth, checkpointH.appendJournalEntries);
 	app.post(R.postEngineEventBatch.path, withUpdateAuth, eventH.postEvents);
 	app.post(R.renewLease.path, withUpdateAuth, eventH.renewLease);
@@ -266,4 +288,10 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 
 	app.route("/api", api);
 	return app;
+}
+
+function isCheckpointPath(path: string): boolean {
+	return /\/api\/stacks\/[^/]+\/[^/]+\/[^/]+\/[^/]+\/[^/]+\/(checkpoint|checkpointverbatim|checkpointdelta)$/.test(
+		path,
+	);
 }
