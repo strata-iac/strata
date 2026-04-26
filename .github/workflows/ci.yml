@@ -27,8 +27,8 @@ jobs:
           path: |
             node_modules
             ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+          key: bun-v2-${{ runner.os }}-${{ hashFiles('bun.lock', 'bunfig.toml') }}
+          restore-keys: bun-v2-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - run: bunx biome check .
       - run: bun run typecheck
@@ -66,8 +66,8 @@ jobs:
           path: |
             node_modules
             ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+          key: bun-v2-${{ runner.os }}-${{ hashFiles('bun.lock', 'bunfig.toml') }}
+          restore-keys: bun-v2-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - name: Build UI
         run: bun run --cwd apps/ui build
@@ -102,8 +102,8 @@ jobs:
           path: |
             node_modules
             ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+          key: bun-v2-${{ runner.os }}-${{ hashFiles('bun.lock', 'bunfig.toml') }}
+          restore-keys: bun-v2-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - name: Run integration tests
         env:
@@ -149,8 +149,8 @@ jobs:
           path: |
             node_modules
             ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+          key: bun-v2-${{ runner.os }}-${{ hashFiles('bun.lock', 'bunfig.toml') }}
+          restore-keys: bun-v2-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - name: Run ESC CLI E2E test
         env:
@@ -174,8 +174,8 @@ jobs:
           path: |
             node_modules
             ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+          key: bun-v2-${{ runner.os }}-${{ hashFiles('bun.lock', 'bunfig.toml') }}
+          restore-keys: bun-v2-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - name: Regenerate types from Pulumi SDK
         run: bun run types:generate
@@ -233,8 +233,8 @@ jobs:
           path: |
             node_modules
             ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+          key: bun-v2-${{ runner.os }}-${{ hashFiles('bun.lock', 'bunfig.toml') }}
+          restore-keys: bun-v2-${{ runner.os }}-
       - uses: pulumi/setup-pulumi@v2
       - run: bun install --frozen-lockfile
       - name: Run E2E tests (shard ${{ matrix.shard }}/3)
@@ -286,8 +286,8 @@ jobs:
           path: |
             node_modules
             ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+          key: bun-v2-${{ runner.os }}-${{ hashFiles('bun.lock', 'bunfig.toml') }}
+          restore-keys: bun-v2-${{ runner.os }}-
       - uses: pulumi/setup-pulumi@v2
       - run: bun install --frozen-lockfile
       - name: Install Playwright browsers
@@ -346,8 +346,8 @@ jobs:
           path: |
             node_modules
             ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+          key: bun-v2-${{ runner.os }}-${{ hashFiles('bun.lock', 'bunfig.toml') }}
+          restore-keys: bun-v2-${{ runner.os }}-
       - uses: pulumi/setup-pulumi@v2
       - run: bun install --frozen-lockfile
       - name: Run benchmark

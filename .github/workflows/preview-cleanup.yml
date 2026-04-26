@@ -26,8 +26,8 @@ jobs:
           path: |
             node_modules
             ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+          key: bun-v2-${{ runner.os }}-${{ hashFiles('bun.lock', 'bunfig.toml') }}
+          restore-keys: bun-v2-${{ runner.os }}-
       - run: bun install --frozen-lockfile
 
       - name: Configure AWS credentials
