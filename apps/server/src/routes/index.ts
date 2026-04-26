@@ -35,6 +35,8 @@ import {
 import {
 	apiAuth,
 	auditMiddleware,
+	createIpRateLimiter,
+	createSecurityHeadersMiddleware,
 	decompress,
 	errorHandler,
 	pulumiAccept,
@@ -43,6 +45,7 @@ import {
 	updateAuth,
 } from "../middleware/index.js";
 import type { Env } from "../types.js";
+import { authenticateTrpcCaller } from "./trpc-auth.js";
 
 // ============================================================================
 // App Factory
@@ -62,8 +65,10 @@ export function createApp(deps: {
 	esc: EscService;
 	github: GitHubService | null;
 	githubWebhookSecret?: string;
+	issueSubscriptionTicket?: (caller: import("@procella/types").Caller) => Promise<string>;
 	oidc?: OidcService | null;
 	oidcPolicies?: TrustPolicyRepository | null;
+	verifySubscriptionTicket?: (ticket: string) => Promise<import("@procella/types").Caller>;
 }): Hono<Env> {
 	const app = new Hono<Env>();
 	const R = PulumiRoutes;
@@ -74,6 +79,7 @@ export function createApp(deps: {
 	app.onError(errorHandler());
 
 	// Global middleware
+	app.use("*", createSecurityHeadersMiddleware());
 	app.use("*", tracingMiddleware());
 	app.use("*", requestLogger());
 	if ((deps.corsOrigins ?? []).length > 0) {
@@ -111,6 +117,13 @@ export function createApp(deps: {
 	const withApiAuth = apiAuth(deps.auth);
 	const withAudit = auditMiddleware(deps.audit);
 	const withPulumiAccept = pulumiAccept();
+	const withCliTokenRateLimit = createIpRateLimiter({ limit: 10 });
+	const withOauthTokenRateLimit = createIpRateLimiter({ limit: 30 });
+	const withCryptoRateLimit = createIpRateLimiter({ limit: 1000 });
+	const withTrpcMutationRateLimit = createIpRateLimiter({
+		limit: 60,
+		skip: (c) => !isTrpcMutationRequest(c.req.path),
+	});
 	const withUpdateAuth = updateAuth(
 		deps.auth,
 		(updateId, token) => deps.updates.verifyLeaseToken(updateId, token),
@@ -118,25 +131,19 @@ export function createApp(deps: {
 	);
 
 	// ========================================================================
-	// tRPC routes (/trpc/*)
+	// tRPC routes (/trpc/*) — SSE GET requests use short-lived signed tickets
 	// ========================================================================
 
-	app.all("/trpc/*", async (c) => {
-		let req = c.req.raw;
+	app.all("/trpc/*", withTrpcMutationRateLimit, async (c) => {
+		const req = c.req.raw;
+		const { caller, invalidTicket } = await authenticateTrpcCaller(req, c.req.query("ticket"), {
+			auth: deps.auth,
+			verifySubscriptionTicket: deps.verifySubscriptionTicket,
+		});
 
-		const cpRaw = c.req.query("connectionParams");
-		if (cpRaw && req.method === "GET" && !req.headers.get("Authorization")) {
-			try {
-				const cp = JSON.parse(decodeURIComponent(cpRaw)) as Record<string, string>;
-				if (cp.authorization) {
-					const headers = new Headers(req.headers);
-					headers.set("Authorization", cp.authorization);
-					req = new Request(req, { headers });
-				}
-			} catch {}
+		if (invalidTicket) {
+			return c.json({ code: "invalid_ticket" }, 401);
 		}
-
-		const caller = await deps.auth.authenticate(req).catch(() => null);
 
 		if (!caller) {
 			return c.json({ code: 401, message: "Unauthorized" }, 401);
@@ -144,6 +151,7 @@ export function createApp(deps: {
 
 		const ctx: TRPCContext = {
 			caller,
+			issueSubscriptionTicket: deps.issueSubscriptionTicket,
 			db: deps.db,
 			dbUrl: deps.dbUrl,
 			stacks: deps.stacks,
@@ -203,7 +211,7 @@ export function createApp(deps: {
 		return c.json({ mode: "dev" as const });
 	});
 
-	app.post("/api/auth/cli-token", async (c) => {
+	app.post("/api/auth/cli-token", withCliTokenRateLimit, async (c) => {
 		if (!deps.auth.createCliAccessKey) {
 			return c.json({ error: "CLI token creation not available in this auth mode" }, 400);
 		}
@@ -219,7 +227,7 @@ export function createApp(deps: {
 	});
 
 	const oauth = oauthHandlers(deps.oidc ?? null);
-	app.post("/api/oauth/token", oauth.tokenExchange);
+	app.post("/api/oauth/token", withOauthTokenRateLimit, oauth.tokenExchange);
 
 	app.post("/api/webhooks/github", githubH.handleGitHubWebhook);
 
@@ -306,10 +314,18 @@ export function createApp(deps: {
 	api.post("/stacks/:org/:project/:stack/import", stateH.importStack);
 
 	// Crypto (API token)
-	api.post("/stacks/:org/:project/:stack/encrypt", cryptoH.encryptValue);
-	api.post("/stacks/:org/:project/:stack/decrypt", cryptoH.decryptValue);
-	api.post("/stacks/:org/:project/:stack/batch-encrypt", cryptoH.batchEncrypt);
-	api.post("/stacks/:org/:project/:stack/batch-decrypt", cryptoH.batchDecrypt);
+	api.post("/stacks/:org/:project/:stack/encrypt", withCryptoRateLimit, cryptoH.encryptValue);
+	api.post("/stacks/:org/:project/:stack/decrypt", withCryptoRateLimit, cryptoH.decryptValue);
+	api.post(
+		"/stacks/:org/:project/:stack/batch-encrypt",
+		withCryptoRateLimit,
+		cryptoH.batchEncrypt,
+	);
+	api.post(
+		"/stacks/:org/:project/:stack/batch-decrypt",
+		withCryptoRateLimit,
+		cryptoH.batchDecrypt,
+	);
 	api.post("/stacks/:org/:project/:stack/log-decryption", cryptoH.logDecryption);
 
 	// Stack CRUD + createUpdate (:kind catch-all LAST)
@@ -419,4 +435,39 @@ function safeEqualString(a: string, b: string): boolean {
 		return false;
 	}
 	return timingSafeEqual(aBuf, bBuf);
+}
+
+function hasProcedureType(value: unknown): value is { _def: { type: string } } {
+	if (typeof value !== "object" || value === null || !("_def" in value)) {
+		return false;
+	}
+
+	const def = (value as { _def?: unknown })._def;
+	return typeof def === "object" && def !== null && "type" in def;
+}
+
+function isTrpcMutationRequest(path: string): boolean {
+	if (!path.startsWith("/trpc/")) {
+		return false;
+	}
+	const procedures = appRouter._def.procedures;
+	const procedurePaths = path
+		.slice("/trpc/".length)
+		.split(",")
+		.map((part) => {
+			try {
+				return decodeURIComponent(part);
+			} catch {
+				return part;
+			}
+		})
+		.filter(Boolean);
+	return procedurePaths.some((procedurePath) => {
+		if (!(procedurePath in procedures)) {
+			return false;
+		}
+
+		const candidate = procedures[procedurePath as keyof typeof procedures];
+		return hasProcedureType(candidate) && candidate._def.type === "mutation";
+	});
 }

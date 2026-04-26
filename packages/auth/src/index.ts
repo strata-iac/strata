@@ -326,12 +326,7 @@ export class DescopeAuthService implements AuthService {
 			try {
 				const authInfo = await this.sdk.exchangeAccessKey(accessKey);
 				const claims = authInfo.token;
-				const elapsed = (performance.now() - started).toFixed(0);
 				const exp = typeof claims.exp === "number" ? claims.exp : undefined;
-				// biome-ignore lint/suspicious/noConsole: auth diagnostics
-				console.log(
-					`[auth] exchangeAccessKey OK ${elapsed}ms exp=${exp ? new Date(exp * 1000).toISOString() : "none"} sub=${claims.sub ?? "?"}`,
-				);
 
 				const caller = this.extractCaller(claims);
 

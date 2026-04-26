@@ -7,20 +7,10 @@ import {
 } from "@procella/oidc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
-import { publicProcedure, router } from "../trpc.js";
+import { adminProcedure, router } from "../trpc.js";
 
 const UUID_V4_PATTERN =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-// ============================================================================
-// Guard
-// ============================================================================
-
-function assertAdmin(roles: readonly string[]): void {
-	if (!roles.includes("admin")) {
-		throw new TRPCError({ code: "FORBIDDEN", message: "Admin role required" });
-	}
-}
 
 function assertOidc(ctx: { oidcPolicies?: unknown }): void {
 	if (!ctx.oidcPolicies) {
@@ -109,15 +99,13 @@ const updatePolicyInput = z.object({
 // ============================================================================
 
 export const oidcRouter = router({
-	listPolicies: publicProcedure.query(async ({ ctx }) => {
-		assertAdmin(ctx.caller.roles);
+	listPolicies: adminProcedure.query(async ({ ctx }) => {
 		assertOidc(ctx);
 		// biome-ignore lint/style/noNonNullAssertion: assertOidc guards above
 		return ctx.oidcPolicies!.listByOrgSlug(ctx.caller.orgSlug, ctx.caller.tenantId);
 	}),
 
-	createPolicy: publicProcedure.input(createPolicyInput).mutation(async ({ ctx, input }) => {
-		assertAdmin(ctx.caller.roles);
+	createPolicy: adminProcedure.input(createPolicyInput).mutation(async ({ ctx, input }) => {
 		assertOidc(ctx);
 		try {
 			// biome-ignore lint/style/noNonNullAssertion: assertOidc guards above
@@ -137,8 +125,7 @@ export const oidcRouter = router({
 		}
 	}),
 
-	updatePolicy: publicProcedure.input(updatePolicyInput).mutation(async ({ ctx, input }) => {
-		assertAdmin(ctx.caller.roles);
+	updatePolicy: adminProcedure.input(updatePolicyInput).mutation(async ({ ctx, input }) => {
 		assertOidc(ctx);
 		const { id, ...patch } = input;
 		try {
@@ -149,7 +136,7 @@ export const oidcRouter = router({
 		}
 	}),
 
-	deletePolicy: publicProcedure
+	deletePolicy: adminProcedure
 		.input(
 			z.object({
 				id: z.string().refine((value) => UUID_V4_PATTERN.test(value), {
@@ -158,7 +145,6 @@ export const oidcRouter = router({
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
-			assertAdmin(ctx.caller.roles);
 			assertOidc(ctx);
 			// biome-ignore lint/style/noNonNullAssertion: assertOidc guards above
 			await ctx.oidcPolicies!.delete(input.id, ctx.caller.tenantId);
