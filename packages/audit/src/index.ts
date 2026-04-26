@@ -73,43 +73,58 @@ export interface AuditService {
 }
 
 export function mapRouteToAction(method: string, path: string): AuditActionValue | null {
-	if (method === "POST" && new RegExp(`^/api/stacks/${NAME_SEGMENT}/${NAME_SEGMENT}/${NAME_SEGMENT}$`).test(path)) {
+	if (
+		method === "POST" &&
+		new RegExp(`^/api/stacks/${NAME_SEGMENT}/${NAME_SEGMENT}/${NAME_SEGMENT}$`).test(path)
+	) {
 		return AuditAction.STACK_CREATE;
 	}
-	if (method === "DELETE" && new RegExp(`^/api/stacks/${NAME_SEGMENT}/${NAME_SEGMENT}/${NAME_SEGMENT}$`).test(path)) {
+	if (
+		method === "DELETE" &&
+		new RegExp(`^/api/stacks/${NAME_SEGMENT}/${NAME_SEGMENT}/${NAME_SEGMENT}$`).test(path)
+	) {
 		return AuditAction.STACK_DELETE;
 	}
-	if (method === "POST" && new RegExp(`^/api/stacks/${NAME_SEGMENT}/${NAME_SEGMENT}/${NAME_SEGMENT}/rename$`).test(path)) {
+	if (
+		method === "POST" &&
+		new RegExp(`^/api/stacks/${NAME_SEGMENT}/${NAME_SEGMENT}/${NAME_SEGMENT}/rename$`).test(path)
+	) {
 		return AuditAction.STACK_RENAME;
 	}
-	if (method === "PATCH" && new RegExp(`^/api/stacks/${NAME_SEGMENT}/${NAME_SEGMENT}/${NAME_SEGMENT}/tags$`).test(path)) {
+	if (
+		method === "PATCH" &&
+		new RegExp(`^/api/stacks/${NAME_SEGMENT}/${NAME_SEGMENT}/${NAME_SEGMENT}/tags$`).test(path)
+	) {
 		return AuditAction.STACK_TAGS_UPDATE;
 	}
 	if (
 		method === "POST" &&
-		new RegExp(`^/api/stacks/${NAME_SEGMENT}/${NAME_SEGMENT}/${NAME_SEGMENT}/(?:update|preview|refresh|destroy)$`).test(
-			path,
-		)
+		new RegExp(
+			`^/api/stacks/${NAME_SEGMENT}/${NAME_SEGMENT}/${NAME_SEGMENT}/(?:update|preview|refresh|destroy)$`,
+		).test(path)
 	) {
 		return AuditAction.UPDATE_CREATE;
 	}
 	if (
 		method === "POST" &&
-		new RegExp(`^/api/stacks/${NAME_SEGMENT}/${NAME_SEGMENT}/${NAME_SEGMENT}/update/${NAME_SEGMENT}/complete$`).test(
-			path,
-		)
+		new RegExp(
+			`^/api/stacks/${NAME_SEGMENT}/${NAME_SEGMENT}/${NAME_SEGMENT}/update/${NAME_SEGMENT}/complete$`,
+		).test(path)
 	) {
 		return AuditAction.UPDATE_COMPLETE;
 	}
 	if (
 		method === "POST" &&
-		new RegExp(`^/api/stacks/${NAME_SEGMENT}/${NAME_SEGMENT}/${NAME_SEGMENT}/update/${NAME_SEGMENT}/cancel$`).test(
-			path,
-		)
+		new RegExp(
+			`^/api/stacks/${NAME_SEGMENT}/${NAME_SEGMENT}/${NAME_SEGMENT}/update/${NAME_SEGMENT}/cancel$`,
+		).test(path)
 	) {
 		return AuditAction.UPDATE_CANCEL;
 	}
-	if (method === "POST" && new RegExp(`^/api/stacks/${NAME_SEGMENT}/${NAME_SEGMENT}/${NAME_SEGMENT}/import$`).test(path)) {
+	if (
+		method === "POST" &&
+		new RegExp(`^/api/stacks/${NAME_SEGMENT}/${NAME_SEGMENT}/${NAME_SEGMENT}/import$`).test(path)
+	) {
 		return AuditAction.STACK_IMPORT;
 	}
 	if (method === "POST" && /^\/api\/orgs\/[^/]+\/tokens$/.test(path)) {
