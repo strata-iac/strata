@@ -6,6 +6,7 @@ import type { UpdatesService } from "@procella/updates";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
 import { param, updateContext } from "./params.js";
+import { EngineEventBatchSchema, RenewUpdateLeaseRequestSchema } from "./schemas.js";
 
 // ============================================================================
 // Event Handlers
@@ -15,7 +16,12 @@ export function eventHandlers(updates: UpdatesService, stacks: StacksService) {
 	return {
 		postEvents: async (c: Context<Env>) => {
 			const updateCtx = updateContext(c);
-			const body = await c.req.json<EngineEventBatch>();
+			const raw = await c.req.json<EngineEventBatch>();
+			const parseResult = EngineEventBatchSchema.safeParse(raw);
+			if (!parseResult.success) {
+				return c.json({ code: "invalid_request", message: parseResult.error.message }, 400);
+			}
+			const body = parseResult.data as EngineEventBatch;
 			await updates.postEvents(updateCtx.updateId, body);
 			return c.body(null, 200);
 		},
@@ -35,7 +41,12 @@ export function eventHandlers(updates: UpdatesService, stacks: StacksService) {
 
 		renewLease: async (c: Context<Env>) => {
 			const updateCtx = updateContext(c);
-			const body = await c.req.json<RenewUpdateLeaseRequest>();
+			const raw = await c.req.json<RenewUpdateLeaseRequest>();
+			const parseResult = RenewUpdateLeaseRequestSchema.safeParse(raw);
+			if (!parseResult.success) {
+				return c.json({ code: "invalid_request", message: parseResult.error.message }, 400);
+			}
+			const body = parseResult.data as RenewUpdateLeaseRequest;
 			const result = await updates.renewLease(updateCtx.updateId, body);
 			return c.json(result);
 		},

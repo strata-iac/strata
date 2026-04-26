@@ -604,31 +604,32 @@ export class PostgresStacksService implements StacksService {
 				"stack.name": stack,
 				"tags.count": Object.keys(tags).length,
 			},
-			async () => {
-				const rows = await this.db
-					.select({ stackId: stacks.id })
-					.from(stacks)
-					.innerJoin(projects, eq(stacks.projectId, projects.id))
-					.where(
-						and(
-							eq(projects.tenantId, tenantId),
-							eq(projects.name, project),
-							eq(stacks.name, stack),
-						),
-					);
+			() =>
+				this.db.transaction(async (tx) => {
+					const rows = await tx
+						.select({ stackId: stacks.id, stackTags: stacks.tags })
+						.from(stacks)
+						.innerJoin(projects, eq(stacks.projectId, projects.id))
+						.where(
+							and(
+								eq(projects.tenantId, tenantId),
+								eq(projects.name, project),
+								eq(stacks.name, stack),
+							),
+						);
 
-				if (rows.length === 0) {
-					throw new StackNotFoundError(tenantId, project, stack);
-				}
+					if (rows.length === 0) {
+						throw new StackNotFoundError(tenantId, project, stack);
+					}
 
-				await this.db
-					.update(stacks)
-					.set({
-						tags: sql`COALESCE(${stacks.tags}, '{}'::jsonb) || ${JSON.stringify(tags)}::jsonb`,
-						updatedAt: sql`now()`,
-					})
-					.where(eq(stacks.id, rows[0].stackId));
-			},
+					await tx
+						.update(stacks)
+						.set({
+							tags: mergeTags((rows[0].stackTags ?? {}) as Record<string, string>, tags),
+							updatedAt: sql`now()`,
+						})
+						.where(eq(stacks.id, rows[0].stackId));
+				}),
 		);
 	}
 

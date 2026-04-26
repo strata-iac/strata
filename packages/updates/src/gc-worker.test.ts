@@ -69,7 +69,7 @@ describe("@procella/updates GCWorker", () => {
 				execute: () => Promise.reject(new Error("connection refused")),
 			};
 			const worker = new GCWorker({ db: failDb as never, interval: 60_000 });
-			await expect(worker.start()).resolves.toBeUndefined();
+			expect(await worker.start()).toBeUndefined();
 			await worker.stop();
 		});
 	});
