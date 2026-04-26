@@ -10,7 +10,7 @@ import { trpcProcedureDuration, withSpan } from "@procella/telemetry";
 import type { Caller } from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
-import { TRPCError, initTRPC } from "@trpc/server";
+import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 
 // ============================================================================

@@ -316,16 +316,8 @@ export function createApp(deps: {
 	// Crypto (API token)
 	api.post("/stacks/:org/:project/:stack/encrypt", withCryptoRateLimit, cryptoH.encryptValue);
 	api.post("/stacks/:org/:project/:stack/decrypt", withCryptoRateLimit, cryptoH.decryptValue);
-	api.post(
-		"/stacks/:org/:project/:stack/batch-encrypt",
-		withCryptoRateLimit,
-		cryptoH.batchEncrypt,
-	);
-	api.post(
-		"/stacks/:org/:project/:stack/batch-decrypt",
-		withCryptoRateLimit,
-		cryptoH.batchDecrypt,
-	);
+	api.post("/stacks/:org/:project/:stack/batch-encrypt", withCryptoRateLimit, cryptoH.batchEncrypt);
+	api.post("/stacks/:org/:project/:stack/batch-decrypt", withCryptoRateLimit, cryptoH.batchDecrypt);
 	api.post("/stacks/:org/:project/:stack/log-decryption", cryptoH.logDecryption);
 
 	// Stack CRUD + createUpdate (:kind catch-all LAST)
