@@ -6,7 +6,11 @@ import {
 	mapUpdateStatusToCommitState,
 } from "@procella/github";
 import type { StacksService } from "@procella/stacks";
-import type { CompleteUpdateRequest, StartUpdateRequest, UpdateKind } from "@procella/types";
+import {
+	type CompleteUpdateRequest,
+	isValidUpdateKind,
+	type StartUpdateRequest,
+} from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import type { Context } from "hono";
@@ -29,7 +33,10 @@ export function updateHandlers(
 			const org = param(c, "org");
 			const project = param(c, "project");
 			const stack = param(c, "stack");
-			const kind = param(c, "kind") as UpdateKind;
+			const kind = param(c, "kind");
+			if (!isValidUpdateKind(kind)) {
+				return c.json({ code: "invalid_kind", message: `Invalid update kind: ${kind}` }, 400);
+			}
 			const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
 			const body = await c.req.json().catch(() => ({}));
 			const typedBody = body as { config?: unknown; program?: unknown };

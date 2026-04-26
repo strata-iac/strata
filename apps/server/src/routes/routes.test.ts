@@ -420,6 +420,25 @@ describe("@procella/server routes", () => {
 			expect(body.orgName).toBe("my-org");
 		});
 
+		test("POST /api/stacks/:org/:project/:stack/:kind rejects invalid kind", async () => {
+			const app = makeApp();
+			const res = await app.request("/api/stacks/dev-org/proj/stack/badkind", {
+				method: "POST",
+				headers: {
+					...authHeaders,
+					Accept: "application/vnd.pulumi+8",
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({}),
+			});
+
+			expect(res.status).toBe(400);
+			expect(await res.json()).toEqual({
+				code: "invalid_kind",
+				message: "Invalid update kind: badkind",
+			});
+		});
+
 		test("GET /api/stacks/:org/:project/:stack returns stack info", async () => {
 			const app = makeApp();
 			const res = await app.request("/api/stacks/myorg/myproj/dev", {

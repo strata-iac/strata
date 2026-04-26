@@ -135,6 +135,27 @@ describe("updateHandlers", () => {
 		);
 	});
 
+	test("createUpdate rejects invalid kind with 400", async () => {
+		const updates = mockUpdatesService();
+		const stacks = mockStacksService();
+		const app = new Hono<Env>();
+		app.use("*", injectCaller(validCaller));
+		const h = updateHandlers(updates, stacks);
+		app.post("/stacks/:org/:project/:stack/:kind", h.createUpdate);
+
+		const res = await app.request("/stacks/myorg/myproj/dev/badkind", {
+			method: "POST",
+		});
+
+		expect(res.status).toBe(400);
+		expect(await res.json()).toEqual({
+			code: "invalid_kind",
+			message: "Invalid update kind: badkind",
+		});
+		expect(stacks.getStack).not.toHaveBeenCalled();
+		expect(updates.createUpdate).not.toHaveBeenCalled();
+	});
+
 	test("startUpdate returns version, token, and expiration", async () => {
 		const updates = mockUpdatesService();
 		const stacks = mockStacksService();

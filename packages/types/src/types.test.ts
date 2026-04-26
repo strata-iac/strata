@@ -2,11 +2,12 @@ import { describe, expect, test } from "bun:test";
 import {
 	ErrorType,
 	formatStackFQN,
+	isValidUpdateKind,
 	NotFoundError,
 	ProcellaError,
 	parseStackFQN,
 	type StackFQN,
-	UpdateKind,
+	UPDATE_KINDS,
 	UpdateResult,
 	UpdateStatus,
 } from "./index.js";
@@ -51,12 +52,17 @@ describe("@procella/types", () => {
 	});
 
 	describe("enum objects", () => {
-		test("UpdateKind has all expected values", () => {
-			expect(UpdateKind.Update).toBe("update");
-			expect(UpdateKind.Preview).toBe("preview");
-			expect(UpdateKind.Refresh).toBe("refresh");
-			expect(UpdateKind.Destroy).toBe("destroy");
-			expect(UpdateKind.Import).toBe("import");
+		test("UPDATE_KINDS has all expected values", () => {
+			expect(UPDATE_KINDS).toEqual(["update", "preview", "refresh", "destroy"]);
+		});
+
+		test("isValidUpdateKind only allows the update allowlist", () => {
+			expect(isValidUpdateKind("update")).toBeTrue();
+			expect(isValidUpdateKind("preview")).toBeTrue();
+			expect(isValidUpdateKind("refresh")).toBeTrue();
+			expect(isValidUpdateKind("destroy")).toBeTrue();
+			expect(isValidUpdateKind("import")).toBeFalse();
+			expect(isValidUpdateKind("badkind")).toBeFalse();
 		});
 
 		test("UpdateResult has all expected values", () => {
