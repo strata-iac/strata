@@ -1,3 +1,10 @@
+[install]
+# Force hoisted install layout. Isolated install (the default in newer bun
+# versions, opt-in via lockfile configVersion:1) places workspace deps in
+# per-workspace node_modules, which breaks TypeScript project-reference
+# .d.ts emit for packages with subscription procedures (TS2742 — see PR #144).
+linker = "hoisted"
+
 [test]
 coverageReporter = ["text", "lcov"]
 coverageDir = "coverage"
