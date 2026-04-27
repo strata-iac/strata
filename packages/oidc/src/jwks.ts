@@ -1,4 +1,4 @@
-import { isBlockedHostname, validateUrl } from "@procella/webhooks";
+import { isBlockedHostname, resolveAndValidateUrl, validateUrl } from "@procella/webhooks";
 import { createRemoteJWKSet, errors as joseErrors, jwtVerify } from "jose";
 import type { JwksValidator } from "./types.js";
 
@@ -71,7 +71,7 @@ export class JwksValidatorImpl implements JwksValidator {
 			throw new JwksValidationError("invalid_issuer", `Issuer must use HTTPS, got: ${issuer}`);
 		}
 		if (!this.allowHttp) {
-			this.validateSsrf(issuer, "Issuer");
+			await this.validateSsrf(issuer, "Issuer");
 		}
 
 		const cached = this.discoveredJwksUris.get(issuer);
@@ -101,14 +101,14 @@ export class JwksValidatorImpl implements JwksValidator {
 			throw new JwksValidationError("discovery_failed", `jwks_uri must use HTTPS, got: ${jwksUri}`);
 		}
 		if (!this.allowHttp) {
-			this.validateSsrf(jwksUri, "jwks_uri");
+			await this.validateSsrf(jwksUri, "jwks_uri");
 		}
 
 		this.discoveredJwksUris.set(issuer, jwksUri);
 		return jwksUri;
 	}
 
-	private validateSsrf(url: string, label: string): void {
+	private async validateSsrf(url: string, label: string): Promise<void> {
 		try {
 			validateUrl(url, label);
 			const parsed = new URL(url);
@@ -119,6 +119,7 @@ export class JwksValidatorImpl implements JwksValidator {
 					`${label} URL uses a blocked DNS rebinding service: ${hostname}`,
 				);
 			}
+			await resolveAndValidateUrl(url, label);
 		} catch (err) {
 			if (err instanceof JwksValidationError) throw err;
 			throw new JwksValidationError(

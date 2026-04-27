@@ -67,14 +67,19 @@ export class AesCryptoService implements CryptoService {
 	async decrypt(input: StackCryptoInput, ciphertext: Uint8Array): Promise<Uint8Array> {
 		cryptoOperationCount().add(1, { operation: "decrypt" });
 
-		if (ciphertext[0] === CIPHERTEXT_VERSION_V2) {
-			if (ciphertext.length < 1 + NONCE_LENGTH + TAG_LENGTH) {
-				throw new Error(
-					`Ciphertext too short: expected at least ${1 + NONCE_LENGTH + TAG_LENGTH} bytes, got ${ciphertext.length}`,
-				);
+		// v1 ciphertexts have a random first byte (nonce[0]) so ~1/256 collide with the
+		// v2 marker. If the marker matches, try v2 first; on AES-GCM auth-tag failure
+		// (which is what happens when the bytes are actually v1), fall back to v1.
+		if (
+			ciphertext[0] === CIPHERTEXT_VERSION_V2 &&
+			ciphertext.length >= 1 + NONCE_LENGTH + TAG_LENGTH
+		) {
+			try {
+				return this.decryptWithKey(ciphertext.slice(1), this.deriveV2Key(input.stackId));
+			} catch {
+				// Fall through to v1 — collision on the marker byte; the auth tag tells us
+				// which format the bytes really are.
 			}
-
-			return this.decryptWithKey(ciphertext.slice(1), this.deriveV2Key(input.stackId));
 		}
 
 		if (ciphertext.length < NONCE_LENGTH + TAG_LENGTH) {

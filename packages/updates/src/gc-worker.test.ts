@@ -146,5 +146,30 @@ describe("@procella/updates GCWorker", () => {
 
 			expect(worker).toBeDefined();
 		});
+
+		test("functional: runOnce completes the GC cycle without throwing (PR #149 review — invoke the actual cycle, not just constants)", async () => {
+			const mockDb = {
+				execute: async (query: unknown) => {
+					const queryStr = String(query);
+					if (queryStr.includes("pg_try_advisory_lock")) {
+						return { rows: [{ acquired: true }] };
+					}
+					return { rows: [] };
+				},
+				select: () => ({
+					from: () => ({
+						where: () => Promise.resolve([]),
+					}),
+				}),
+				update: () => ({
+					set: () => ({
+						where: () => ({ returning: () => [] }),
+					}),
+				}),
+			};
+
+			const worker = new GCWorker({ db: mockDb as never, interval: 60_000 });
+			await expect(worker.runOnce()).resolves.toBeUndefined();
+		});
 	});
 });

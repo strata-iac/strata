@@ -74,6 +74,18 @@ describe("@procella/crypto", () => {
 			expect(decrypted).toEqual(plaintext);
 		});
 
+		test("decrypt falls back to v1 even when v1 nonce[0] collides with v2 marker (PR #149 review — 1/256 of v1 ciphertexts have nonce[0]=0x02)", async () => {
+			const svc = devService();
+			const plaintext = new TextEncoder().encode("legacy with 0x02 nonce prefix");
+			const input = stackInput();
+			const collidingNonce = Buffer.alloc(12, 0x02);
+			const encrypted = legacyEncrypt(testMasterKey(), input, plaintext, collidingNonce);
+			expect(encrypted[0]).toBe(VERSION_V2);
+
+			const decrypted = await svc.decrypt(input, encrypted);
+			expect(decrypted).toEqual(plaintext);
+		});
+
 		test("decrypt with v1 fallback uses stackFQN", async () => {
 			const svc = devService();
 			const plaintext = new TextEncoder().encode("legacy secret");

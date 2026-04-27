@@ -1,5 +1,4 @@
-import type { Database } from "@procella/db";
-import { oidcTrustPolicies } from "@procella/db/src/schema.js";
+import { type Database, oidcTrustPolicies } from "@procella/db";
 import { ProcellaError } from "@procella/types";
 import { and, eq } from "drizzle-orm";
 import type { OidcTrustPolicy, TrustPolicyRepository } from "./types.js";

@@ -6,9 +6,7 @@
 // Run explicitly: bun test packages/oidc/src/policy.integration.test.ts
 // Or via: bun run test:integration
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import type { Database } from "@procella/db";
-import { createDb } from "@procella/db";
-import { oidcTrustPolicies } from "@procella/db/src/schema.js";
+import { createDb, type Database, oidcTrustPolicies } from "@procella/db";
 import { eq, sql } from "drizzle-orm";
 import { PostgresTrustPolicyRepository } from "./policy.js";
 
