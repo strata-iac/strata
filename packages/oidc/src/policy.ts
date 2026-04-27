@@ -14,6 +14,17 @@ export class OidcPolicyConflictError extends ProcellaError {
 	}
 }
 
+export class OidcPolicyDisplayNameConflictError extends ProcellaError {
+	constructor() {
+		super(
+			"OIDC trust policy with this display name already exists in the tenant",
+			"policy_display_name_conflict",
+			409,
+		);
+		this.name = "OidcPolicyDisplayNameConflictError";
+	}
+}
+
 export class OidcPolicyClaimConditionsError extends ProcellaError {
 	constructor(message: string) {
 		super(message, "policy_claim_conditions_invalid", 400);
@@ -87,6 +98,10 @@ export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
 				.returning();
 		} catch (error) {
 			if (pgErrorCode(error) === "23505") {
+				const constraint = pgConstraintName(error);
+				if (constraint === "idx_oidc_trust_org_name") {
+					throw new OidcPolicyDisplayNameConflictError();
+				}
 				throw new OidcPolicyConflictError();
 			}
 			throw error;
@@ -202,6 +217,31 @@ function pgErrorCode(err: unknown): string | undefined {
 				for (const inner of record.errors) {
 					const code = pgErrorCode(inner);
 					if (code) return code;
+				}
+			}
+			if ("cause" in record) {
+				current = record.cause;
+				continue;
+			}
+		}
+		current = undefined;
+	}
+	return undefined;
+}
+
+function pgConstraintName(err: unknown): string | undefined {
+	let current: unknown = err;
+	for (let i = 0; i < 10 && current != null; i++) {
+		if (typeof current === "object") {
+			const record = current as Record<string, unknown>;
+			for (const key of ["constraint", "constraint_name"] as const) {
+				const value = record[key];
+				if (typeof value === "string" && value.length > 0) return value;
+			}
+			if (Array.isArray(record.errors)) {
+				for (const inner of record.errors) {
+					const name = pgConstraintName(inner);
+					if (name) return name;
 				}
 			}
 			if ("cause" in record) {

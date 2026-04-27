@@ -223,6 +223,7 @@ describe("PostgresTrustPolicyRepository", () => {
 		const { db } = createMockDb({
 			insertError: Object.assign(new Error("duplicate key value violates unique constraint"), {
 				code: "23505",
+				constraint: "idx_oidc_trust_org_issuer",
 			}),
 		});
 		const repo = new PostgresTrustPolicyRepository(db);
@@ -245,6 +246,36 @@ describe("PostgresTrustPolicyRepository", () => {
 		).rejects.toMatchObject({
 			code: "policy_conflict",
 			message: "OIDC trust policy with this org/issuer pair already exists",
+		});
+	});
+
+	test("create surfaces policy_display_name_conflict when the displayName unique index fires (PR #149 review — distinct error per constraint)", () => {
+		const { db } = createMockDb({
+			insertError: Object.assign(new Error("duplicate key value violates unique constraint"), {
+				code: "23505",
+				constraint: "idx_oidc_trust_org_name",
+			}),
+		});
+		const repo = new PostgresTrustPolicyRepository(db);
+
+		return expect(
+			repo.create({
+				tenantId: "tenant-2",
+				orgSlug: "acme",
+				provider: "github-actions",
+				displayName: "Existing Display Name",
+				issuer: "https://token.actions.githubusercontent.com",
+				maxExpiration: 3600,
+				claimConditions: {
+					iss: "https://token.actions.githubusercontent.com",
+					repository_owner: "myorg",
+				},
+				grantedRole: Role.Member,
+				active: true,
+			}),
+		).rejects.toMatchObject({
+			code: "policy_display_name_conflict",
+			message: "OIDC trust policy with this display name already exists in the tenant",
 		});
 	});
 
