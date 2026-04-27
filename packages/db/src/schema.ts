@@ -85,7 +85,10 @@ export const updates = pgTable(
 		initiatedByMeta: jsonb("initiated_by_meta").$type<Record<string, unknown>>(),
 	},
 	(table) => [
-		check("chk_updates_kind", sql`${table.kind} IN ('update', 'preview', 'refresh', 'destroy', 'import')`),
+		check(
+			"chk_updates_kind",
+			sql`${table.kind} IN ('update', 'preview', 'refresh', 'destroy', 'import')`,
+		),
 		uniqueIndex("idx_updates_active")
 			.on(table.stackId)
 			.where(sql`status IN ('not started', 'requested', 'running')`),

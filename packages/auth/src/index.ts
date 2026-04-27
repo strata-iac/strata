@@ -633,6 +633,7 @@ function sanitizeCliAccessKeyCustomClaims(
 	}
 
 	if (strippedClaims.length > 0) {
+		// biome-ignore lint/suspicious/noConsole: security warning when caller customClaims include reserved fields
 		console.warn(
 			`[auth] stripping unsupported CLI access-key custom claims: ${strippedClaims.join(", ")}`,
 		);

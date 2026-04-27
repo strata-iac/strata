@@ -83,9 +83,8 @@ describe("[security] LOW regressions (vulns.txt L1-L8)", () => {
 	test("[L8] audit classifier regex uses NAME_SEGMENT (no unanchored greedy)", () => {
 		const auditSource = readText("packages/audit/src/index.ts");
 		expect(auditSource).toContain('const NAME_SEGMENT = "[a-zA-Z0-9._-]+";');
-		expect(auditSource).toContain(
-			"new RegExp(`^/api/stacks/${NAME_SEGMENT}/${NAME_SEGMENT}/${NAME_SEGMENT}$`)",
-		);
+		const seg = "$" + "{NAME_SEGMENT}";
+		expect(auditSource).toContain(`new RegExp(\`^/api/stacks/${seg}/${seg}/${seg}$\`)`);
 	});
 });
 

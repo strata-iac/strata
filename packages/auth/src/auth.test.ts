@@ -727,6 +727,7 @@ describe("extractOrgSlug", () => {
 describe("DescopeAuthService — createCliAccessKey", () => {
 	let svc: DescopeAuthService;
 	const mockConsoleWarn = mock();
+	// biome-ignore lint/suspicious/noConsole: snapshot console.warn to assert customClaims sanitizer warnings
 	const originalConsoleWarn = console.warn;
 
 	const userCaller = {

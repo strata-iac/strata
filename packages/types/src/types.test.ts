@@ -53,7 +53,7 @@ describe("@procella/types", () => {
 
 	describe("enum objects", () => {
 		test("UPDATE_KINDS has all expected values", () => {
-			expect(UPDATE_KINDS).toEqual(["update", "preview", "refresh", "destroy"]);
+			expect(UPDATE_KINDS).toEqual(["update", "preview", "refresh", "destroy", "import"]);
 		});
 
 		test("isValidUpdateKind only allows the update allowlist", () => {
@@ -61,7 +61,11 @@ describe("@procella/types", () => {
 			expect(isValidUpdateKind("preview")).toBeTrue();
 			expect(isValidUpdateKind("refresh")).toBeTrue();
 			expect(isValidUpdateKind("destroy")).toBeTrue();
-			expect(isValidUpdateKind("import")).toBeFalse();
+			// 'import' is a valid update kind because Pulumi ImportStack inserts
+			// updates rows with kind='import'. Including it in the allowlist (and
+			// the matching DB CHECK constraint) is required for state imports to
+			// succeed; see commit b583b06 ("C4 follow-up").
+			expect(isValidUpdateKind("import")).toBeTrue();
 			expect(isValidUpdateKind("badkind")).toBeFalse();
 		});
 

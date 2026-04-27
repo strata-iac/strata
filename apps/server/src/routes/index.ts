@@ -84,6 +84,7 @@ export function createApp(deps: {
 	app.use("*", requestLogger());
 	if ((deps.corsOrigins ?? []).length > 0) {
 		if (deps.corsOrigins?.includes("*")) {
+			// biome-ignore lint/suspicious/noConsole: intentional startup warning surfaced before serving traffic
 			console.warn("[cors] PROCELLA_CORS_ORIGINS=* allows any origin; do not use in production");
 		}
 		app.use("*", cors({ origin: deps.corsOrigins ?? [] }));
