@@ -302,30 +302,30 @@ describe("JwksValidatorImpl", () => {
 		}
 	});
 
-	test("M12: rejects private IP in discovered jwks_uri via validateSsrf", () => {
+	test("M12: rejects private IP in discovered jwks_uri via validateSsrf", async () => {
 		const validator = new JwksValidatorImpl({ allowHttp: false });
 		const validateSsrf = (
-			validator as unknown as { validateSsrf: (url: string, label: string) => void }
+			validator as unknown as { validateSsrf: (url: string, label: string) => Promise<void> }
 		).validateSsrf.bind(validator);
 
-		expect(() => validateSsrf("https://10.0.0.1/.well-known/jwks", "jwks_uri")).toThrow(
+		await expect(validateSsrf("https://10.0.0.1/.well-known/jwks", "jwks_uri")).rejects.toThrow(
 			JwksValidationError,
 		);
-		expect(() => validateSsrf("https://192.168.1.1/.well-known/jwks", "jwks_uri")).toThrow(
+		await expect(validateSsrf("https://192.168.1.1/.well-known/jwks", "jwks_uri")).rejects.toThrow(
 			JwksValidationError,
 		);
-		expect(() => validateSsrf("https://172.16.0.1/.well-known/jwks", "jwks_uri")).toThrow(
+		await expect(validateSsrf("https://172.16.0.1/.well-known/jwks", "jwks_uri")).rejects.toThrow(
 			JwksValidationError,
 		);
 	});
 
-	test("M12: rejects .lvh.me DNS rebinding in discovered jwks_uri", () => {
+	test("M12: rejects .lvh.me DNS rebinding in discovered jwks_uri", async () => {
 		const validator = new JwksValidatorImpl({ allowHttp: false });
 		const validateSsrf = (
-			validator as unknown as { validateSsrf: (url: string, label: string) => void }
+			validator as unknown as { validateSsrf: (url: string, label: string) => Promise<void> }
 		).validateSsrf.bind(validator);
 
-		expect(() => validateSsrf("https://evil.lvh.me/.well-known/jwks", "jwks_uri")).toThrow(
+		await expect(validateSsrf("https://evil.lvh.me/.well-known/jwks", "jwks_uri")).rejects.toThrow(
 			JwksValidationError,
 		);
 	});

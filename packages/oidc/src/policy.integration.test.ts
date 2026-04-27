@@ -89,7 +89,7 @@ describe_db("PostgresTrustPolicyRepository", () => {
 		} catch (error) {
 			expect(error).toMatchObject({
 				code: "policy_conflict",
-				message: "OIDC trust policy with this org/issuer already exists in another tenant",
+				message: "OIDC trust policy with this org/issuer pair already exists",
 			});
 		}
 
