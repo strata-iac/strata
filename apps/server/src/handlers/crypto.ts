@@ -25,18 +25,27 @@ import {
 // Crypto Handlers
 // ============================================================================
 
+const INVALID_JSON_RESPONSE = {
+	code: "invalid_request",
+	message: "Body is not valid JSON",
+} as const;
+
 export function cryptoHandlers(updates: UpdatesService, stacks: StacksService) {
 	return {
 		encryptValue: async (c: Context<Env>) => {
 			const stackInput = await resolveAuthorizedStack(c, stacks);
 			if (stackInput instanceof Response) return stackInput;
-			const raw = await c.req.json<EncryptValueRequest>();
+			let raw: unknown;
+			try {
+				raw = await c.req.json();
+			} catch {
+				return c.json(INVALID_JSON_RESPONSE, 400);
+			}
 			const parseResult = EncryptValueRequestSchema.safeParse(raw);
 			if (!parseResult.success) {
 				return c.json({ code: "invalid_request", message: parseResult.error.message }, 400);
 			}
-			const body = parseResult.data;
-			const plaintext = decodeBase64(body.plaintext);
+			const plaintext = decodeBase64((parseResult.data as EncryptValueRequest).plaintext);
 			const ciphertext = await updates.encryptValue(stackInput, plaintext);
 			return c.json({ ciphertext: encodeBase64(ciphertext) });
 		},
@@ -44,13 +53,17 @@ export function cryptoHandlers(updates: UpdatesService, stacks: StacksService) {
 		decryptValue: async (c: Context<Env>) => {
 			const stackInput = await resolveAuthorizedStack(c, stacks);
 			if (stackInput instanceof Response) return stackInput;
-			const raw = await c.req.json<DecryptValueRequest>();
+			let raw: unknown;
+			try {
+				raw = await c.req.json();
+			} catch {
+				return c.json(INVALID_JSON_RESPONSE, 400);
+			}
 			const parseResult = DecryptValueRequestSchema.safeParse(raw);
 			if (!parseResult.success) {
 				return c.json({ code: "invalid_request", message: parseResult.error.message }, 400);
 			}
-			const body = parseResult.data;
-			const ciphertext = decodeBase64(body.ciphertext);
+			const ciphertext = decodeBase64((parseResult.data as DecryptValueRequest).ciphertext);
 			const plaintext = await updates.decryptValue(stackInput, ciphertext);
 			return c.json({ plaintext: encodeBase64(plaintext) });
 		},
@@ -58,13 +71,19 @@ export function cryptoHandlers(updates: UpdatesService, stacks: StacksService) {
 		batchEncrypt: async (c: Context<Env>) => {
 			const stackInput = await resolveAuthorizedStack(c, stacks);
 			if (stackInput instanceof Response) return stackInput;
-			const raw = await c.req.json<BatchEncryptRequest>();
+			let raw: unknown;
+			try {
+				raw = await c.req.json();
+			} catch {
+				return c.json(INVALID_JSON_RESPONSE, 400);
+			}
 			const parseResult = BatchEncryptRequestSchema.safeParse(raw);
 			if (!parseResult.success) {
 				return c.json({ code: "invalid_request", message: parseResult.error.message }, 400);
 			}
-			const body = parseResult.data;
-			const plaintexts = (body.plaintexts ?? []).map(decodeBase64);
+			const plaintexts = ((parseResult.data as BatchEncryptRequest).plaintexts ?? []).map(
+				decodeBase64,
+			);
 			const ciphertexts = await updates.batchEncrypt(stackInput, plaintexts);
 			return c.json({
 				ciphertexts: ciphertexts.map(encodeBase64),
@@ -74,16 +93,19 @@ export function cryptoHandlers(updates: UpdatesService, stacks: StacksService) {
 		batchDecrypt: async (c: Context<Env>) => {
 			const stackInput = await resolveAuthorizedStack(c, stacks);
 			if (stackInput instanceof Response) return stackInput;
-			const raw = await c.req.json<BatchDecryptRequest>();
+			let raw: unknown;
+			try {
+				raw = await c.req.json();
+			} catch {
+				return c.json(INVALID_JSON_RESPONSE, 400);
+			}
 			const parseResult = BatchDecryptRequestSchema.safeParse(raw);
 			if (!parseResult.success) {
 				return c.json({ code: "invalid_request", message: parseResult.error.message }, 400);
 			}
-			const body = parseResult.data;
-			const rawCiphertexts = body.ciphertexts ?? [];
+			const rawCiphertexts = (parseResult.data as BatchDecryptRequest).ciphertexts ?? [];
 			const ciphertexts = rawCiphertexts.map(decodeBase64);
 			const decrypted = await updates.batchDecrypt(stackInput, ciphertexts);
-			// Response is a map: base64(ciphertext) → base64(plaintext)
 			const plaintexts: Record<string, string> = {};
 			for (let i = 0; i < rawCiphertexts.length; i++) {
 				const key =

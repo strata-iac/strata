@@ -32,13 +32,17 @@ export function stateHandlers(updates: UpdatesService, stacks: StacksService) {
 			const project = param(c, "project");
 			const stack = param(c, "stack");
 			const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
-			const raw = await c.req.json<UntypedDeployment>();
+			let raw: unknown;
+			try {
+				raw = await c.req.json();
+			} catch {
+				return c.json({ code: "invalid_request", message: "Body is not valid JSON" }, 400);
+			}
 			const parseResult = UntypedDeploymentSchema.safeParse(raw);
 			if (!parseResult.success) {
 				return c.json({ code: "invalid_request", message: parseResult.error.message }, 400);
 			}
-			const body = parseResult.data;
-			const result = await updates.importStack(stackInfo.id, body);
+			const result = await updates.importStack(stackInfo.id, parseResult.data as UntypedDeployment);
 			return c.json(result);
 		},
 	};

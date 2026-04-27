@@ -140,7 +140,12 @@ export interface StacksService {
 	): Promise<void>;
 
 	getStackByFQN(tenantId: string, fqn: string): Promise<StackInfo>;
-	/** System-only: no tenant filter. Callers MUST be system-context (auth middleware, GC). */
+	/**
+	 * System-only: scoped by tenantId only (passed via the `org` param). The query is
+	 * `(projects.tenantId = org AND projects.name = project AND stacks.name = stack)`.
+	 * Callers MUST be system-context (auth middleware, GC) — there is no caller-context
+	 * authorization, only the URL-tuple resolution.
+	 */
 	getStackByNames_systemOnly(org: string, project: string, stack: string): Promise<StackInfo>;
 }
 
