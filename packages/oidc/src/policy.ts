@@ -9,11 +9,7 @@ type PolicyClaimValidationInput = Pick<OidcTrustPolicy, "provider" | "issuer" | 
 
 export class OidcPolicyConflictError extends ProcellaError {
 	constructor() {
-		super(
-			"OIDC trust policy with this org/issuer pair already exists",
-			"policy_conflict",
-			409,
-		);
+		super("OIDC trust policy with this org/issuer pair already exists", "policy_conflict", 409);
 		this.name = "OidcPolicyConflictError";
 	}
 }
