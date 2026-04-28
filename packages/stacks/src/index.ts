@@ -9,6 +9,7 @@ import {
 	InvalidNameError,
 	parseStackFQN,
 	StackAlreadyExistsError,
+	StackNotFoundByIdError,
 	StackNotFoundError,
 } from "@procella/types";
 import { and, asc, desc, eq, type SQL, sql } from "drizzle-orm";
@@ -149,7 +150,8 @@ export interface StacksService {
 	 * @deprecated Prefer {@link getStackById_systemOnly} when a trusted `stackId` is
 	 * available (e.g. from a lease-bound update token). The `org` URL slug does NOT
 	 * always equal `projects.tenantId` — in OIDC mode the tenantId is a Descope UUID
-	 * while the URL slug is the human-readable orgSlug. See bd issue procella-64t.
+	 * while the URL slug is the human-readable orgSlug. See `bd` (beads) issue
+	 * procella-64t (run `bd show procella-64t`).
 	 */
 	getStackByNames_systemOnly(org: string, project: string, stack: string): Promise<StackInfo>;
 
@@ -739,7 +741,7 @@ export class PostgresStacksService implements StacksService {
 				.where(eq(stacks.id, stackId));
 
 			if (rows.length === 0) {
-				throw new StackNotFoundError("(by-id)", "(by-id)", stackId);
+				throw new StackNotFoundByIdError(stackId);
 			}
 			return toStackInfo(rows[0]);
 		});

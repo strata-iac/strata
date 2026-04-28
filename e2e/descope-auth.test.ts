@@ -258,7 +258,7 @@ describe_descope("Descope auth (deployed preview)", () => {
 						claimConditions: {
 							repository: process.env.GITHUB_REPOSITORY ?? "procella-dev/procella",
 							repository_owner:
-								(process.env.GITHUB_REPOSITORY ?? "procella-dev/procella").split("/")[0] ??
+								(process.env.GITHUB_REPOSITORY ?? "procella-dev/procella").split("/")[0] ||
 								"procella-dev",
 						},
 						grantedRole: "member",
