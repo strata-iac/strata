@@ -159,6 +159,7 @@ describe("@procella/stacks", () => {
 				replaceStackTags: async () => {},
 				getStackByFQN: async () => mockInfo,
 				getStackByNames_systemOnly: async () => mockInfo,
+				getStackById_systemOnly: async () => mockInfo,
 			};
 
 			// Type-level check: all methods exist and are callable
@@ -183,6 +184,7 @@ describe("@procella/stacks", () => {
 				replaceStackTags: async () => {},
 				getStackByFQN: async () => ({}) as StackInfo,
 				getStackByNames_systemOnly: async () => ({}) as StackInfo,
+				getStackById_systemOnly: async () => ({}) as StackInfo,
 			};
 
 			// No filters
@@ -368,9 +370,11 @@ describe("@procella/stacks", () => {
 				replaceStackTags: async () => {},
 				getStackByFQN: async () => mockInfo,
 				getStackByNames_systemOnly: async () => mockInfo,
+				getStackById_systemOnly: async () => mockInfo,
 			};
 
 			expect(typeof mock.getStackByNames_systemOnly).toBe("function");
+			expect(typeof mock.getStackById_systemOnly).toBe("function");
 		});
 	});
 });
