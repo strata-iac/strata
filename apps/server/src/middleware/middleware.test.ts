@@ -231,6 +231,63 @@ describe("@procella/server middleware", () => {
 			expect(body).toHaveProperty("code");
 			expect(body).toHaveProperty("message");
 		});
+
+		test("maps PG serialization_failure (40001) to 503 with Retry-After (procella-fkf)", async () => {
+			const app = new Hono();
+			app.onError(errorHandler());
+			app.get("/test", () => {
+				throw Object.assign(new Error("could not serialize access due to concurrent update"), {
+					code: "40001",
+				});
+			});
+
+			const res = await app.request("/test");
+			expect(res.status).toBe(503);
+			expect(res.headers.get("Retry-After")).toBe("1");
+			const body = (await res.json()) as { code: string; sqlState: string };
+			expect(body.code).toBe("transient_conflict");
+			expect(body.sqlState).toBe("40001");
+		});
+
+		test("maps PG deadlock_detected (40P01) to 503 with Retry-After (procella-fkf)", async () => {
+			const app = new Hono();
+			app.onError(errorHandler());
+			app.get("/test", () => {
+				throw Object.assign(new Error("deadlock detected"), { code: "40P01" });
+			});
+
+			const res = await app.request("/test");
+			expect(res.status).toBe(503);
+			expect(res.headers.get("Retry-After")).toBe("1");
+			const body = (await res.json()) as { code: string; sqlState: string };
+			expect(body.code).toBe("transient_conflict");
+			expect(body.sqlState).toBe("40P01");
+		});
+
+		test("non-transient PG error (e.g. unique_violation 23505) still maps to 500", async () => {
+			const app = new Hono();
+			app.onError(errorHandler());
+			app.get("/test", () => {
+				throw Object.assign(new Error("unique constraint violation"), { code: "23505" });
+			});
+
+			const res = await app.request("/test");
+			expect(res.status).toBe(500);
+			expect(res.headers.get("Retry-After")).toBeNull();
+		});
+
+		test("transient PG error wrapped in AggregateError still maps to 503", async () => {
+			const app = new Hono();
+			app.onError(errorHandler());
+			app.get("/test", () => {
+				const inner = Object.assign(new Error("deadlock"), { code: "40P01" });
+				throw new AggregateError([inner], "wrapped");
+			});
+
+			const res = await app.request("/test");
+			expect(res.status).toBe(503);
+			expect(res.headers.get("Retry-After")).toBe("1");
+		});
 	});
 
 	// ========================================================================
