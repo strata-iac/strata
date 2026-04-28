@@ -1,7 +1,11 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import type { Database } from "@procella/db";
 import { PostgresStacksService, type StackInfo } from "@procella/stacks";
-import { StackAlreadyExistsError, StackNotFoundError } from "@procella/types";
+import {
+	StackAlreadyExistsError,
+	StackNotFoundByIdError,
+	StackNotFoundError,
+} from "@procella/types";
 import { getTestDb, truncateTables } from "./setup.js";
 
 let db: Database;
@@ -306,10 +310,10 @@ describe("PostgresStacksService — integration", () => {
 			expect(fetched.tenantId).toBe("T2descope-tenant-uuid");
 		});
 
-		test("rejects unknown stackId with StackNotFoundError", async () => {
+		test("rejects unknown stackId with StackNotFoundByIdError", async () => {
 			await expect(
 				stacks.getStackById_systemOnly("00000000-0000-0000-0000-000000000000"),
-			).rejects.toThrow(StackNotFoundError);
+			).rejects.toThrow(StackNotFoundByIdError);
 		});
 	});
 });
