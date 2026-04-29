@@ -41,6 +41,7 @@ function mockStacksService(overrides?: Partial<StacksService>): StacksService {
 		replaceStackTags: mock(async () => {}),
 		getStackByFQN: mock(async () => mockStackInfo),
 		getStackByNames_systemOnly: mock(async () => mockStackInfo),
+		getStackById_systemOnly: mock(async () => mockStackInfo),
 		...overrides,
 	};
 }
@@ -349,6 +350,7 @@ describe("updateHandlers", () => {
 		const stacks = mockStacksService({
 			getStack: mock(async () => stackWithGithubTags),
 			getStackByNames_systemOnly: mock(async () => stackWithGithubTags),
+			getStackById_systemOnly: mock(async () => stackWithGithubTags),
 		});
 		const github = {
 			getInstallation: mock(async () => ({

@@ -5,12 +5,13 @@
 
 import { database, databaseUrl, vpc } from "./database";
 import {
-	allSecrets,
+	apiSecrets,
 	descopeManagementKey,
 	devAuthToken,
 	encryptionKey,
 	otelEndpoint,
 	otelHeaders,
+	ticketSigningKey,
 } from "./secrets";
 import { bucket } from "./storage";
 
@@ -29,13 +30,14 @@ export const webApi = new sst.aws.Function("ProcellaWebApi", {
 	timeout: "60 seconds",
 	memory: "512 MB",
 	vpc,
-	link: [database, bucket, ...allSecrets],
+	link: [database, bucket, ...apiSecrets],
 	environment: {
 		PROCELLA_DATABASE_URL: databaseUrl,
 		PROCELLA_BLOB_BACKEND: "s3",
 		PROCELLA_BLOB_S3_BUCKET: bucket.name,
 		PROCELLA_AUTH_MODE: $dev ? "dev" : "descope",
 		PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
+		PROCELLA_TICKET_SIGNING_KEY: ticketSigningKey.value,
 		PROCELLA_OTEL_ENABLED: "true",
 		OTEL_SERVICE_NAME: `procella-web-${stage}`,
 		OTEL_EXPORTER_OTLP_ENDPOINT: otelEndpoint.value,

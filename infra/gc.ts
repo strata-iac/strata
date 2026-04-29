@@ -1,5 +1,5 @@
 import { database, databaseUrl, vpc } from "./database";
-import { allSecrets, devAuthToken, encryptionKey, otelEndpoint, otelHeaders } from "./secrets";
+import { devAuthToken, encryptionKey, otelEndpoint, otelHeaders, sharedSecrets } from "./secrets";
 import { bucket } from "./storage";
 
 export const gc = new sst.aws.Cron("ProcellaGcCron", {
@@ -12,7 +12,7 @@ export const gc = new sst.aws.Cron("ProcellaGcCron", {
 		timeout: "60 seconds",
 		memory: "256 MB",
 		vpc,
-		link: [database, bucket, ...allSecrets],
+		link: [database, bucket, ...sharedSecrets],
 		environment: {
 			PROCELLA_DATABASE_URL: databaseUrl,
 			PROCELLA_BLOB_BACKEND: "s3",

@@ -76,6 +76,13 @@ export class StackNotFoundError extends NotFoundError {
 	}
 }
 
+export class StackNotFoundByIdError extends NotFoundError {
+	constructor(stackId: string) {
+		super("Stack", `id=${stackId}`);
+		this.name = "StackNotFoundByIdError";
+	}
+}
+
 export class StackAlreadyExistsError extends ConflictError {
 	constructor(org: string, project: string, stack: string) {
 		super(`Stack already exists: ${org}/${project}/${stack}`);

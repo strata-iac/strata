@@ -145,6 +145,7 @@ function makeRouteTestApp(opts?: { corsOrigins?: string[]; cronSecret?: string }
 		replaceStackTags: async () => {},
 		getStackByFQN: async () => mockStackInfo,
 		getStackByNames_systemOnly: async () => mockStackInfo,
+		getStackById_systemOnly: async () => mockStackInfo,
 	} satisfies StacksService;
 
 	return createApp({

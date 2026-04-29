@@ -1,7 +1,11 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import type { Database } from "@procella/db";
 import { PostgresStacksService, type StackInfo } from "@procella/stacks";
-import { StackAlreadyExistsError, StackNotFoundError } from "@procella/types";
+import {
+	StackAlreadyExistsError,
+	StackNotFoundByIdError,
+	StackNotFoundError,
+} from "@procella/types";
 import { getTestDb, truncateTables } from "./setup.js";
 
 let db: Database;
@@ -287,6 +291,29 @@ describe("PostgresStacksService — integration", () => {
 			await expect(
 				stacks.getStackByNames_systemOnly("tenant-c", "shared-proj", "shared-stack"),
 			).rejects.toThrow(StackNotFoundError);
+		});
+	});
+
+	describe("getStackById_systemOnly", () => {
+		test("looks up by stack UUID independent of tenantId or org slug (procella-64t)", async () => {
+			const created = await stacks.createStack(
+				"T2descope-tenant-uuid",
+				"procella-pr-151",
+				"replace-triggers",
+				"oidc-e2e",
+			);
+
+			const fetched = await stacks.getStackById_systemOnly(created.id);
+			expect(fetched.id).toBe(created.id);
+			expect(fetched.projectName).toBe("replace-triggers");
+			expect(fetched.stackName).toBe("oidc-e2e");
+			expect(fetched.tenantId).toBe("T2descope-tenant-uuid");
+		});
+
+		test("rejects unknown stackId with StackNotFoundByIdError", async () => {
+			await expect(
+				stacks.getStackById_systemOnly("00000000-0000-0000-0000-000000000000"),
+			).rejects.toThrow(StackNotFoundByIdError);
 		});
 	});
 });
