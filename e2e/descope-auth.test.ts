@@ -247,22 +247,31 @@ describe_descope("Descope auth (deployed preview)", () => {
 
 	describe_oidc("OIDC CI auth (real GitHub OIDC)", () => {
 		beforeAll(async () => {
-			// Register trust policy for the real GitHub Actions OIDC issuer.
-			// Lock to our repo's owner ID so other repos can't use this policy.
-			await trpcMutation(
-				"oidc.createPolicy",
-				{
-					provider: "github-actions",
-					displayName: `E2E GitHub OIDC (${RUN_ID})`,
-					issuer: "https://token.actions.githubusercontent.com",
-					maxExpiration: 600,
-					claimConditions: {
-						repository: process.env.GITHUB_REPOSITORY ?? "procella-dev/procella",
+			try {
+				await trpcMutation(
+					"oidc.createPolicy",
+					{
+						provider: "github-actions",
+						displayName: `E2E GitHub OIDC (${RUN_ID})`,
+						issuer: "https://token.actions.githubusercontent.com",
+						maxExpiration: 600,
+						claimConditions: {
+							repository: process.env.GITHUB_REPOSITORY ?? "procella-dev/procella",
+							repository_owner:
+								(process.env.GITHUB_REPOSITORY ?? "procella-dev/procella").split("/")[0] ||
+								"procella-dev",
+						},
+						grantedRole: "member",
 					},
-					grantedRole: "member",
-				},
-				accessKey,
-			);
+					accessKey,
+				);
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				const isAlreadyExistsConflict =
+					message.includes("(409)") &&
+					message.includes("OIDC trust policy with this org/issuer pair already exists");
+				if (!isAlreadyExistsConflict) throw err;
+			}
 		});
 
 		test("exchange real GitHub OIDC token", async () => {

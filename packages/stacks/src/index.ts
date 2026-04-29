@@ -9,6 +9,7 @@ import {
 	InvalidNameError,
 	parseStackFQN,
 	StackAlreadyExistsError,
+	StackNotFoundByIdError,
 	StackNotFoundError,
 } from "@procella/types";
 import { and, asc, desc, eq, type SQL, sql } from "drizzle-orm";
@@ -145,8 +146,27 @@ export interface StacksService {
 	 * `(projects.tenantId = org AND projects.name = project AND stacks.name = stack)`.
 	 * Callers MUST be system-context (auth middleware, GC) — there is no caller-context
 	 * authorization, only the URL-tuple resolution.
+	 *
+	 * @deprecated Prefer {@link getStackById_systemOnly} when a trusted `stackId` is
+	 * available (e.g. from a lease-bound update token). The `org` URL slug does NOT
+	 * always equal `projects.tenantId` — in OIDC mode the tenantId is a Descope UUID
+	 * while the URL slug is the human-readable orgSlug. See `bd` (beads) issue
+	 * procella-64t (run `bd show procella-64t`).
 	 */
 	getStackByNames_systemOnly(org: string, project: string, stack: string): Promise<StackInfo>;
+
+	/**
+	 * System-only: lookup by stack UUID primary key. Bypasses tenant scoping because
+	 * the `stackId` is a non-guessable UUID — callers MUST have already obtained it
+	 * from a trusted source (e.g. a cryptographically-signed lease/update token).
+	 *
+	 * Use this in preference to {@link getStackByNames_systemOnly} when verifying
+	 * lease-token-bound URL parameters: the lease token contains `stackId`, and we
+	 * want to confirm the URL `(org, project, stack)` tuple refers to the same stack.
+	 * Looking up by ID then comparing `projectName`/`stackName` is correct in both
+	 * dev mode (tenantId == orgSlug) and OIDC mode (tenantId is a Descope UUID).
+	 */
+	getStackById_systemOnly(stackId: string): Promise<StackInfo>;
 }
 
 // ============================================================================
@@ -700,5 +720,30 @@ export class PostgresStacksService implements StacksService {
 			throw new StackNotFoundError(org, project, stack);
 		}
 		return toStackInfo(rows[0]);
+	}
+
+	async getStackById_systemOnly(stackId: string): Promise<StackInfo> {
+		return withDbSpan("getStackById_systemOnly", { "stack.id": stackId }, async () => {
+			const rows = await this.db
+				.select({
+					stack_id: stacks.id,
+					stack_name: stacks.name,
+					stack_tags: stacks.tags,
+					stack_active_update_id: stacks.activeUpdateId,
+					stack_created_at: stacks.createdAt,
+					stack_updated_at: stacks.updatedAt,
+					project_id: projects.id,
+					project_tenant_id: projects.tenantId,
+					project_name: projects.name,
+				})
+				.from(stacks)
+				.innerJoin(projects, eq(stacks.projectId, projects.id))
+				.where(eq(stacks.id, stackId));
+
+			if (rows.length === 0) {
+				throw new StackNotFoundByIdError(stackId);
+			}
+			return toStackInfo(rows[0]);
+		});
 	}
 }

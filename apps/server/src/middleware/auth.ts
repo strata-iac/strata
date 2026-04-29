@@ -68,7 +68,7 @@ export type LeaseTokenVerifier = (updateId: string, token: string) => Promise<vo
 export function updateAuth(
 	authService: AuthService,
 	verifyLeaseToken: LeaseTokenVerifier,
-	stacks: Pick<StacksService, "getStackByNames_systemOnly">,
+	stacks: Pick<StacksService, "getStackById_systemOnly">,
 ): MiddlewareHandler<Env> {
 	return async (c, next) => {
 		try {
@@ -83,12 +83,17 @@ export function updateAuth(
 			const ctx = await authService.authenticateUpdateToken(token);
 			await verifyLeaseToken(ctx.updateId, token);
 
-			const org = c.req.param("org");
 			const project = c.req.param("project");
 			const stack = c.req.param("stack");
-			if (org && project && stack) {
-				const stackInfo = await stacks.getStackByNames_systemOnly(org, project, stack);
-				if (stackInfo.id !== ctx.stackId) {
+			if (project && stack) {
+				// Look up by trusted stackId from the lease token (UUID PK), then verify
+				// the URL project+stack names match. We deliberately do NOT compare the
+				// URL `org` slug because in OIDC mode the URL slug is the human-readable
+				// orgSlug while `projects.tenantId` is a Descope UUID — they diverge.
+				// The lease token is cryptographically bound to `stackId`, so trusting it
+				// for the lookup and verifying the URL names is sufficient. (procella-64t)
+				const stackInfo = await stacks.getStackById_systemOnly(ctx.stackId);
+				if (stackInfo.projectName !== project || stackInfo.stackName !== stack) {
 					return c.json(
 						{
 							code: "lease_url_mismatch",
