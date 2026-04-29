@@ -2,7 +2,7 @@ import { database, databaseUrl, vpc } from "./database";
 import { escEvaluator } from "./esc";
 import { router } from "./router";
 import {
-	allSecrets,
+	apiSecrets,
 	descopeManagementKey,
 	devAuthToken,
 	encryptionKey,
@@ -46,7 +46,7 @@ export const api = new sst.aws.Function("ProcellaCliApi", {
 		},
 	},
 	vpc,
-	link: [database, bucket, escEvaluator, ticketSigningKey, ...allSecrets],
+	link: [database, bucket, escEvaluator, ...apiSecrets],
 	environment: {
 		PROCELLA_DATABASE_URL: databaseUrl,
 		PROCELLA_BLOB_BACKEND: "s3",

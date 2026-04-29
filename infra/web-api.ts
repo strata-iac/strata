@@ -5,7 +5,7 @@
 
 import { database, databaseUrl, vpc } from "./database";
 import {
-	allSecrets,
+	apiSecrets,
 	descopeManagementKey,
 	devAuthToken,
 	encryptionKey,
@@ -30,7 +30,7 @@ export const webApi = new sst.aws.Function("ProcellaWebApi", {
 	timeout: "60 seconds",
 	memory: "512 MB",
 	vpc,
-	link: [database, bucket, ticketSigningKey, ...allSecrets],
+	link: [database, bucket, ...apiSecrets],
 	environment: {
 		PROCELLA_DATABASE_URL: databaseUrl,
 		PROCELLA_BLOB_BACKEND: "s3",

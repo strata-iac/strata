@@ -5,19 +5,17 @@ export const otelEndpoint = new sst.Secret("ProcellaOtelEndpoint");
 export const otelHeaders = new sst.Secret("ProcellaOtelHeaders");
 export const ticketSigningKey = new sst.Secret("ProcellaTicketSigningKey");
 
-// sharedSecrets are linked into every Lambda (API + GC). descopeManagementKey
-// is excluded because GC runs in dev auth mode and never calls Descope APIs.
-// API-only secrets (ticketSigningKey, descopeManagementKey) are linked
-// explicitly per-function in api.ts and web-api.ts.
+// sharedSecrets are linked into every Lambda. descopeManagementKey and
+// ticketSigningKey are NOT included because the GC Lambda never calls Descope
+// APIs and never issues/verifies tickets — so granting it those secrets would
+// violate least privilege.
 // cronSecret is intentionally NOT declared — the AWS deploy uses a dedicated
 // gc Lambda (gc-bootstrap.ts) that calls GCWorker.runOnce() directly, so the
 // HTTP /cron/gc route in createApp() is never served from this infra. The route
 // remains in the codebase for Vercel/Render deploys that drive cron over HTTP.
 export const sharedSecrets = [encryptionKey, devAuthToken, otelEndpoint, otelHeaders];
 
-// API-only secrets, linked explicitly in api.ts / web-api.ts. Aliased for
-// readability where multiple API-scoped secrets are spread together.
-export const apiOnlySecrets = [...sharedSecrets, descopeManagementKey];
-
-/** @deprecated Use sharedSecrets (gc) or apiOnlySecrets (api/web-api) instead. */
-export const allSecrets = apiOnlySecrets;
+// apiSecrets are linked into the CLI API + Web API Lambdas. Adds the two
+// API-only secrets (descopeManagementKey, ticketSigningKey) on top of the
+// shared set.
+export const apiSecrets = [...sharedSecrets, descopeManagementKey, ticketSigningKey];
